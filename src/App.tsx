@@ -201,6 +201,11 @@ const getCommandStatus = (
   }
 }
 
+const getCommandSuffix = (payload: EnvelopePayload): string | null => {
+  const suffix = payload.suffix
+  return typeof suffix === 'string' ? suffix : null
+}
+
 const isEditableTarget = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) {
     return false
@@ -566,12 +571,14 @@ function App() {
   const [snapshot, setSnapshot] = useState<UiStateSnapshot | null>(null)
   const [isCommandMode, setIsCommandMode] = useState(false)
   const [commandText, setCommandText] = useState('')
+  const [commandSuffix, setCommandSuffix] = useState('')
   const [commandHistory, setCommandHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState<number>(-1)
   const eventTokenRef = useRef<unknown>(null)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const liveCommandBufferRef = useRef('')
   const lastSnapshotVersionRef = useRef<number>(-1)
+  const completionRequestVersionRef = useRef(0)
 
   const sendBridgeRequest = useCallback(
     async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
@@ -717,6 +724,7 @@ function App() {
 
   useEffect(() => {
     if (!isCommandMode) {
+      setCommandSuffix('')
       return
     }
 
@@ -729,6 +737,39 @@ function App() {
     const textLength = input.value.length
     input.setSelectionRange(textLength, textLength)
   }, [isCommandMode])
+
+  useEffect(() => {
+    if (!isCommandMode || bridgeUnavailableMessage !== null) {
+      setCommandSuffix('')
+      return
+    }
+
+    const currentVersion = completionRequestVersionRef.current + 1
+    completionRequestVersionRef.current = currentVersion
+
+    const loadSuffix = async (): Promise<void> => {
+      try {
+        const completionResponse = await sendBridgeRequest('command.completeText', {
+          partial: commandText,
+        })
+        const payloadError = getPayloadError(completionResponse.payload)
+        if (payloadError) {
+          throw new Error(payloadError)
+        }
+
+        const suffix = getCommandSuffix(completionResponse.payload) ?? ''
+        if (completionRequestVersionRef.current === currentVersion) {
+          setCommandSuffix(suffix)
+        }
+      } catch {
+        if (completionRequestVersionRef.current === currentVersion) {
+          setCommandSuffix('')
+        }
+      }
+    }
+
+    void loadSuffix()
+  }, [bridgeUnavailableMessage, commandText, isCommandMode, sendBridgeRequest])
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent): void => {
@@ -1075,71 +1116,94 @@ function App() {
         {isCommandMode ? (
           <form className="statusCommandForm" onSubmit={submitCommand}>
             <span className="statusPrompt mono">:</span>
-            <input
-              ref={commandInputRef}
-              className="statusCommandInput mono"
-              type="text"
-              value={commandText}
-              onChange={(event) => {
-                const nextValue = event.target.value
-                if (historyIndex !== -1) {
-                  setHistoryIndex(-1)
-                }
-                setCommandText(nextValue)
-                liveCommandBufferRef.current = nextValue
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  closeCommandMode({ preserveText: true })
-                  return
-                }
-
-                if (event.key === 'ArrowUp') {
-                  if (commandHistory.length === 0) {
-                    return
-                  }
-
-                  event.preventDefault()
-
-                  if (historyIndex === -1) {
-                    liveCommandBufferRef.current = commandText
-                    setHistoryIndex(0)
-                    setCommandText(commandHistory[0])
-                    return
-                  }
-
-                  const nextIndex = Math.min(historyIndex + 1, commandHistory.length - 1)
-                  setHistoryIndex(nextIndex)
-                  setCommandText(commandHistory[nextIndex])
-                  return
-                }
-
-                if (event.key === 'ArrowDown') {
-                  if (commandHistory.length === 0 || historyIndex === -1) {
-                    return
-                  }
-
-                  event.preventDefault()
-
-                  if (historyIndex === 0) {
+            <div className="statusCommandField">
+              <input
+                ref={commandInputRef}
+                className="statusCommandInput mono"
+                type="text"
+                value={commandText}
+                size={Math.max(1, commandText.length)}
+                onChange={(event) => {
+                  const nextValue = event.target.value
+                  if (historyIndex !== -1) {
                     setHistoryIndex(-1)
-                    setCommandText(liveCommandBufferRef.current)
+                  }
+                  setCommandText(nextValue)
+                  liveCommandBufferRef.current = nextValue
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Tab') {
+                    event.preventDefault()
+
+                    if (!commandSuffix) {
+                      return
+                    }
+
+                    const completedCore = `${commandText}${commandSuffix}`
+                    const completedText = completedCore.endsWith(' ')
+                      ? completedCore
+                      : `${completedCore} `
+                    if (historyIndex !== -1) {
+                      setHistoryIndex(-1)
+                    }
+                    setCommandText(completedText)
+                    liveCommandBufferRef.current = completedText
                     return
                   }
 
-                  const nextIndex = historyIndex - 1
-                  setHistoryIndex(nextIndex)
-                  setCommandText(commandHistory[nextIndex])
-                }
-              }}
-              onBlur={() => closeCommandMode({ preserveText: true })}
-              spellCheck={false}
-              autoCapitalize="off"
-              autoComplete="off"
-              autoCorrect="off"
-              aria-label="Command input"
-            />
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    closeCommandMode({ preserveText: true })
+                    return
+                  }
+
+                  if (event.key === 'ArrowUp') {
+                    if (commandHistory.length === 0) {
+                      return
+                    }
+
+                    event.preventDefault()
+
+                    if (historyIndex === -1) {
+                      liveCommandBufferRef.current = commandText
+                      setHistoryIndex(0)
+                      setCommandText(commandHistory[0])
+                      return
+                    }
+
+                    const nextIndex = Math.min(historyIndex + 1, commandHistory.length - 1)
+                    setHistoryIndex(nextIndex)
+                    setCommandText(commandHistory[nextIndex])
+                    return
+                  }
+
+                  if (event.key === 'ArrowDown') {
+                    if (commandHistory.length === 0 || historyIndex === -1) {
+                      return
+                    }
+
+                    event.preventDefault()
+
+                    if (historyIndex === 0) {
+                      setHistoryIndex(-1)
+                      setCommandText(liveCommandBufferRef.current)
+                      return
+                    }
+
+                    const nextIndex = historyIndex - 1
+                    setHistoryIndex(nextIndex)
+                    setCommandText(commandHistory[nextIndex])
+                  }
+                }}
+                onBlur={() => closeCommandMode({ preserveText: true })}
+                spellCheck={false}
+                autoCapitalize="off"
+                autoComplete="off"
+                autoCorrect="off"
+                aria-label="Command input"
+              />
+              {commandSuffix ? <span className="statusCommandGhost mono">{commandSuffix}</span> : null}
+            </div>
           </form>
         ) : (
           <span className={`statusText status-${statusLevel}`}>{statusMessage}</span>

@@ -348,6 +348,15 @@
   -webkit-user-select: text;
 }
 
+.statusCommandField {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .statusPrompt {
   flex: 0 0 auto;
   margin-right: var(--space-1);
@@ -356,15 +365,35 @@
 }
 
 .statusCommandInput {
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 auto;
+  min-width: 1ch;
   padding: 0;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--text-primary);
   font-size: 0.95rem;
+  line-height: 1;
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
   user-select: text;
   -webkit-user-select: text;
   caret-color: var(--text-primary);
+}
+
+.statusCommandGhost {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: -1ch;
+  color: rgb(255 255 255 / 35%);
+  font-size: 0.95rem;
+  line-height: 1;
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
 }
