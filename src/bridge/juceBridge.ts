@@ -1,10 +1,9 @@
-import { getNativeFunction } from '../vendor/juce/index.js'
-
 type NativeFn = (requestJson: string) => Promise<unknown>
 type ListenerToken = unknown
 
 const BRIDGE_FN_NAME = 'xenBridgeRequest'
 const BRIDGE_EVENT_ID = 'xenBridgeEvent'
+let nativeFnFactoryPromise: Promise<(name: string) => unknown> | null = null
 
 type JuceHost = NonNullable<Window['__JUCE__']> & {
   backend: {
@@ -52,7 +51,23 @@ function requireJuceHost(): JuceHost {
   return juce as JuceHost
 }
 
-export function getXenBridgeRequest(): NativeFn {
+async function getNativeFunctionFactory(): Promise<(name: string) => unknown> {
+  if (nativeFnFactoryPromise) {
+    return nativeFnFactoryPromise
+  }
+
+  nativeFnFactoryPromise = import('../vendor/juce/index.js').then((module) => {
+    if (typeof module.getNativeFunction !== 'function') {
+      throw new Error('JUCE bridge contract mismatch: getNativeFunction export is missing.')
+    }
+
+    return module.getNativeFunction as (name: string) => unknown
+  })
+
+  return nativeFnFactoryPromise
+}
+
+export async function getXenBridgeRequest(): Promise<NativeFn> {
   const juce = requireJuceHost()
   const registered = juce.initialisationData.__juce__functions
 
@@ -68,16 +83,17 @@ export function getXenBridgeRequest(): NativeFn {
     )
   }
 
+  const getNativeFunction = await getNativeFunctionFactory()
   return getNativeFunction(BRIDGE_FN_NAME) as NativeFn
 }
 
 export function addXenBridgeListener(
-  onEvent: (eventJson: string) => void
+  onEvent: (eventPayload: unknown) => void
 ): ListenerToken {
   const juce = requireJuceHost()
 
   return juce.backend.addEventListener(BRIDGE_EVENT_ID, (raw: unknown) => {
-    onEvent(String(raw))
+    onEvent(raw)
   })
 }
 

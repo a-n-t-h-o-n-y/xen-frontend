@@ -44,26 +44,15 @@ if (
 
 {
   if (typeof window.__JUCE__ === "undefined") {
-    console.warn(
-      "The 'window.__JUCE__' object is undefined." +
-        " Native integration features will not work." +
-        " Defining a placeholder 'window.__JUCE__' object."
+    throw new Error(
+      "JUCE native bridge is required, but 'window.__JUCE__' is undefined."
     );
-
-    window.__JUCE__ = {
-      postMessage: function () {},
-    };
   }
 
   if (typeof window.__JUCE__.initialisationData === "undefined") {
-    window.__JUCE__.initialisationData = {
-      __juce__platform: [],
-      __juce__functions: [],
-      __juce__registeredGlobalEventIds: [],
-      __juce__sliders: [],
-      __juce__toggles: [],
-      __juce__comboBoxes: [],
-    };
+    throw new Error(
+      "JUCE native bridge is required, but 'window.__JUCE__.initialisationData' is undefined."
+    );
   }
 
   class ListenerList {
@@ -142,5 +131,7 @@ if (
   }
 
   if (typeof window.__JUCE__.backend === "undefined")
-    window.__JUCE__.backend = new Backend();
+    throw new Error(
+      "JUCE native bridge is required, but 'window.__JUCE__.backend' is undefined."
+    );
 }

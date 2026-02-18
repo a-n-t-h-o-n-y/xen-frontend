@@ -1,29 +1,31 @@
+/* =========================================================
+   Global Defaults
+   Keep this file for app-wide styles only.
+   ========================================================= */
+
 :root {
-  font-family: 'IBM Plex Sans', 'Avenir Next', 'Segoe UI', sans-serif;
-  line-height: 1.4;
-  font-weight: 400;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Use a neutral monospace font for the plugin prototype UI */
+  font-family: monospace;
 }
 
+/* Include border/padding in element dimensions */
 * {
   box-sizing: border-box;
 }
+
+/* =========================================================
+   Page Frame
+   ========================================================= */
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  color: #d6e2f8;
-  background:
-    radial-gradient(110% 90% at 20% 0%, #1b2b47 0%, transparent 55%),
-    radial-gradient(90% 120% at 100% 10%, #1b365f 0%, transparent 50%),
-    #070d1c;
+  background: #111;
+  color: #fff;
 }
 
 #root {
   min-height: 100vh;
-  padding: 1.25rem;
+  padding: 0.5rem;
 }

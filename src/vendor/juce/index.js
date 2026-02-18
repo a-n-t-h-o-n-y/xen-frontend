@@ -78,7 +78,6 @@ function getNativeFunction(name) {
 
   const f = function () {
     const [promiseId, result] = promiseHandler.createPromise();
-
     window.__JUCE__.backend.emitEvent("__juce__invoke", {
       name: name,
       params: Array.prototype.slice.call(arguments),

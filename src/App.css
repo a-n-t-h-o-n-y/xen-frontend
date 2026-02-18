@@ -1,234 +1,369 @@
-.appShell {
-  margin: 0 auto;
-  max-width: 1240px;
+/* =========================================================
+   Tokens
+   Keep values centralized so future design passes are easy.
+   ========================================================= */
+
+:root {
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --border-subtle: 1px solid rgb(255 255 255 / 35%);
+  --surface-1: #000;
+  --surface-2: #0d0d0d;
+  --text-primary: #fff;
+  --text-secondary: #c9c9c9;
+}
+
+/* =========================================================
+   App layout
+   1) Header
+   2) Sequencer area
+   3) Status bar
+   ========================================================= */
+
+.app {
   display: grid;
-  gap: 1rem;
-}
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-3);
 
-.topBar {
-  border: 1px solid #253149;
-  border-radius: 12px;
-  background: linear-gradient(140deg, #0f1a2e, #131f35);
-  padding: 1.2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.topBar h1 {
+  min-height: calc(100vh - 2rem);
+  width: 100%;
   margin: 0;
-  font-size: 1.35rem;
-  letter-spacing: 0.01em;
+  padding: var(--space-3);
+
+  color: var(--text-primary);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.topBar p {
-  margin: 0.35rem 0 0;
-  color: #abbbd4;
-  max-width: 70ch;
-}
+/* =========================================================
+   Header
+   ========================================================= */
 
-.topBarActions {
+.header {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.statusPill {
-  border-radius: 999px;
-  padding: 0.4rem 0.8rem;
-  font-size: 0.8rem;
-  border: 1px solid transparent;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.status-connected {
-  color: #8febca;
-  background: #103e2f;
-  border-color: #245744;
-}
-
-.status-connecting {
-  color: #f8dda0;
-  background: #493617;
-  border-color: #705421;
-}
-
-.status-missing,
-.status-error {
-  color: #ffc0c0;
-  background: #4a1f24;
-  border-color: #7b343c;
-}
-
-.panelGrid {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.panel {
-  grid-column: span 6;
-  border: 1px solid #253149;
-  border-radius: 12px;
-  background: #0f182b;
-  padding: 1rem;
-  min-height: 160px;
-}
-
-.panelWide {
-  grid-column: 1 / -1;
-}
-
-.panel h2 {
-  margin: 0 0 0.75rem;
-  font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #89a6d4;
-}
-
-.panel pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 350px;
-  overflow: auto;
-  border-radius: 8px;
-  border: 1px solid #27344e;
-  background: #0a1020;
-  color: #d4e1f8;
-  padding: 0.75rem;
-  font-size: 0.8rem;
-  font-family:
-    'Iosevka Web',
-    'SFMono-Regular',
-    Menlo,
-    Consolas,
-    monospace;
-}
-
-.commandForm {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.commandInput {
-  flex: 1;
-  min-width: 220px;
-  border: 1px solid #32456a;
-  border-radius: 8px;
-  background: #070d1b;
-  color: #dbe6f7;
-  padding: 0.6rem 0.75rem;
-  font-size: 0.9rem;
-  font-family:
-    'Iosevka Web',
-    'SFMono-Regular',
-    Menlo,
-    Consolas,
-    monospace;
-}
-
-.panelActions {
-  margin-top: 0.6rem;
-}
-
-.buttonPrimary,
-.buttonSecondary {
-  border: 1px solid #355184;
-  border-radius: 8px;
-  cursor: pointer;
-  padding: 0.55rem 0.85rem;
-  transition: border-color 120ms ease-out;
-  font-size: 0.86rem;
-}
-
-.buttonPrimary {
-  background: #275cc2;
-  color: #f5f8ff;
-}
-
-.buttonSecondary {
-  background: #131f35;
-  color: #d2e0fb;
-}
-
-.buttonPrimary:hover,
-.buttonSecondary:hover {
-  border-color: #7ca7ef;
-}
-
-.errorText {
-  color: #ff9090;
-}
-
-.logList {
-  margin: 0;
+  flex-wrap: nowrap;
+  gap: var(--space-3);
   padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.75rem;
+  overflow-x: auto;
 }
 
-.logEntry {
-  border: 1px solid #253149;
-  border-radius: 8px;
-  padding: 0.75rem;
-  background: #0b1325;
+.headerGroup {
+  flex: 1 1 0;
+  min-width: 240px;
+  padding: var(--space-3);
+  border: var(--border-subtle);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
 }
 
-.logHeader {
+.headerGrid {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.6rem;
-  font-size: 0.8rem;
-  color: #a5b8d8;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-4);
 }
 
-.directionBadge {
-  border-radius: 999px;
-  padding: 0.2rem 0.45rem;
+.headerField {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 110px;
+  gap: var(--space-1);
+}
+
+.fieldLabel {
   font-size: 0.7rem;
   text-transform: uppercase;
-  border: 1px solid transparent;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
-.direction-outbound {
-  background: #143558;
-  color: #96ccff;
-  border-color: #2f5e8f;
+.fieldValue {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
-.direction-inbound {
-  background: #1f2f53;
-  color: #a9bfff;
-  border-color: #3b5281;
+.mono {
+  font-variant-numeric: tabular-nums;
 }
 
-.direction-event {
-  background: #413322;
-  color: #f7d58e;
-  border-color: #76592c;
+/* =========================================================
+   Sequencer
+   Left: pitch index
+   Middle: single-octave piano roll
+   Right: tuning ruler
+   ========================================================= */
+
+.sequencer {
+  min-height: 240px;
+  padding: var(--space-2);
+  border: var(--border-subtle);
+  border-radius: var(--radius-2);
+  background: var(--surface-1);
 }
 
-.direction-system {
-  background: #39304c;
-  color: #d7b8ff;
-  border-color: #5e4a83;
+.sequencerShell {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr 2.5rem;
+  gap: var(--space-2);
+  height: 100%;
+  min-height: 280px;
 }
 
-@media (max-width: 900px) {
-  .panel {
-    grid-column: 1 / -1;
+.pitchIndexBar {
+  display: grid;
+  grid-auto-rows: 1fr;
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.pitchIndexRow {
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
+}
+
+.pitchIndexRow:last-child {
+  border-bottom: 0;
+}
+
+.pianoRoll {
+  position: relative;
+  background: transparent;
+}
+
+.rollIslands {
+  display: flex;
+  gap: 5px;
+  height: 100%;
+  padding: 4px;
+}
+
+.rollIsland {
+  min-width: 0;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.rollIslandGrid {
+  display: grid;
+  grid-auto-rows: 1fr;
+  height: 100%;
+}
+
+.rollRow {
+  position: relative;
+  border-bottom: 1px solid rgb(0 0 0 / 35%);
+}
+
+.rollRow-bandEven {
+  background: rgb(74 70 84 / 90%);
+}
+
+.rollRow-bandOdd {
+  background: rgb(102 98 112 / 90%);
+}
+
+.rollRow:last-child {
+  border-bottom: 0;
+}
+
+.rollRowLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: rgb(0 0 0 / 42%);
+}
+
+.rollNote {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgb(220 136 122 / 92%);
+}
+
+.rollNote-hasDelay {
+  border-left: 1px solid rgb(0 0 0 / 65%);
+}
+
+.rollNote-shortGate {
+  border-right: 1px solid rgb(0 0 0 / 65%);
+}
+
+.tuningRuler {
+  position: relative;
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-2);
+}
+
+.tuningRulerLine {
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: 50%;
+  width: 1px;
+  background: rgb(255 255 255 / 70%);
+  transform: translateX(-0.5px);
+}
+
+.rulerMark {
+  position: absolute;
+  height: 2px;
+  transform: translateY(1px);
+}
+
+.rulerMark-reference {
+  left: 50%;
+  width: 0.65rem;
+  background: rgb(255 255 255 / 70%);
+}
+
+.rulerMark-tuning {
+  right: 50%;
+  width: 0.65rem;
+  background: rgb(255 255 255 / 35%);
+}
+
+.rulerMark-active {
+  background: #fff;
+}
+
+.bridgeNotice {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: var(--space-3);
+
+  height: 100%;
+  padding: var(--space-4);
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+}
+
+.bridgeNoticeTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.bridgeNoticeBody,
+.bridgeNoticeHint {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 860px) {
+  .sequencerShell {
+    grid-template-columns: 2rem 1fr 2rem;
   }
 
-  .commandForm {
-    flex-direction: column;
+  .pitchIndexRow {
+    font-size: 0.65rem;
   }
+
+  .rulerMark-reference,
+  .rulerMark-tuning {
+    width: 0.5rem;
+  }
+}
+
+/* =========================================================
+   Status bar
+   ========================================================= */
+
+.statusBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-subtle);
+  border-radius: var(--radius-2);
+  background: var(--surface-1);
+}
+
+.statusLeft {
+  display: flex;
+  align-items: center;
+}
+
+.modeBadge {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: var(--border-subtle);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.statusText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-debug {
+  color: #bcbcbc;
+}
+
+.status-info {
+  color: var(--text-primary);
+}
+
+.status-warning {
+  color: #f3dd9a;
+}
+
+.status-error {
+  color: #f7a8a8;
+}
+
+.statusCommandForm {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.statusPrompt {
+  flex: 0 0 auto;
+  margin-right: var(--space-1);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.statusCommandInput {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  user-select: text;
+  -webkit-user-select: text;
+  caret-color: var(--text-primary);
 }

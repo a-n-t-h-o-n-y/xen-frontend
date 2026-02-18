@@ -1,4 +1,12 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import {
+  type CSSProperties,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import './App.css'
 import {
   addXenBridgeListener,
@@ -7,38 +15,107 @@ import {
 } from './bridge/juceBridge'
 
 const BRIDGE_PROTOCOL = 'xen.bridge.v1'
-const FRONTEND_APP = 'xen-frontend-debug'
-const FRONTEND_VERSION = '0.1.0'
-const MAX_LOG_ENTRIES = 200
+const FRONTEND_APP = 'xen-frontend-skeleton'
+const FRONTEND_VERSION = '0.2.0'
+const MAX_COMMAND_HISTORY = 100
+const DEFAULT_TUNING_LENGTH = 12
 
-type EnvelopeType = 'request' | 'response' | 'event'
+type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
+type TranslateDirection = 'up' | 'down'
+type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
+
+type EnvelopePayload = Record<string, unknown>
 
 type Envelope = {
-  protocol: typeof BRIDGE_PROTOCOL
-  type: EnvelopeType
+  protocol: string
+  type: 'request' | 'response' | 'event'
   name: string
   request_id?: string
-  payload: Record<string, unknown>
+  payload: EnvelopePayload
 }
 
-type ConnectionStatus = 'missing' | 'connecting' | 'connected' | 'error'
-type LogDirection = 'outbound' | 'inbound' | 'event' | 'system'
+type NoteCell = {
+  type: 'Note'
+  weight: number
+  pitch: number
+  velocity: number
+  delay: number
+  gate: number
+}
 
-type LogEntry = {
-  id: string
-  timestamp: string
-  direction: LogDirection
+type RestCell = {
+  type: 'Rest'
+  weight: number
+}
+
+type SequenceCell = {
+  type: 'Sequence'
+  weight: number
+  cells: Cell[]
+}
+
+type Cell = NoteCell | RestCell | SequenceCell
+
+type Measure = {
+  cell: Cell
+  time_signature: {
+    numerator: number
+    denominator: number
+  }
+}
+
+type Scale = {
   name: string
-  body?: unknown
-  error?: string
+  tuning_length: number
+  intervals: number[]
+  mode: number
 }
 
-const createId = (): string => {
+type UiStateSnapshot = {
+  snapshot_version: number
+  engine: {
+    sequence_bank: Measure[]
+    sequence_names: string[]
+    tuning: {
+      intervals: number[]
+      octave: number
+    }
+    tuning_name: string
+    scale: Scale | null
+    key: number
+    scale_translate_direction: TranslateDirection
+    base_frequency: number
+  }
+  editor: {
+    selected: {
+      measure: number
+      cell: number[]
+    }
+    input_mode: InputMode
+  }
+}
+
+const REFERENCE_RATIOS = [
+  Math.log2(1 / 1),
+  Math.log2(3 / 2),
+  Math.log2(4 / 3),
+  Math.log2(5 / 4),
+  Math.log2(6 / 5),
+  Math.log2(5 / 3),
+  Math.log2(8 / 5),
+  Math.log2(9 / 8),
+  Math.log2(16 / 9),
+  Math.log2(15 / 8),
+  Math.log2(16 / 15),
+  Math.log2(45 / 32),
+].sort((a, b) => a - b)
+
+const createRequestId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
   }
 
-  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return `req-${Date.now()}`
 }
 
 const getErrorMessage = (error: unknown): string => {
@@ -46,37 +123,24 @@ const getErrorMessage = (error: unknown): string => {
     return error.message
   }
 
-  return 'Unknown bridge error'
+  return String(error)
 }
 
-const formatJson = (value: unknown): string => {
-  if (typeof value === 'string') {
-    return value
+const parseWireEnvelope = (rawValue: unknown): Envelope => {
+  if (typeof rawValue === 'string') {
+    throw new Error('Bridge contract mismatch: expected object envelope, received string')
   }
 
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
-
-const parseEnvelope = (rawValue: unknown): Envelope => {
   if (typeof rawValue !== 'object' || rawValue === null || Array.isArray(rawValue)) {
     throw new Error('Envelope is not an object')
   }
 
   const candidate = rawValue as Record<string, unknown>
-
   if (candidate.protocol !== BRIDGE_PROTOCOL) {
     throw new Error('Unexpected bridge protocol')
   }
 
-  if (
-    candidate.type !== 'request' &&
-    candidate.type !== 'response' &&
-    candidate.type !== 'event'
-  ) {
+  if (candidate.type !== 'request' && candidate.type !== 'response' && candidate.type !== 'event') {
     throw new Error('Unexpected envelope type')
   }
 
@@ -92,328 +156,993 @@ const parseEnvelope = (rawValue: unknown): Envelope => {
     throw new Error('Envelope payload must be an object')
   }
 
-  if (
-    candidate.request_id !== undefined &&
-    typeof candidate.request_id !== 'string'
-  ) {
-    throw new Error('Envelope request_id must be a string when present')
-  }
-
   return {
     protocol: BRIDGE_PROTOCOL,
     type: candidate.type,
     name: candidate.name,
-    request_id: candidate.request_id,
-    payload: candidate.payload as Record<string, unknown>,
+    request_id: typeof candidate.request_id === 'string' ? candidate.request_id : undefined,
+    payload: candidate.payload as EnvelopePayload,
   }
 }
 
-const parseWireEnvelope = (rawValue: unknown): Envelope => {
-  const parsed = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue
-  return parseEnvelope(parsed)
+const getPayloadError = (payload: EnvelopePayload): string | null => {
+  const rawError = payload.error
+  if (typeof rawError !== 'object' || rawError === null || Array.isArray(rawError)) {
+    return null
+  }
+
+  const message = (rawError as Record<string, unknown>).message
+  return typeof message === 'string' ? message : null
+}
+
+const getCommandSnapshot = (payload: EnvelopePayload): unknown =>
+  'snapshot' in payload ? payload.snapshot : null
+
+const isMessageLevel = (value: unknown): value is MessageLevel =>
+  value === 'debug' || value === 'info' || value === 'warning' || value === 'error'
+
+const getCommandStatus = (
+  payload: EnvelopePayload
+): { level: MessageLevel; message: string } | null => {
+  const rawStatus = payload.status
+  if (typeof rawStatus !== 'object' || rawStatus === null || Array.isArray(rawStatus)) {
+    return null
+  }
+
+  const statusLevel = (rawStatus as Record<string, unknown>).level
+  const statusMessage = (rawStatus as Record<string, unknown>).message
+  if (!isMessageLevel(statusLevel) || typeof statusMessage !== 'string') {
+    return null
+  }
+
+  return {
+    level: statusLevel,
+    message: statusMessage,
+  }
+}
+
+const isEditableTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  const tagName = target.tagName
+  return (
+    target.isContentEditable ||
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT'
+  )
+}
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null
+  }
+
+  return value as Record<string, unknown>
+}
+
+const toNumberArray = (value: unknown): number[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.filter((item): item is number => typeof item === 'number')
+}
+
+const normalizePitch = (pitch: number, tuningLength: number): number => {
+  const modulo = pitch % tuningLength
+  return modulo >= 0 ? modulo : modulo + tuningLength
+}
+
+const parseCell = (value: unknown): Cell | null => {
+  const cell = asRecord(value)
+  if (!cell || typeof cell.type !== 'string' || typeof cell.weight !== 'number') {
+    return null
+  }
+
+  if (
+    cell.type === 'Note' &&
+    typeof cell.pitch === 'number' &&
+    typeof cell.velocity === 'number' &&
+    typeof cell.delay === 'number' &&
+    typeof cell.gate === 'number'
+  ) {
+    return {
+      type: 'Note',
+      weight: cell.weight,
+      pitch: cell.pitch,
+      velocity: cell.velocity,
+      delay: cell.delay,
+      gate: cell.gate,
+    }
+  }
+
+  if (cell.type === 'Rest') {
+    return {
+      type: 'Rest',
+      weight: cell.weight,
+    }
+  }
+
+  if (cell.type === 'Sequence' && Array.isArray(cell.cells)) {
+    return {
+      type: 'Sequence',
+      weight: cell.weight,
+      cells: cell.cells.map(parseCell).filter((item): item is Cell => item !== null),
+    }
+  }
+
+  return null
+}
+
+const parseMeasure = (value: unknown): Measure | null => {
+  const measure = asRecord(value)
+  if (!measure) {
+    return null
+  }
+
+  const cell = parseCell(measure.cell)
+  const timeSignature = asRecord(measure.time_signature)
+  if (
+    !cell ||
+    !timeSignature ||
+    typeof timeSignature.numerator !== 'number' ||
+    typeof timeSignature.denominator !== 'number'
+  ) {
+    return null
+  }
+
+  return {
+    cell,
+    time_signature: {
+      numerator: timeSignature.numerator,
+      denominator: timeSignature.denominator,
+    },
+  }
+}
+
+const parseScale = (value: unknown): Scale | null => {
+  if (value === null) {
+    return null
+  }
+
+  const scale = asRecord(value)
+  if (
+    !scale ||
+    typeof scale.name !== 'string' ||
+    typeof scale.tuning_length !== 'number' ||
+    typeof scale.mode !== 'number'
+  ) {
+    return null
+  }
+
+  return {
+    name: scale.name,
+    tuning_length: scale.tuning_length,
+    intervals: toNumberArray(scale.intervals),
+    mode: scale.mode,
+  }
+}
+
+const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => {
+  const snapshot = asRecord(value)
+  if (!snapshot || typeof snapshot.snapshot_version !== 'number') {
+    return null
+  }
+
+  const engine = asRecord(snapshot.engine)
+  const editor = asRecord(snapshot.editor)
+  if (!engine || !editor) {
+    return null
+  }
+
+  const tuning = asRecord(engine.tuning)
+  const selected = asRecord(editor.selected)
+  if (
+    !tuning ||
+    !selected ||
+    typeof tuning.octave !== 'number' ||
+    typeof engine.tuning_name !== 'string' ||
+    typeof engine.key !== 'number' ||
+    typeof engine.base_frequency !== 'number' ||
+    (engine.scale_translate_direction !== 'up' && engine.scale_translate_direction !== 'down') ||
+    typeof editor.input_mode !== 'string' ||
+    typeof selected.measure !== 'number'
+  ) {
+    return null
+  }
+
+  const inputMode = editor.input_mode
+  if (
+    inputMode !== 'pitch' &&
+    inputMode !== 'velocity' &&
+    inputMode !== 'delay' &&
+    inputMode !== 'gate' &&
+    inputMode !== 'scale'
+  ) {
+    return null
+  }
+
+  const sequenceBank = Array.isArray(engine.sequence_bank)
+    ? engine.sequence_bank.map(parseMeasure).filter((item): item is Measure => item !== null)
+    : []
+
+  const sequenceNames = Array.isArray(engine.sequence_names)
+    ? engine.sequence_names.filter((item): item is string => typeof item === 'string')
+    : []
+
+  const scale = parseScale(engine.scale)
+  const selectedCellPath = Array.isArray(selected.cell)
+    ? selected.cell.filter((item): item is number => typeof item === 'number')
+    : []
+
+  return {
+    snapshot_version: snapshot.snapshot_version,
+    engine: {
+      sequence_bank: sequenceBank,
+      sequence_names: sequenceNames,
+      tuning: {
+        intervals: toNumberArray(tuning.intervals),
+        octave: tuning.octave,
+      },
+      tuning_name: engine.tuning_name,
+      scale,
+      key: engine.key,
+      scale_translate_direction: engine.scale_translate_direction,
+      base_frequency: engine.base_frequency,
+    },
+    editor: {
+      selected: {
+        measure: selected.measure,
+        cell: selectedCellPath,
+      },
+      input_mode: inputMode,
+    },
+  }
+}
+
+const getTuningRatios = (intervals: number[]): number[] =>
+  Array.from(new Set(intervals.map((cents) => cents / 1200))).sort((a, b) => a - b)
+
+const getLargestElement = (values: number[]): number => {
+  if (values.length === 0) {
+    return 0
+  }
+
+  return values[values.length - 1]
+}
+
+const euclidMod = (value: number, modulo: number): number => {
+  if (modulo === 0) {
+    return 0
+  }
+  return ((value % modulo) + modulo) % modulo
+}
+
+const generateValidPitches = (scale: Scale, tuningLength: number): number[] => {
+  if (scale.intervals.length === 0) {
+    return [0]
+  }
+
+  const modeOffset = euclidMod(Math.trunc(scale.mode) - 1, scale.intervals.length)
+  const rotatedIntervals = scale.intervals.map((_, index) => {
+    const intervalIndex = euclidMod(index + modeOffset, scale.intervals.length)
+    return Math.trunc(scale.intervals[intervalIndex] ?? 0)
+  })
+
+  const validPitches = [0]
+  for (const interval of rotatedIntervals) {
+    const nextPitch = validPitches[validPitches.length - 1] + interval
+    if (nextPitch < tuningLength) {
+      validPitches.push(nextPitch)
+    }
+  }
+
+  return Array.from(new Set(validPitches)).sort((a, b) => a - b)
+}
+
+const mapPitchToScale = (
+  pitch: number,
+  validPitches: number[],
+  tuningLength: number,
+  direction: TranslateDirection
+): number => {
+  if (validPitches.length === 0 || tuningLength <= 0) {
+    return pitch
+  }
+
+  let octaveShift = Math.floor(pitch / tuningLength)
+  const normalizedPitch = euclidMod(pitch, tuningLength)
+  let index = validPitches.findIndex((validPitch) => validPitch >= normalizedPitch)
+
+  if (index === -1 || validPitches[index] !== normalizedPitch) {
+    if (direction === 'down') {
+      if (index <= 0) {
+        index = validPitches.length - 1
+        octaveShift -= 1
+      } else {
+        index -= 1
+      }
+    } else if (index === -1) {
+      index = 0
+      octaveShift += 1
+    }
+  }
+
+  return (validPitches[index] ?? normalizedPitch) + octaveShift * tuningLength
+}
+
+const collectNotePitches = (cell: Cell): number[] => {
+  if (cell.type === 'Note') {
+    return [cell.pitch]
+  }
+
+  if (cell.type === 'Sequence') {
+    return cell.cells.flatMap(collectNotePitches)
+  }
+
+  return []
+}
+
+const getCellWeight = (weight: number): number => (weight > 0 ? weight : 1)
+
+type LeafCell = {
+  weight: number
+  note:
+    | {
+        pitch: number
+        velocity: number
+        delay: number
+        gate: number
+      }
+    | null
+}
+
+const flattenLeafCells = (cells: Cell[], tuningLength: number): LeafCell[] => {
+  const result: LeafCell[] = []
+
+  const walk = (cell: Cell, parentWeight: number): void => {
+    const accumulatedWeight = parentWeight * getCellWeight(cell.weight)
+
+    if (cell.type === 'Sequence') {
+      if (cell.cells.length === 0) {
+        result.push({ weight: accumulatedWeight, note: null })
+        return
+      }
+
+      for (const nestedCell of cell.cells) {
+        walk(nestedCell, accumulatedWeight)
+      }
+      return
+    }
+
+    if (cell.type === 'Note') {
+      const normalizedVelocity = Math.min(Math.max(cell.velocity, 0), 1)
+      const normalizedDelay = Math.min(Math.max(cell.delay, 0), 1)
+      const normalizedGate = Math.min(Math.max(cell.gate, 0), 1)
+
+      result.push({
+        weight: accumulatedWeight,
+        note: {
+          pitch: normalizePitch(cell.pitch, tuningLength),
+          velocity: normalizedVelocity,
+          delay: normalizedDelay,
+          gate: normalizedGate,
+        },
+      })
+      return
+    }
+
+    result.push({ weight: accumulatedWeight, note: null })
+  }
+
+  for (const cell of cells) {
+    walk(cell, 1)
+  }
+
+  return result
+}
+
+const getSelectedMeasure = (snapshot: UiStateSnapshot): Measure | null => {
+  const sequenceBank = snapshot.engine.sequence_bank
+  if (sequenceBank.length === 0) {
+    return null
+  }
+
+  const selectedIndex = Math.max(
+    0,
+    Math.min(snapshot.editor.selected.measure, sequenceBank.length - 1)
+  )
+  return sequenceBank[selectedIndex] ?? null
 }
 
 function App() {
-  const [status, setStatus] = useState<ConnectionStatus>('missing')
-  const [lastError, setLastError] = useState<string | null>(null)
-  const [pluginVersion, setPluginVersion] = useState<string>('unknown')
-  const [latestSnapshot, setLatestSnapshot] = useState<unknown>(null)
-  const [catalog, setCatalog] = useState<unknown>(null)
-  const [keymap, setKeymap] = useState<unknown>(null)
-  const [commandText, setCommandText] = useState<string>('')
-  const [logEntries, setLogEntries] = useState<LogEntry[]>([])
+  const [currentInputMode, setCurrentInputMode] = useState<InputMode>('pitch')
+  const [statusMessage, setStatusMessage] = useState('Waiting for backend...')
+  const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
+  const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
+  const [snapshot, setSnapshot] = useState<UiStateSnapshot | null>(null)
+  const [isCommandMode, setIsCommandMode] = useState(false)
+  const [commandText, setCommandText] = useState('')
+  const [commandHistory, setCommandHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState<number>(-1)
   const eventTokenRef = useRef<unknown>(null)
+  const commandInputRef = useRef<HTMLInputElement>(null)
+  const liveCommandBufferRef = useRef('')
+  const lastSnapshotVersionRef = useRef<number>(-1)
 
-  const appendLog = useCallback(
-    (entry: Omit<LogEntry, 'id' | 'timestamp'>): void => {
-      const logEntry: LogEntry = {
-        id: createId(),
-        timestamp: new Date().toISOString(),
-        ...entry,
+  const sendBridgeRequest = useCallback(
+    async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
+      const request = {
+        protocol: BRIDGE_PROTOCOL,
+        type: 'request' as const,
+        name,
+        request_id: createRequestId(),
+        payload,
       }
 
-      setLogEntries((previous) => [logEntry, ...previous].slice(0, MAX_LOG_ENTRIES))
+      const requestFn = await getXenBridgeRequest()
+      const rawResponse = await requestFn(JSON.stringify(request))
+      const envelope = parseWireEnvelope(rawResponse)
+
+      if (envelope.type !== 'response') {
+        throw new Error(`Unexpected '${envelope.type}' envelope for '${name}'`)
+      }
+
+      return envelope
     },
     []
   )
 
-  const sendBridgeRequest = useCallback(
-    async (name: string, payload: Record<string, unknown>): Promise<Envelope> => {
-      const requestEnvelope: Envelope = {
-        protocol: BRIDGE_PROTOCOL,
-        type: 'request',
-        name,
-        request_id: createId(),
-        payload,
+  const applySnapshot = useCallback((rawSnapshot: unknown): number | null => {
+    const parsedSnapshot = parseUiStateSnapshot(rawSnapshot)
+    if (!parsedSnapshot) {
+      return null
+    }
+
+    if (parsedSnapshot.snapshot_version <= lastSnapshotVersionRef.current) {
+      return parsedSnapshot.snapshot_version
+    }
+
+    lastSnapshotVersionRef.current = parsedSnapshot.snapshot_version
+    setSnapshot(parsedSnapshot)
+    setCurrentInputMode(parsedSnapshot.editor.input_mode)
+    return parsedSnapshot.snapshot_version
+  }, [])
+
+  const openCommandMode = useCallback((): void => {
+    liveCommandBufferRef.current = commandText
+    setHistoryIndex(-1)
+    setIsCommandMode(true)
+  }, [commandText])
+
+  const closeCommandMode = useCallback(
+    (options?: { preserveText?: boolean }): void => {
+      setIsCommandMode(false)
+      setHistoryIndex(-1)
+      if (!options?.preserveText) {
+        setCommandText('')
+        liveCommandBufferRef.current = ''
       }
-
-      appendLog({
-        direction: 'outbound',
-        name: requestEnvelope.name,
-        body: requestEnvelope,
-      })
-
-      const requestFn = getXenBridgeRequest()
-      const rawResponse = await requestFn(JSON.stringify(requestEnvelope))
-      let responseEnvelope: Envelope
-
-      try {
-        responseEnvelope = parseWireEnvelope(rawResponse)
-      } catch (error) {
-        const message = getErrorMessage(error)
-        appendLog({
-          direction: 'inbound',
-          name: 'response.parse_error',
-          body: rawResponse,
-          error: message,
-        })
-        throw new Error(message)
-      }
-
-      appendLog({
-        direction: 'inbound',
-        name: responseEnvelope.name,
-        body: responseEnvelope,
-      })
-
-      return responseEnvelope
     },
-    [appendLog]
+    []
   )
 
-  const bootstrapBridge = useCallback(async (): Promise<void> => {
-    setStatus('connecting')
-    setLastError(null)
-
-    if (eventTokenRef.current !== null) {
-      removeXenBridgeListener(eventTokenRef.current)
-      eventTokenRef.current = null
-    }
-
-    try {
-      eventTokenRef.current = addXenBridgeListener((rawEvent) => {
-        try {
-          const eventEnvelope = parseWireEnvelope(rawEvent)
-          appendLog({
-            direction: 'event',
-            name: eventEnvelope.name,
-            body: eventEnvelope,
-          })
-
-          if (eventEnvelope.name === 'state.changed') {
-            setLatestSnapshot(eventEnvelope.payload)
-          }
-        } catch (error) {
-          appendLog({
-            direction: 'event',
-            name: 'event.parse_error',
-            body: rawEvent,
-            error: getErrorMessage(error),
-          })
-        }
-      })
-
-      const helloResponse = await sendBridgeRequest('session.hello', {
-        protocol: BRIDGE_PROTOCOL,
-        snapshot_schema_version: 1,
-        frontend_app: FRONTEND_APP,
-        frontend_version: FRONTEND_VERSION,
-      })
-
-      if (typeof helloResponse.payload.plugin_version === 'string') {
-        setPluginVersion(helloResponse.payload.plugin_version)
-      }
-
-      const stateResponse = await sendBridgeRequest('state.get', {})
-      setLatestSnapshot(stateResponse.payload)
-
-      const catalogResponse = await sendBridgeRequest('catalog.get', {})
-      setCatalog(catalogResponse.payload)
-
-      const keymapResponse = await sendBridgeRequest('keymap.get', {})
-      setKeymap(keymapResponse.payload)
-
-      setStatus('connected')
-    } catch (error) {
-      const message = getErrorMessage(error)
-      setStatus('missing')
-      setLastError(message)
-      appendLog({
-        direction: 'system',
-        name: 'bridge.unavailable',
-        error: message,
-      })
-    }
-  }, [appendLog, sendBridgeRequest])
-
   useEffect(() => {
-    const bootstrapTimer = window.setTimeout(() => {
-      void bootstrapBridge()
-    }, 0)
+    let isMounted = true
+
+    const connect = async (): Promise<void> => {
+      try {
+        setStatusMessage('Connecting to backend...')
+        setStatusLevel('info')
+
+        eventTokenRef.current = addXenBridgeListener((rawEvent) => {
+          try {
+            const eventEnvelope = parseWireEnvelope(rawEvent)
+            if (eventEnvelope.name !== 'state.changed') {
+              return
+            }
+
+            applySnapshot(eventEnvelope.payload)
+          } catch (error) {
+            setStatusMessage(`Backend event error: ${getErrorMessage(error)}`)
+            setStatusLevel('error')
+          }
+        })
+
+        const helloResponse = await sendBridgeRequest('session.hello', {
+          protocol: BRIDGE_PROTOCOL,
+          snapshot_schema_version: 1,
+          frontend_app: FRONTEND_APP,
+          frontend_version: FRONTEND_VERSION,
+        })
+
+        const helloError = getPayloadError(helloResponse.payload)
+        if (helloError) {
+          throw new Error(helloError)
+        }
+
+        const pluginVersion =
+          typeof helloResponse.payload.plugin_version === 'string'
+            ? helloResponse.payload.plugin_version
+            : 'unknown'
+
+        if (isMounted) {
+          setBridgeUnavailableMessage(null)
+          setStatusMessage(`Connected to backend (plugin v${pluginVersion})`)
+          setStatusLevel('info')
+        }
+
+        const stateResponse = await sendBridgeRequest('state.get', {})
+        const stateError = getPayloadError(stateResponse.payload)
+        if (stateError) {
+          throw new Error(stateError)
+        }
+
+        const appliedVersion = applySnapshot(stateResponse.payload)
+        if (isMounted) {
+          setStatusMessage(
+            appliedVersion === null
+              ? 'Loaded initial state'
+              : `Loaded initial state (snapshot ${appliedVersion})`
+          )
+          setStatusLevel('info')
+        }
+      } catch (error) {
+        if (isMounted) {
+          const message = getErrorMessage(error)
+          setStatusMessage(`Backend status: ${message}`)
+          setStatusLevel('error')
+          if (message.startsWith('JUCE bridge unavailable:')) {
+            setBridgeUnavailableMessage(message)
+          }
+        }
+      }
+    }
+
+    void connect()
 
     return () => {
-      window.clearTimeout(bootstrapTimer)
-
+      isMounted = false
       if (eventTokenRef.current !== null) {
         removeXenBridgeListener(eventTokenRef.current)
         eventTokenRef.current = null
       }
     }
-  }, [bootstrapBridge])
+  }, [applySnapshot, sendBridgeRequest])
 
-  const requestStateSnapshot = useCallback(async (): Promise<void> => {
-    try {
-      const response = await sendBridgeRequest('state.get', {})
-      setLatestSnapshot(response.payload)
-      setLastError(null)
-    } catch (error) {
-      const message = getErrorMessage(error)
-      setLastError(message)
-      appendLog({
-        direction: 'system',
-        name: 'state.get.failed',
-        error: message,
-      })
+  useEffect(() => {
+    if (!isCommandMode) {
+      return
     }
-  }, [appendLog, sendBridgeRequest])
 
-  const handleCommandSubmit = useCallback(
+    const input = commandInputRef.current
+    if (!input) {
+      return
+    }
+
+    input.focus()
+    const textLength = input.value.length
+    input.setSelectionRange(textLength, textLength)
+  }, [isCommandMode])
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent): void => {
+      if (isCommandMode || bridgeUnavailableMessage !== null) {
+        return
+      }
+
+      if (event.key !== ':') {
+        return
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+
+      if (isEditableTarget(event.target)) {
+        return
+      }
+
+      event.preventDefault()
+      openCommandMode()
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [bridgeUnavailableMessage, isCommandMode, openCommandMode])
+
+  const submitCommand = useCallback(
     async (event: FormEvent<HTMLFormElement>): Promise<void> => {
       event.preventDefault()
 
       const command = commandText.trim()
       if (!command) {
+        closeCommandMode({ preserveText: true })
         return
       }
 
+      setCommandHistory((previous) => [command, ...previous].slice(0, MAX_COMMAND_HISTORY))
+      setHistoryIndex(-1)
+      liveCommandBufferRef.current = ''
+
+      let shouldClearCommandText = false
+
       try {
         const response = await sendBridgeRequest('command.execute', { command })
-        setCommandText('')
-        setLastError(null)
-
-        const snapshot = response.payload.snapshot
-        if (typeof snapshot === 'object' && snapshot !== null) {
-          setLatestSnapshot(snapshot)
+        const payloadError = getPayloadError(response.payload)
+        if (payloadError) {
+          throw new Error(payloadError)
         }
 
-        const statusPayload = response.payload.status
-        if (typeof statusPayload === 'object' && statusPayload !== null) {
-          appendLog({
-            direction: 'system',
-            name: 'command.status',
-            body: statusPayload,
-          })
+        const commandSnapshot = getCommandSnapshot(response.payload)
+        const commandSnapshotVersion = applySnapshot(commandSnapshot)
+        const commandStatus = getCommandStatus(response.payload)
+
+        if (commandStatus) {
+          setStatusMessage(commandStatus.message)
+          setStatusLevel(commandStatus.level)
+        } else if (commandSnapshotVersion !== null) {
+          setStatusMessage(`Command applied (snapshot ${commandSnapshotVersion})`)
+          setStatusLevel('info')
+        } else {
+          setStatusMessage(`Command applied: ${command}`)
+          setStatusLevel('info')
         }
+
+        shouldClearCommandText = true
       } catch (error) {
-        const message = getErrorMessage(error)
-        setLastError(message)
-        appendLog({
-          direction: 'system',
-          name: 'command.execute.failed',
-          error: message,
-        })
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+      } finally {
+        closeCommandMode({ preserveText: !shouldClearCommandText })
       }
     },
-    [appendLog, commandText, sendBridgeRequest]
+    [applySnapshot, closeCommandMode, commandText, sendBridgeRequest]
   )
 
-  const statusLabel =
-    status === 'connected'
-      ? 'Connected'
-      : status === 'connecting'
-        ? 'Connecting'
-        : status === 'error'
-          ? 'Error'
-          : 'Backend Missing'
+  const {
+    tuningLength,
+    selectedMeasureIndex,
+    selectedMeasureName,
+    timeSignature,
+    scaleName,
+    scaleMode,
+    tuningName,
+    keyDisplay,
+    baseFrequency,
+    staffLineBandByPitch,
+    leafCells,
+    rulerRatios,
+    highlightedPitches,
+  } = useMemo(() => {
+    if (!snapshot) {
+      const defaultStaffLineBand = Array.from(
+        { length: DEFAULT_TUNING_LENGTH },
+        (_, pitch) => (pitch % 2 === 0 ? 0 : 1)
+      )
+      return {
+        tuningLength: DEFAULT_TUNING_LENGTH,
+        selectedMeasureIndex: 0,
+        selectedMeasureName: 'Init Test',
+        timeSignature: '4/4',
+        scaleName: 'major diatonic',
+        scaleMode: 3,
+        tuningName: '12EDO',
+        keyDisplay: 2,
+        baseFrequency: 440,
+        staffLineBandByPitch: defaultStaffLineBand,
+        leafCells: [] as LeafCell[],
+        rulerRatios: getTuningRatios(Array.from({ length: DEFAULT_TUNING_LENGTH }, (_, i) => i * 100)),
+        highlightedPitches: new Set<number>(),
+      }
+    }
 
+    const rawTuningLength = snapshot.engine.tuning.intervals.length
+    const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
+    const selectedMeasure = getSelectedMeasure(snapshot)
+    const selectedIndex = Math.max(
+      0,
+      Math.min(snapshot.editor.selected.measure, snapshot.engine.sequence_bank.length - 1)
+    )
+    const sequenceName = snapshot.engine.sequence_names[selectedIndex] ?? `Sequence ${selectedIndex}`
+    const scaleValidPitches = snapshot.engine.scale
+      ? generateValidPitches(snapshot.engine.scale, derivedTuningLength)
+      : []
+    const translateDirection = snapshot.engine.scale_translate_direction
+
+    const mapPitch = (pitch: number): number =>
+      mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
+
+    const selectedCell = selectedMeasure?.cell ?? null
+    const directCells =
+      selectedCell?.type === 'Sequence' ? selectedCell.cells : selectedCell ? [selectedCell] : []
+
+    const allMeasurePitches = selectedCell ? collectNotePitches(selectedCell) : []
+    const mappedHighlights = new Set(
+      allMeasurePitches.map((pitch) =>
+        normalizePitch(mapPitch(normalizePitch(pitch, derivedTuningLength)), derivedTuningLength)
+      )
+    )
+
+    const tuningRatios = getTuningRatios(snapshot.engine.tuning.intervals)
+    const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
+    const hasScale = snapshot.engine.scale !== null
+    const staffLineBands: number[] = []
+
+    if (hasScale) {
+      let currentBand = 0
+      let previousMappedPitch = 0
+
+      for (let pitch = 0; pitch < derivedTuningLength; pitch += 1) {
+        const mappedPitch = rowMap[pitch] ?? pitch
+        if (mappedPitch !== previousMappedPitch) {
+          currentBand = currentBand === 0 ? 1 : 0
+        }
+        staffLineBands.push(currentBand)
+        previousMappedPitch = mappedPitch
+      }
+    } else {
+      for (let pitch = 0; pitch < derivedTuningLength; pitch += 1) {
+        staffLineBands.push(pitch % 2 === 0 ? 0 : 1)
+      }
+    }
+
+    const signature = selectedMeasure?.time_signature
+      ? `${selectedMeasure.time_signature.numerator}/${selectedMeasure.time_signature.denominator}`
+      : '4/4'
+
+    return {
+      tuningLength: derivedTuningLength,
+      selectedMeasureIndex: selectedIndex,
+      selectedMeasureName: sequenceName,
+      timeSignature: signature,
+      scaleName: snapshot.engine.scale?.name ?? 'none',
+      scaleMode: snapshot.engine.scale?.mode ?? 0,
+      tuningName: snapshot.engine.tuning_name,
+      keyDisplay: snapshot.engine.key,
+      baseFrequency: snapshot.engine.base_frequency,
+      staffLineBandByPitch: staffLineBands,
+      leafCells: flattenLeafCells(directCells, derivedTuningLength),
+      rulerRatios: tuningRatios,
+      highlightedPitches: mappedHighlights,
+    }
+  }, [snapshot])
+
+  const pitchRows = useMemo(
+    () => Array.from({ length: tuningLength }, (_, index) => tuningLength - 1 - index),
+    [tuningLength]
+  )
+
+  const referenceMax = getLargestElement(REFERENCE_RATIOS)
+  const rulerOffset = (1 - referenceMax) / 2
+
+  const ratioToBottom = useCallback(
+    (ratio: number): number => {
+      let bottom = ratio + rulerOffset
+      while (bottom > 1) {
+        bottom -= 1
+      }
+      while (bottom < 0) {
+        bottom += 1
+      }
+      return bottom * 100
+    },
+    [rulerOffset]
+  )
+
+  const currentInputModeLetter = currentInputMode.charAt(0).toUpperCase()
   return (
-    <div className="appShell">
-      <header className="topBar">
-        <div>
-          <h1>Xen JUCE Bridge Debugger</h1>
-          <p>
-            Inspect bridge traffic, state snapshots, and send raw text commands through
-            <code> command.execute</code>.
-          </p>
-        </div>
-        <div className="topBarActions">
-          <span className={`statusPill status-${status}`}>{statusLabel}</span>
-          <button type="button" className="buttonSecondary" onClick={() => void bootstrapBridge()}>
-            Reconnect
-          </button>
-          <button
-            type="button"
-            className="buttonSecondary"
-            onClick={() => setLogEntries([])}
-          >
-            Clear Logs
-          </button>
-        </div>
-      </header>
-
-      <section className="panelGrid">
-        <div className="panel">
-          <h2>Session</h2>
-          <p>
-            Plugin version: <strong>{pluginVersion}</strong>
-          </p>
-          {lastError && <p className="errorText">{lastError}</p>}
-        </div>
-
-        <div className="panel">
-          <h2>Command Console</h2>
-          <form className="commandForm" onSubmit={(event) => void handleCommandSubmit(event)}>
-            <input
-              value={commandText}
-              onChange={(event) => setCommandText(event.target.value)}
-              placeholder='Example: transpose up 12'
-              className="commandInput"
-            />
-            <button type="submit" className="buttonPrimary">
-              Send
-            </button>
-          </form>
-          <div className="panelActions">
-            <button type="button" className="buttonSecondary" onClick={() => void requestStateSnapshot()}>
-              Request state.get
-            </button>
+    <div className="app">
+      <header className="header">
+        <div className="headerGroup">
+          <div className="headerGrid">
+            <div className="headerField">
+              <span className="fieldLabel">Time Signature</span>
+              <span className="fieldValue mono">{timeSignature}</span>
+            </div>
+            <div className="headerField">
+              <span className="fieldLabel">Key</span>
+              <span className="fieldValue mono">{keyDisplay}</span>
+            </div>
+            <div className="headerField">
+              <span className="fieldLabel">Zero Freq. (Hz)</span>
+              <span className="fieldValue mono">{baseFrequency}</span>
+            </div>
           </div>
         </div>
-
-        <div className="panel panelWide">
-          <h2>Latest Snapshot</h2>
-          <pre>{formatJson(latestSnapshot)}</pre>
+        <div className="headerGroup">
+          <div className="headerGrid">
+            <div className="headerField">
+              <span className="fieldLabel">Scale</span>
+              <span className="fieldValue">{scaleName}</span>
+            </div>
+            <div className="headerField">
+              <span className="fieldLabel">Mode</span>
+              <span className="fieldValue mono">{scaleMode}</span>
+            </div>
+            <div className="headerField">
+              <span className="fieldLabel">Tuning</span>
+              <span className="fieldValue mono">{tuningName}</span>
+            </div>
+          </div>
         </div>
-
-        <div className="panel">
-          <h2>Cached Catalog</h2>
-          <pre>{formatJson(catalog)}</pre>
+        <div className="headerGroup">
+          <div className="headerGrid">
+            <div className="headerField">
+              <span className="fieldLabel">Sequence Index</span>
+              <span className="fieldValue mono">{selectedMeasureIndex}</span>
+            </div>
+            <div className="headerField">
+              <span className="fieldLabel">Sequence Name</span>
+              <span className="fieldValue">{selectedMeasureName}</span>
+            </div>
+          </div>
         </div>
-
-        <div className="panel">
-          <h2>Cached Keymap</h2>
-          <pre>{formatJson(keymap)}</pre>
-        </div>
-
-        <div className="panel panelWide">
-          <h2>Bridge Traffic</h2>
-          <ul className="logList">
-            {logEntries.map((entry) => (
-              <li key={entry.id} className="logEntry">
-                <div className="logHeader">
-                  <span>{entry.timestamp}</span>
-                  <span className={`directionBadge direction-${entry.direction}`}>
-                    {entry.direction}
-                  </span>
-                  <code>{entry.name}</code>
+      </header>
+      <main className="sequencer">
+        {bridgeUnavailableMessage ? (
+          <section className="bridgeNotice" aria-live="polite">
+            <h1 className="bridgeNoticeTitle">JUCE native bridge not detected</h1>
+            <p className="bridgeNoticeBody">{bridgeUnavailableMessage}</p>
+            <p className="bridgeNoticeHint">
+              Run this frontend inside the JUCE WebView host to enable backend requests and events.
+            </p>
+          </section>
+        ) : (
+          <section className="sequencerShell" aria-label="Single octave sequencer view">
+            <aside className="pitchIndexBar" aria-label="Pitch index">
+              {pitchRows.map((pitch) => (
+                <div key={`left-pitch-${pitch}`} className="pitchIndexRow mono">
+                  {pitch}
                 </div>
-                {entry.error && <p className="errorText">{entry.error}</p>}
-                {entry.body !== undefined && <pre>{formatJson(entry.body)}</pre>}
-              </li>
-            ))}
-          </ul>
+              ))}
+            </aside>
+
+            <div className="pianoRoll" role="img" aria-label="Single octave piano roll">
+              <div className="rollIslands" aria-hidden="true">
+                {(leafCells.length > 0 ? leafCells : [{ weight: 1, note: null }]).map(
+                  (leafCell, index) => (
+                  <div
+                    key={`roll-island-${index}`}
+                    className="rollIsland"
+                    style={
+                      {
+                        flexGrow: leafCell.weight,
+                        flexBasis: 0,
+                      } as CSSProperties
+                    }
+                  >
+                    <div className="rollIslandGrid">
+                      {pitchRows.map((pitch) => (
+                        <div
+                          key={`roll-island-${index}-row-${pitch}`}
+                          className={`rollRow ${(staffLineBandByPitch[pitch] ?? 0) === 0 ? 'rollRow-bandEven' : 'rollRow-bandOdd'}`}
+                        >
+                          <div className="rollRowLine" aria-hidden="true" />
+                          {leafCell.note?.pitch === pitch ? (
+                            <div
+                              className={`rollNote${leafCell.note.delay > 0 ? ' rollNote-hasDelay' : ''}${leafCell.note.gate < 1 ? ' rollNote-shortGate' : ''}`}
+                              style={
+                                {
+                                  left: `${leafCell.note.delay * 100}%`,
+                                  width: `max(${(1 - leafCell.note.delay) * leafCell.note.gate * 100}%, 4px)`,
+                                  background: `rgb(220 136 122 / ${0.04 + leafCell.note.velocity * 0.9})`,
+                                } as CSSProperties
+                              }
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+                )}
+              </div>
+            </div>
+
+            <aside className="tuningRuler" aria-label="Tuning ruler">
+              <div className="tuningRulerLine" />
+              {REFERENCE_RATIOS.map((ratio, index) => (
+                <span
+                  key={`reference-mark-${index}`}
+                  className="rulerMark rulerMark-reference"
+                  style={{ bottom: `${ratioToBottom(ratio)}%` }}
+                />
+              ))}
+              {rulerRatios.map((ratio, index) => (
+                <span
+                  key={`tuning-mark-${index}`}
+                  className={`rulerMark rulerMark-tuning${highlightedPitches.has(index) ? ' rulerMark-active' : ''}`}
+                  style={{ bottom: `${ratioToBottom(ratio)}%` }}
+                />
+              ))}
+            </aside>
+          </section>
+        )}
+      </main>
+      <footer className="statusBar">
+        <div className="statusLeft">
+          <span className="modeBadge mono" aria-label={`Input mode ${currentInputMode}`}>
+            {currentInputModeLetter}
+          </span>
         </div>
-      </section>
+        {isCommandMode ? (
+          <form className="statusCommandForm" onSubmit={submitCommand}>
+            <span className="statusPrompt mono">:</span>
+            <input
+              ref={commandInputRef}
+              className="statusCommandInput mono"
+              type="text"
+              value={commandText}
+              onChange={(event) => {
+                const nextValue = event.target.value
+                if (historyIndex !== -1) {
+                  setHistoryIndex(-1)
+                }
+                setCommandText(nextValue)
+                liveCommandBufferRef.current = nextValue
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  closeCommandMode({ preserveText: true })
+                  return
+                }
+
+                if (event.key === 'ArrowUp') {
+                  if (commandHistory.length === 0) {
+                    return
+                  }
+
+                  event.preventDefault()
+
+                  if (historyIndex === -1) {
+                    liveCommandBufferRef.current = commandText
+                    setHistoryIndex(0)
+                    setCommandText(commandHistory[0])
+                    return
+                  }
+
+                  const nextIndex = Math.min(historyIndex + 1, commandHistory.length - 1)
+                  setHistoryIndex(nextIndex)
+                  setCommandText(commandHistory[nextIndex])
+                  return
+                }
+
+                if (event.key === 'ArrowDown') {
+                  if (commandHistory.length === 0 || historyIndex === -1) {
+                    return
+                  }
+
+                  event.preventDefault()
+
+                  if (historyIndex === 0) {
+                    setHistoryIndex(-1)
+                    setCommandText(liveCommandBufferRef.current)
+                    return
+                  }
+
+                  const nextIndex = historyIndex - 1
+                  setHistoryIndex(nextIndex)
+                  setCommandText(commandHistory[nextIndex])
+                }
+              }}
+              onBlur={() => closeCommandMode({ preserveText: true })}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoComplete="off"
+              autoCorrect="off"
+              aria-label="Command input"
+            />
+          </form>
+        ) : (
+          <span className={`statusText status-${statusLevel}`}>{statusMessage}</span>
+        )}
+      </footer>
     </div>
   )
 }
