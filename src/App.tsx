@@ -560,7 +560,7 @@ const getSelectedMeasure = (snapshot: UiStateSnapshot): Measure | null => {
 
 function App() {
   const [currentInputMode, setCurrentInputMode] = useState<InputMode>('pitch')
-  const [statusMessage, setStatusMessage] = useState('Waiting for backend...')
+  const [statusMessage, setStatusMessage] = useState('')
   const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
   const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<UiStateSnapshot | null>(null)
@@ -635,9 +635,6 @@ function App() {
 
     const connect = async (): Promise<void> => {
       try {
-        setStatusMessage('Connecting to backend...')
-        setStatusLevel('info')
-
         eventTokenRef.current = addXenBridgeListener((rawEvent) => {
           try {
             const eventEnvelope = parseWireEnvelope(rawEvent)
@@ -646,9 +643,8 @@ function App() {
             }
 
             applySnapshot(eventEnvelope.payload)
-          } catch (error) {
-            setStatusMessage(`Backend event error: ${getErrorMessage(error)}`)
-            setStatusLevel('error')
+          } catch {
+            // Keep footer status reserved for command responses only.
           }
         })
 
@@ -664,15 +660,8 @@ function App() {
           throw new Error(helloError)
         }
 
-        const pluginVersion =
-          typeof helloResponse.payload.plugin_version === 'string'
-            ? helloResponse.payload.plugin_version
-            : 'unknown'
-
         if (isMounted) {
           setBridgeUnavailableMessage(null)
-          setStatusMessage(`Connected to backend (plugin v${pluginVersion})`)
-          setStatusLevel('info')
         }
 
         const stateResponse = await sendBridgeRequest('state.get', {})
@@ -681,20 +670,33 @@ function App() {
           throw new Error(stateError)
         }
 
-        const appliedVersion = applySnapshot(stateResponse.payload)
+        applySnapshot(stateResponse.payload)
+
+        const welcomeResponse = await sendBridgeRequest('command.execute', { command: 'welcome' })
+        const welcomeError = getPayloadError(welcomeResponse.payload)
+        if (welcomeError) {
+          throw new Error(welcomeError)
+        }
+
+        const welcomeSnapshot = getCommandSnapshot(welcomeResponse.payload)
+        const welcomeSnapshotVersion = applySnapshot(welcomeSnapshot)
+        const welcomeStatus = getCommandStatus(welcomeResponse.payload)
+
         if (isMounted) {
-          setStatusMessage(
-            appliedVersion === null
-              ? 'Loaded initial state'
-              : `Loaded initial state (snapshot ${appliedVersion})`
-          )
-          setStatusLevel('info')
+          if (welcomeStatus) {
+            setStatusMessage(welcomeStatus.message)
+            setStatusLevel(welcomeStatus.level)
+          } else if (welcomeSnapshotVersion !== null) {
+            setStatusMessage(`Command applied (snapshot ${welcomeSnapshotVersion})`)
+            setStatusLevel('info')
+          } else {
+            setStatusMessage('Command applied: welcome')
+            setStatusLevel('info')
+          }
         }
       } catch (error) {
         if (isMounted) {
           const message = getErrorMessage(error)
-          setStatusMessage(`Backend status: ${message}`)
-          setStatusLevel('error')
           if (message.startsWith('JUCE bridge unavailable:')) {
             setBridgeUnavailableMessage(message)
           }
