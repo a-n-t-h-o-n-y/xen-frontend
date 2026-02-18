@@ -1,42 +1,234 @@
-#root {
-  max-width: 1280px;
+.appShell {
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  max-width: 1240px;
+  display: grid;
+  gap: 1rem;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.topBar {
+  border: 1px solid #253149;
+  border-radius: 12px;
+  background: linear-gradient(140deg, #0f1a2e, #131f35);
+  padding: 1.2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+.topBar h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: 0.01em;
+}
+
+.topBar p {
+  margin: 0.35rem 0 0;
+  color: #abbbd4;
+  max-width: 70ch;
+}
+
+.topBarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.statusPill {
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.status-connected {
+  color: #8febca;
+  background: #103e2f;
+  border-color: #245744;
+}
+
+.status-connecting {
+  color: #f8dda0;
+  background: #493617;
+  border-color: #705421;
+}
+
+.status-missing,
+.status-error {
+  color: #ffc0c0;
+  background: #4a1f24;
+  border-color: #7b343c;
+}
+
+.panelGrid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.panel {
+  grid-column: span 6;
+  border: 1px solid #253149;
+  border-radius: 12px;
+  background: #0f182b;
+  padding: 1rem;
+  min-height: 160px;
+}
+
+.panelWide {
+  grid-column: 1 / -1;
+}
+
+.panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #89a6d4;
+}
+
+.panel pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 350px;
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid #27344e;
+  background: #0a1020;
+  color: #d4e1f8;
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  font-family:
+    'Iosevka Web',
+    'SFMono-Regular',
+    Menlo,
+    Consolas,
+    monospace;
+}
+
+.commandForm {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.commandInput {
+  flex: 1;
+  min-width: 220px;
+  border: 1px solid #32456a;
+  border-radius: 8px;
+  background: #070d1b;
+  color: #dbe6f7;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+  font-family:
+    'Iosevka Web',
+    'SFMono-Regular',
+    Menlo,
+    Consolas,
+    monospace;
+}
+
+.panelActions {
+  margin-top: 0.6rem;
+}
+
+.buttonPrimary,
+.buttonSecondary {
+  border: 1px solid #355184;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 0.55rem 0.85rem;
+  transition: border-color 120ms ease-out;
+  font-size: 0.86rem;
+}
+
+.buttonPrimary {
+  background: #275cc2;
+  color: #f5f8ff;
+}
+
+.buttonSecondary {
+  background: #131f35;
+  color: #d2e0fb;
+}
+
+.buttonPrimary:hover,
+.buttonSecondary:hover {
+  border-color: #7ca7ef;
+}
+
+.errorText {
+  color: #ff9090;
+}
+
+.logList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.logEntry {
+  border: 1px solid #253149;
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #0b1325;
+}
+
+.logHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+  color: #a5b8d8;
+}
+
+.directionBadge {
+  border-radius: 999px;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.direction-outbound {
+  background: #143558;
+  color: #96ccff;
+  border-color: #2f5e8f;
+}
+
+.direction-inbound {
+  background: #1f2f53;
+  color: #a9bfff;
+  border-color: #3b5281;
+}
+
+.direction-event {
+  background: #413322;
+  color: #f7d58e;
+  border-color: #76592c;
+}
+
+.direction-system {
+  background: #39304c;
+  color: #d7b8ff;
+  border-color: #5e4a83;
+}
+
+@media (max-width: 900px) {
+  .panel {
+    grid-column: 1 / -1;
   }
-  to {
-    transform: rotate(360deg);
+
+  .commandForm {
+    flex-direction: column;
   }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
 }
