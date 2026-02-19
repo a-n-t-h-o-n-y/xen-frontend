@@ -962,8 +962,10 @@ const parsePatternPrefix = (value: string): PatternPrefix | null => {
 
   let cursor = 0
   let offset = 0
+  let hasOffsetToken = false
   if (/^\+\d+$/.test(tokens[0])) {
     offset = Math.max(0, Math.trunc(Number(tokens[0].slice(1))))
+    hasOffsetToken = true
     cursor += 1
   }
 
@@ -979,6 +981,10 @@ const parsePatternPrefix = (value: string): PatternPrefix | null => {
       intervals.push(interval)
     }
     cursor += 1
+  }
+
+  if (intervals.length === 0 && hasOffsetToken) {
+    return { offset, intervals: [1] }
   }
 
   if (intervals.length === 0) {
@@ -2188,8 +2194,8 @@ function App() {
   const {
     tuningLength,
     sequenceCount,
-    topLevelCellCount,
-    leafTopLevelIndices,
+    patternScopeCellCount,
+    leafPatternScopeIndices,
     rootCells,
     selectedMeasureIndex,
     selectedMeasureNumerator,
@@ -2218,8 +2224,8 @@ function App() {
       return {
         tuningLength: DEFAULT_TUNING_LENGTH,
         sequenceCount: TRANSPORT_SEQUENCE_COUNT,
-        topLevelCellCount: 0,
-        leafTopLevelIndices: [] as number[],
+        patternScopeCellCount: 0,
+        leafPatternScopeIndices: [] as number[],
         rootCells: [] as Cell[],
         selectedMeasureIndex: 0,
         selectedMeasureNumerator: 4,
@@ -2298,10 +2304,29 @@ function App() {
     const selectedNumerator = selectedMeasure?.time_signature?.numerator ?? 4
     const selectedDenominator = selectedMeasure?.time_signature?.denominator ?? 4
     const directLeafCells = collectLeafCells(directCells)
-    const topLevelIndices = directLeafCells.map((leafCell) => leafCell.path[0] ?? 0)
     const selectionPath = snapshot.editor.selected.cell
     const resolvedSelectedCell =
       getCellAtPath(directCells, selectionPath) ?? (selectionPath.length === 0 ? selectedCell : null)
+    const patternScopePath =
+      resolvedSelectedCell?.type === 'Sequence'
+        ? selectionPath
+        : selectionPath.length > 0
+          ? selectionPath.slice(0, -1)
+          : []
+    const patternScopeCell =
+      patternScopePath.length === 0 ? null : getCellAtPath(directCells, patternScopePath)
+    const patternScopeCells =
+      patternScopePath.length === 0
+        ? directCells
+        : patternScopeCell?.type === 'Sequence'
+          ? patternScopeCell.cells
+          : []
+    const scopeIndices = directLeafCells.map((leafCell) => {
+      if (!isPathPrefix(patternScopePath, leafCell.path)) {
+        return -1
+      }
+      return leafCell.path[patternScopePath.length] ?? -1
+    })
     const selectionFlags = directLeafCells.map((leafCell) =>
       isPathPrefix(selectionPath, leafCell.path)
     )
@@ -2309,8 +2334,8 @@ function App() {
     return {
       tuningLength: derivedTuningLength,
       sequenceCount: snapshot.engine.sequence_bank.length,
-      topLevelCellCount: directCells.length,
-      leafTopLevelIndices: topLevelIndices,
+      patternScopeCellCount: patternScopeCells.length,
+      leafPatternScopeIndices: scopeIndices,
       rootCells: directCells,
       selectedMeasureIndex: selectedIndex,
       selectedMeasureNumerator: selectedNumerator,
@@ -2512,15 +2537,15 @@ function App() {
       return selectedLeafFlags
     }
 
-    const matchingIndices = getPatternIndices(topLevelCellCount, pattern)
-    return leafCells.map((_, index) => matchingIndices.has(leafTopLevelIndices[index] ?? -1))
+    const matchingIndices = getPatternIndices(patternScopeCellCount, pattern)
+    return leafCells.map((_, index) => matchingIndices.has(leafPatternScopeIndices[index] ?? -1))
   }, [
     commandText,
     isCommandMode,
     leafCells,
-    leafTopLevelIndices,
+    leafPatternScopeIndices,
+    patternScopeCellCount,
     selectedLeafFlags,
-    topLevelCellCount,
   ])
 
   const selectedLeafPathKeySet = useMemo(() => {
@@ -3943,6 +3968,12 @@ function App() {
                   }
 
                   if (event.key === 'Escape') {
+                    event.preventDefault()
+                    closeCommandMode({ preserveText: true })
+                    return
+                  }
+
+                  if (event.key === 'Backspace' && commandText.length === 0) {
                     event.preventDefault()
                     closeCommandMode({ preserveText: true })
                     return
