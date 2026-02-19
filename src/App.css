@@ -506,9 +506,9 @@
   justify-content: flex-start;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid rgb(255 255 255 / 24%);
-  border-radius: var(--radius-1);
-  background: transparent;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: var(--radius-2);
+  background: var(--surface-1);
 }
 
 .bottomModuleHeader {
@@ -532,6 +532,12 @@
 
 .bottomModule-square {
   flex: 0 0 var(--extras-row-height);
+  min-height: calc(var(--extras-row-height) + var(--square-module-label-offset));
+}
+
+.bottomModule-reference {
+  flex: 1 1 16rem;
+  min-width: 0;
   min-height: calc(var(--extras-row-height) + var(--square-module-label-offset));
 }
 
@@ -588,7 +594,7 @@
   min-width: 0;
   border: 1px solid rgb(255 255 255 / 24%);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 4%);
+  background: rgb(255 255 255 / 6%);
   color: var(--text-primary);
   font-size: 0.78rem;
   padding: 0.3rem 0.4rem;
@@ -605,7 +611,7 @@
   width: 100%;
   border: 1px solid rgb(255 255 255 / 24%);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 4%);
+  background: rgb(255 255 255 / 6%);
   color: var(--text-primary);
   font-size: 0.78rem;
   padding: 0.32rem 0.45rem;
@@ -715,7 +721,7 @@
   position: relative;
   border: 1px solid rgb(255 255 255 / 22%);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 3%);
+  background: rgb(255 255 255 / 4%);
   min-height: 5rem;
   overflow: hidden;
   cursor: crosshair;
@@ -851,7 +857,7 @@
   height: 1.7rem;
   border: 1px solid rgb(255 255 255 / 22%);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 3%);
+  background: rgb(255 255 255 / 4%);
   cursor: ns-resize;
 }
 
@@ -952,7 +958,7 @@
   min-height: 0;
   border: 1px solid rgb(255 255 255 / 20%);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 2%);
+  background: rgb(255 255 255 / 3%);
   color: var(--text-secondary);
   cursor: pointer;
   transition:
@@ -1002,7 +1008,7 @@
   height: 1.2rem;
   border: 1px solid rgb(255 255 255 / 24%);
   border-radius: 4px;
-  background: rgb(255 255 255 / 4%);
+  background: rgb(255 255 255 / 6%);
   color: var(--text-secondary);
   font-size: 0.66rem;
   line-height: 1;
@@ -1014,6 +1020,46 @@
   border-color: rgb(245 196 90 / 58%);
   background: rgb(245 196 90 / 14%);
   color: rgb(252 245 223);
+}
+
+.referenceTabs {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.referenceTab {
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  line-height: 1;
+  padding: 0.22rem 0.38rem;
+}
+
+.referenceTab-active {
+  border-color: rgb(245 196 90 / 58%);
+  background: rgb(245 196 90 / 14%);
+  color: rgb(252 245 223);
+}
+
+.referenceBody {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: var(--radius-1);
+  padding: var(--space-3);
+  background: rgb(255 255 255 / 4%);
+}
+
+.referencePlaceholder {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 860px) {

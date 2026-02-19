@@ -1215,6 +1215,7 @@ function App() {
     Array.from({ length: 4 }, () => createInitialModulatorPanelState())
   )
   const [activeModulatorTab, setActiveModulatorTab] = useState(0)
+  const [activeReferenceTab, setActiveReferenceTab] = useState<'commands' | 'keybindings'>('commands')
   const [waveAType, setWaveAType] = useState<WaveType>('sine')
   const [waveBType, setWaveBType] = useState<WaveType>('triangle')
   const [waveAPulseWidth, setWaveAPulseWidth] = useState(0.5)
@@ -2635,7 +2636,7 @@ function App() {
               })}
             </div>
           </article>
-          <article className="bottomModule bottomModule-square">
+          <article className="bottomModule bottomModule-square bottomModule-modulators">
             <div className="bottomModuleHeader">
               <p className="bottomModuleLabel">Modulators</p>
               <div className="modTabs" role="tablist" aria-label="Modulator instances">
@@ -3046,6 +3047,38 @@ function App() {
                 })}
               </div>
 
+            </div>
+          </article>
+          <article className="bottomModule bottomModule-reference">
+            <div className="bottomModuleHeader">
+              <p className="bottomModuleLabel">Reference</p>
+              <div className="referenceTabs" role="tablist" aria-label="Reference tabs">
+                <button
+                  type="button"
+                  className={`referenceTab${activeReferenceTab === 'commands' ? ' referenceTab-active' : ''}`}
+                  role="tab"
+                  aria-selected={activeReferenceTab === 'commands'}
+                  onClick={() => setActiveReferenceTab('commands')}
+                >
+                  Commands
+                </button>
+                <button
+                  type="button"
+                  className={`referenceTab${activeReferenceTab === 'keybindings' ? ' referenceTab-active' : ''}`}
+                  role="tab"
+                  aria-selected={activeReferenceTab === 'keybindings'}
+                  onClick={() => setActiveReferenceTab('keybindings')}
+                >
+                  Keybindings
+                </button>
+              </div>
+            </div>
+            <div className="referenceBody">
+              {activeReferenceTab === 'commands' ? (
+                <p className="referencePlaceholder">Command reference placeholder</p>
+              ) : (
+                <p className="referencePlaceholder">Keybindings reference placeholder</p>
+              )}
             </div>
           </article>
         </div>
