@@ -28,6 +28,10 @@ type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
 
 type EnvelopePayload = Record<string, unknown>
 type SequenceViewKeymap = Record<string, string>
+type PatternPrefix = {
+  offset: number
+  intervals: number[]
+}
 
 type Envelope = {
   protocol: string
@@ -376,6 +380,64 @@ const applyNumberParameter = (command: string, pendingDigits: string): string =>
   return command.replace(/:N=(\d+):/g, (_, defaultValue: string) =>
     hasPendingNumber ? pendingDigits : defaultValue
   )
+}
+
+const parsePatternPrefix = (value: string): PatternPrefix | null => {
+  const tokens = value
+    .trimStart()
+    .split(/\s+/)
+    .filter((token) => token.length > 0)
+
+  if (tokens.length === 0) {
+    return null
+  }
+
+  let cursor = 0
+  let offset = 0
+  if (/^\+\d+$/.test(tokens[0])) {
+    offset = Math.max(0, Math.trunc(Number(tokens[0].slice(1))))
+    cursor += 1
+  }
+
+  const intervals: number[] = []
+  while (cursor < tokens.length) {
+    const token = tokens[cursor]
+    if (!/^\d+$/.test(token)) {
+      break
+    }
+
+    const interval = Math.trunc(Number(token))
+    if (interval > 0) {
+      intervals.push(interval)
+    }
+    cursor += 1
+  }
+
+  if (intervals.length === 0) {
+    return null
+  }
+
+  return { offset, intervals }
+}
+
+const getPatternIndices = (sequenceLength: number, pattern: PatternPrefix): Set<number> => {
+  const matches = new Set<number>()
+  if (sequenceLength <= 0) {
+    return matches
+  }
+
+  let position = pattern.offset
+  let intervalIndex = 0
+  while (position < sequenceLength) {
+    if (position >= 0) {
+      matches.add(position)
+    }
+
+    position += pattern.intervals[intervalIndex] ?? 1
+    intervalIndex = (intervalIndex + 1) % pattern.intervals.length
+  }
+
+  return matches
 }
 
 const isEditableTarget = (target: EventTarget | null): boolean => {
@@ -1251,6 +1313,8 @@ function App() {
   const {
     tuningLength,
     sequenceCount,
+    topLevelCellCount,
+    leafTopLevelIndices,
     selectedMeasureIndex,
     selectedMeasureNumerator,
     selectedMeasureDenominator,
@@ -1275,6 +1339,8 @@ function App() {
       return {
         tuningLength: DEFAULT_TUNING_LENGTH,
         sequenceCount: TRANSPORT_SEQUENCE_COUNT,
+        topLevelCellCount: 0,
+        leafTopLevelIndices: [] as number[],
         selectedMeasureIndex: 0,
         selectedMeasureNumerator: 4,
         selectedMeasureDenominator: 4,
@@ -1349,6 +1415,7 @@ function App() {
     const selectedNumerator = selectedMeasure?.time_signature?.numerator ?? 4
     const selectedDenominator = selectedMeasure?.time_signature?.denominator ?? 4
     const flattenedLeafCells = flattenLeafCells(directCells, derivedTuningLength)
+    const topLevelIndices = flattenedLeafCells.map((leafCell) => leafCell.path[0] ?? 0)
     const selectionPath = snapshot.editor.selected.cell
     const selectionFlags = flattenedLeafCells.map((leafCell) =>
       isPathPrefix(selectionPath, leafCell.path)
@@ -1357,6 +1424,8 @@ function App() {
     return {
       tuningLength: derivedTuningLength,
       sequenceCount: snapshot.engine.sequence_bank.length,
+      topLevelCellCount: directCells.length,
+      leafTopLevelIndices: topLevelIndices,
       selectedMeasureIndex: selectedIndex,
       selectedMeasureNumerator: selectedNumerator,
       selectedMeasureDenominator: selectedDenominator,
@@ -1437,6 +1506,27 @@ function App() {
     []
   )
 
+  const displayedLeafFlags = useMemo(() => {
+    if (!isCommandMode) {
+      return selectedLeafFlags
+    }
+
+    const pattern = parsePatternPrefix(commandText)
+    if (!pattern) {
+      return selectedLeafFlags
+    }
+
+    const matchingIndices = getPatternIndices(topLevelCellCount, pattern)
+    return leafCells.map((_, index) => matchingIndices.has(leafTopLevelIndices[index] ?? -1))
+  }, [
+    commandText,
+    isCommandMode,
+    leafCells,
+    leafTopLevelIndices,
+    selectedLeafFlags,
+    topLevelCellCount,
+  ])
+
   return (
     <div className="app">
       <header className="header">
@@ -1508,9 +1598,9 @@ function App() {
               <div className="rollIslands" aria-hidden="true">
                 {(leafCells.length > 0 ? leafCells : [{ weight: 1, path: [0], note: null }]).map(
                   (leafCell, index) => {
-                    const isSelected = selectedLeafFlags[index] ?? false
-                    const isSelectedStart = isSelected && !(selectedLeafFlags[index - 1] ?? false)
-                    const isSelectedEnd = isSelected && !(selectedLeafFlags[index + 1] ?? false)
+                    const isSelected = displayedLeafFlags[index] ?? false
+                    const isSelectedStart = isSelected && !(displayedLeafFlags[index - 1] ?? false)
+                    const isSelectedEnd = isSelected && !(displayedLeafFlags[index + 1] ?? false)
 
                     return (
                       <div

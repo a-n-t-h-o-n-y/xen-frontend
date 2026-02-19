@@ -180,31 +180,57 @@
 }
 
 .rollIsland {
+  position: relative;
   min-width: 0;
   border: 1px solid var(--seq-grid-line);
   border-radius: 10px;
   overflow: hidden;
+  isolation: isolate;
+}
+
+.rollIsland::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 0 solid transparent;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 20;
 }
 
 .rollIsland-selected {
-  border-color: var(--seq-selection);
+  border-color: transparent;
+}
+
+.rollIsland-selected::after {
+  border-width: 1px;
+  border-color: rgb(245 196 90 / 58%);
   box-shadow:
-    0 0 0 1px var(--seq-selection-soft),
-    inset 0 0 0 1px rgb(245 196 90 / 16%);
+    0 0 0 1px var(--seq-selection-soft);
 }
 
 .rollIsland-selectedStart {
+  border-color: transparent;
+}
+
+.rollIsland-selectedStart::after {
+  border-width: 1px;
+  border-color: rgb(245 196 90 / 58%);
   box-shadow:
     0 0 0 1px var(--seq-selection-soft),
-    inset 0 0 0 1px rgb(245 196 90 / 16%),
-    -1px 0 0 0 var(--seq-selection);
+    inset 1px 0 0 0 var(--seq-selection);
 }
 
 .rollIsland-selectedEnd {
+  border-color: transparent;
+}
+
+.rollIsland-selectedEnd::after {
+  border-width: 1px;
+  border-color: rgb(245 196 90 / 58%);
   box-shadow:
     0 0 0 1px var(--seq-selection-soft),
-    inset 0 0 0 1px rgb(245 196 90 / 16%),
-    1px 0 0 0 var(--seq-selection);
+    inset -1px 0 0 0 var(--seq-selection);
 }
 
 .rollIslandGrid {
@@ -246,6 +272,7 @@
   top: 0;
   bottom: 0;
   background: var(--seq-note);
+  z-index: 1;
 }
 
 .rollNoteOctave {
