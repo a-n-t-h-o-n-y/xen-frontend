@@ -451,6 +451,32 @@
   white-space: nowrap;
 }
 
+.statusMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  font-size: 0.73rem;
+  line-height: 1;
+  color: rgb(255 255 255 / 52%);
+  white-space: nowrap;
+}
+
+.statusMetaItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+
+.statusMetaKey {
+  text-transform: lowercase;
+  color: rgb(255 255 255 / 36%);
+}
+
+.statusMetaValue {
+  color: rgb(255 255 255 / 62%);
+}
+
 .status-debug {
   color: #bcbcbc;
 }

@@ -1438,6 +1438,11 @@ type LeafCell = {
   path: number[]
 }
 
+type StatusCellMetaItem = {
+  label: string
+  value: string
+}
+
 const collectLeafCells = (cells: Cell[]): LeafCell[] => {
   const result: LeafCell[] = []
 
@@ -1483,6 +1488,73 @@ const isPathPrefix = (prefix: number[], path: number[]): boolean => {
 }
 
 const pathToKey = (path: number[]): string => path.join('.')
+
+const getCellAtPath = (cells: Cell[], path: number[]): Cell | null => {
+  if (path.length === 0) {
+    return null
+  }
+
+  let currentCells = cells
+  let currentCell: Cell | null = null
+
+  for (let index = 0; index < path.length; index += 1) {
+    const segment = path[index]
+    const nextCell = currentCells[segment]
+    if (!nextCell) {
+      return null
+    }
+
+    currentCell = nextCell
+    if (index < path.length - 1) {
+      if (nextCell.type !== 'Sequence') {
+        return null
+      }
+      currentCells = nextCell.cells
+    }
+  }
+
+  return currentCell
+}
+
+const formatMetaNumber = (value: number, precision = 2): string => {
+  if (!Number.isFinite(value)) {
+    return '0'
+  }
+  const rounded = value.toFixed(precision)
+  return rounded.replace(/\.?0+$/, '')
+}
+
+const formatMetaFixed2 = (value: number): string => {
+  if (!Number.isFinite(value)) {
+    return '0.00'
+  }
+  return value.toFixed(2)
+}
+
+const getStatusCellMeta = (cell: Cell | null): StatusCellMetaItem[] => {
+  if (!cell) {
+    return []
+  }
+
+  if (cell.type === 'Sequence') {
+    return [
+      { label: 'n', value: `${cell.cells.length}` },
+      { label: 'w', value: formatMetaNumber(cell.weight) },
+    ]
+  }
+
+  if (cell.type === 'Rest') {
+    return [{ label: 'w', value: formatMetaNumber(cell.weight) }]
+  }
+
+  return [
+    { label: 'p', value: `${Math.trunc(cell.pitch)}` },
+    { label: 'd', value: formatMetaFixed2(cell.delay) },
+    { label: 'g', value: formatMetaFixed2(cell.gate) },
+    { label: 'v', value: formatMetaFixed2(cell.velocity) },
+    { label: 'w', value: formatMetaNumber(cell.weight) },
+  ]
+}
 
 function App() {
   const [currentInputMode, setCurrentInputMode] = useState<InputMode>('pitch')
@@ -2070,6 +2142,7 @@ function App() {
     staffLineBandByPitch,
     leafCells,
     selectedLeafFlags,
+    selectedCellMeta,
     rulerRatios,
     highlightedPitches,
   } = useMemo(() => {
@@ -2097,6 +2170,7 @@ function App() {
         staffLineBandByPitch: defaultStaffLineBand,
         leafCells: [] as LeafCell[],
         selectedLeafFlags: [] as boolean[],
+        selectedCellMeta: [] as StatusCellMetaItem[],
         rulerRatios: getTuningRatios(Array.from({ length: DEFAULT_TUNING_LENGTH }, (_, i) => i * 100)),
         highlightedPitches: new Set<number>(),
       }
@@ -2160,6 +2234,8 @@ function App() {
     const directLeafCells = collectLeafCells(directCells)
     const topLevelIndices = directLeafCells.map((leafCell) => leafCell.path[0] ?? 0)
     const selectionPath = snapshot.editor.selected.cell
+    const resolvedSelectedCell =
+      getCellAtPath(directCells, selectionPath) ?? (selectionPath.length === 0 ? selectedCell : null)
     const selectionFlags = directLeafCells.map((leafCell) =>
       isPathPrefix(selectionPath, leafCell.path)
     )
@@ -2183,6 +2259,7 @@ function App() {
       staffLineBandByPitch: staffLineBands,
       leafCells: directLeafCells,
       selectedLeafFlags: selectionFlags,
+      selectedCellMeta: getStatusCellMeta(resolvedSelectedCell),
       rulerRatios: tuningRatios,
       highlightedPitches: mappedHighlights,
     }
@@ -3220,6 +3297,16 @@ function App() {
         ) : (
           <span className={`statusText status-${statusLevel}`}>{statusMessage}</span>
         )}
+        {selectedCellMeta.length > 0 ? (
+          <div className="statusMeta mono" aria-label="Selected cell metadata">
+            {selectedCellMeta.map((item) => (
+              <span key={`cell-meta-${item.label}`} className="statusMetaItem">
+                <span className="statusMetaKey">{item.label}</span>
+                <span className="statusMetaValue">{item.value}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
       </footer>
       <section className="bottomModules" aria-label="Temporary module area">
         <div className="bottomModuleRow">
