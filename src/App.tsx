@@ -185,6 +185,19 @@ type TargetControl = {
   scalar: number
 }
 
+type ModulatorPanelState = {
+  waveAType: WaveType
+  waveBType: WaveType
+  waveAPulseWidth: number
+  waveBPulseWidth: number
+  waveLerp: number
+  lfoAFrequency: number
+  lfoAPhaseOffset: number
+  lfoBFrequency: number
+  lfoBPhaseOffset: number
+  targetControls: Record<ModTarget, TargetControl>
+}
+
 const MOD_TARGET_SPECS: Record<ModTarget, ModTargetSpec> = {
   pitch: {
     label: 'Pitch',
@@ -311,6 +324,19 @@ const createInitialTargetControls = (): Record<ModTarget, TargetControl> => ({
     amount: 0,
     scalar: MOD_TARGET_SPECS.weights.defaultScalar,
   },
+})
+
+const createInitialModulatorPanelState = (): ModulatorPanelState => ({
+  waveAType: 'sine',
+  waveBType: 'triangle',
+  waveAPulseWidth: 0.5,
+  waveBPulseWidth: 0.5,
+  waveLerp: 0,
+  lfoAFrequency: 1,
+  lfoAPhaseOffset: 0,
+  lfoBFrequency: 1,
+  lfoBPhaseOffset: 0,
+  targetControls: createInitialTargetControls(),
 })
 
 const REFERENCE_RATIOS = [
@@ -1185,6 +1211,10 @@ function App() {
   const [activeSequenceFlags, setActiveSequenceFlags] = useState<boolean[]>(
     Array(TRANSPORT_SEQUENCE_COUNT).fill(false)
   )
+  const [modulatorInstances, setModulatorInstances] = useState<ModulatorPanelState[]>(() =>
+    Array.from({ length: 4 }, () => createInitialModulatorPanelState())
+  )
+  const [activeModulatorTab, setActiveModulatorTab] = useState(0)
   const [waveAType, setWaveAType] = useState<WaveType>('sine')
   const [waveBType, setWaveBType] = useState<WaveType>('triangle')
   const [waveAPulseWidth, setWaveAPulseWidth] = useState(0.5)
@@ -1220,6 +1250,8 @@ function App() {
   const liveEmitFrameRef = useRef<number | null>(null)
   const liveEmitCommandsRef = useRef<string[] | null>(null)
   const waveMenuRef = useRef<HTMLDivElement | null>(null)
+  const isSwitchingModTabRef = useRef(false)
+  const modulatorInstancesRef = useRef(modulatorInstances)
 
   const sendBridgeRequest = useCallback(
     async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
@@ -2021,6 +2053,71 @@ function App() {
   )
 
   useEffect(() => {
+    modulatorInstancesRef.current = modulatorInstances
+  }, [modulatorInstances])
+
+  useEffect(() => {
+    const nextState = modulatorInstancesRef.current[activeModulatorTab]
+    if (!nextState) {
+      return
+    }
+
+    isSwitchingModTabRef.current = true
+    setWaveAType(nextState.waveAType)
+    setWaveBType(nextState.waveBType)
+    setWaveAPulseWidth(nextState.waveAPulseWidth)
+    setWaveBPulseWidth(nextState.waveBPulseWidth)
+    setWaveLerp(nextState.waveLerp)
+    setLfoAFrequency(nextState.lfoAFrequency)
+    setLfoAPhaseOffset(nextState.lfoAPhaseOffset)
+    setLfoBFrequency(nextState.lfoBFrequency)
+    setLfoBPhaseOffset(nextState.lfoBPhaseOffset)
+    setTargetControls(nextState.targetControls)
+
+    queueMicrotask(() => {
+      isSwitchingModTabRef.current = false
+    })
+  }, [activeModulatorTab])
+
+  useEffect(() => {
+    if (isSwitchingModTabRef.current) {
+      return
+    }
+
+    setModulatorInstances((previous) =>
+      previous.map((instance, index) =>
+        index === activeModulatorTab
+          ? {
+              ...instance,
+              waveAType,
+              waveBType,
+              waveAPulseWidth,
+              waveBPulseWidth,
+              waveLerp,
+              lfoAFrequency,
+              lfoAPhaseOffset,
+              lfoBFrequency,
+              lfoBPhaseOffset,
+              targetControls,
+            }
+          : instance
+      )
+    )
+  }, [
+    activeModulatorTab,
+    lfoAFrequency,
+    lfoAPhaseOffset,
+    lfoBFrequency,
+    lfoBPhaseOffset,
+    targetControls,
+    waveAPulseWidth,
+    waveAType,
+    waveBPulseWidth,
+    waveBType,
+    waveLerp,
+  ])
+
+  useEffect(() => {
     if (openWaveMenu === null) {
       return
     }
@@ -2539,7 +2636,26 @@ function App() {
             </div>
           </article>
           <article className="bottomModule bottomModule-square">
-            <p className="bottomModuleLabel">Modulators</p>
+            <div className="bottomModuleHeader">
+              <p className="bottomModuleLabel">Modulators</p>
+              <div className="modTabs" role="tablist" aria-label="Modulator instances">
+                {Array.from({ length: 4 }, (_, index) => (
+                  <button
+                    key={`mod-tab-${index}`}
+                    type="button"
+                    className={`modTab${activeModulatorTab === index ? ' modTab-active' : ''}`}
+                    onClick={() => {
+                      setOpenWaveMenu(null)
+                      setActiveModulatorTab(index)
+                    }}
+                    role="tab"
+                    aria-selected={activeModulatorTab === index}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="modulatorPanel">
               <div className="modulatorTopRow" ref={waveMenuRef}>
                 <div className="waveSelect">
