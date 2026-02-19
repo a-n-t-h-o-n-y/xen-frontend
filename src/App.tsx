@@ -1443,6 +1443,11 @@ type StatusCellMetaItem = {
   value: string
 }
 
+type TimeSignatureParts = {
+  numerator: number
+  denominator: number
+}
+
 const collectLeafCells = (cells: Cell[]): LeafCell[] => {
   const result: LeafCell[] = []
 
@@ -1556,12 +1561,64 @@ const getStatusCellMeta = (cell: Cell | null): StatusCellMetaItem[] => {
   ]
 }
 
+const parseTimeSignatureInput = (value: string): TimeSignatureParts | null => {
+  const match = value.trim().match(/^(\d+)\s*\/\s*(\d+)$/)
+  if (!match) {
+    return null
+  }
+
+  const numerator = Number.parseInt(match[1], 10)
+  const denominator = Number.parseInt(match[2], 10)
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator)) {
+    return null
+  }
+  if (numerator <= 0 || denominator <= 0) {
+    return null
+  }
+
+  return { numerator, denominator }
+}
+
+const formatTimeSignature = ({ numerator, denominator }: TimeSignatureParts): string =>
+  `${numerator}/${denominator}`
+
+const parseIntegerInput = (value: string): number | null => {
+  const trimmed = value.trim()
+  if (!/^-?\d+$/.test(trimmed)) {
+    return null
+  }
+  const parsed = Number.parseInt(trimmed, 10)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const parsePositiveFloatInput = (value: string): number | null => {
+  const trimmed = value.trim()
+  if (!/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
+    return null
+  }
+  const parsed = Number.parseFloat(trimmed)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null
+  }
+  return parsed
+}
+
 function App() {
   const [currentInputMode, setCurrentInputMode] = useState<InputMode>('pitch')
   const [statusMessage, setStatusMessage] = useState('')
   const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
   const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<UiStateSnapshot | null>(null)
+  const [isTimeSignatureEditing, setIsTimeSignatureEditing] = useState(false)
+  const [timeSignatureDraft, setTimeSignatureDraft] = useState('4/4')
+  const [isKeyEditing, setIsKeyEditing] = useState(false)
+  const [keyDraft, setKeyDraft] = useState('0')
+  const [isBaseFrequencyEditing, setIsBaseFrequencyEditing] = useState(false)
+  const [baseFrequencyDraft, setBaseFrequencyDraft] = useState('440')
+  const [isSequenceNameEditing, setIsSequenceNameEditing] = useState(false)
+  const [sequenceNameDraft, setSequenceNameDraft] = useState('')
+  const [isScaleUpdating, setIsScaleUpdating] = useState(false)
+  const [openScaleMenu, setOpenScaleMenu] = useState(false)
   const [isCommandMode, setIsCommandMode] = useState(false)
   const [commandText, setCommandText] = useState('')
   const [commandSuffix, setCommandSuffix] = useState('')
@@ -1570,6 +1627,11 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState<number>(-1)
   const eventTokenRef = useRef<unknown>(null)
   const commandInputRef = useRef<HTMLInputElement>(null)
+  const timeSignatureInputRef = useRef<HTMLInputElement>(null)
+  const keyInputRef = useRef<HTMLInputElement>(null)
+  const baseFrequencyInputRef = useRef<HTMLInputElement>(null)
+  const sequenceNameInputRef = useRef<HTMLInputElement>(null)
+  const scaleMenuRef = useRef<HTMLDivElement | null>(null)
   const liveCommandBufferRef = useRef('')
   const lastSnapshotVersionRef = useRef<number>(-1)
   const completionRequestVersionRef = useRef(0)
@@ -2136,6 +2198,8 @@ function App() {
     timeSignature,
     scaleName,
     scaleMode,
+    scaleSize,
+    scaleTranslateDirection,
     tuningName,
     keyDisplay,
     baseFrequency,
@@ -2164,6 +2228,8 @@ function App() {
         timeSignature: '4/4',
         scaleName: 'major diatonic',
         scaleMode: 3,
+        scaleSize: 7,
+        scaleTranslateDirection: 'up' as TranslateDirection,
         tuningName: '12EDO',
         keyDisplay: 2,
         baseFrequency: 440,
@@ -2251,8 +2317,10 @@ function App() {
       selectedMeasureDenominator: selectedDenominator,
       selectedMeasureName: sequenceName,
       timeSignature: signature,
-      scaleName: snapshot.engine.scale?.name ?? 'none',
+      scaleName: snapshot.engine.scale?.name ?? 'chromatic',
       scaleMode: snapshot.engine.scale?.mode ?? 0,
+      scaleSize: snapshot.engine.scale?.intervals.length ?? 0,
+      scaleTranslateDirection: snapshot.engine.scale_translate_direction,
       tuningName: snapshot.engine.tuning_name,
       keyDisplay: snapshot.engine.key,
       baseFrequency: snapshot.engine.base_frequency,
@@ -2833,6 +2901,35 @@ function App() {
     }
   }, [openWaveMenu])
 
+  useEffect(() => {
+    if (!openScaleMenu) {
+      return
+    }
+
+    const handlePointerDown = (event: MouseEvent): void => {
+      const host = scaleMenuRef.current
+      if (!host) {
+        return
+      }
+      if (event.target instanceof Node && !host.contains(event.target)) {
+        setOpenScaleMenu(false)
+      }
+    }
+
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setOpenScaleMenu(false)
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleEscape)
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [openScaleMenu])
+
   const updateTargetControl = useCallback(
     (target: ModTarget, update: Partial<TargetControl>): void => {
       setTargetControls((previous) => ({
@@ -3085,6 +3182,358 @@ function App() {
   const previousLibraryTabRef = useRef(activeLibraryTab)
 
   useEffect(() => {
+    if (isTimeSignatureEditing) {
+      return
+    }
+    setTimeSignatureDraft(timeSignature)
+  }, [isTimeSignatureEditing, timeSignature])
+
+  useEffect(() => {
+    if (!isTimeSignatureEditing) {
+      return
+    }
+    const input = timeSignatureInputRef.current
+    if (!input) {
+      return
+    }
+    input.focus()
+    input.select()
+  }, [isTimeSignatureEditing])
+
+  useEffect(() => {
+    if (isKeyEditing) {
+      return
+    }
+    setKeyDraft(`${keyDisplay}`)
+  }, [isKeyEditing, keyDisplay])
+
+  useEffect(() => {
+    if (!isKeyEditing) {
+      return
+    }
+    const input = keyInputRef.current
+    if (!input) {
+      return
+    }
+    input.focus()
+    input.select()
+  }, [isKeyEditing])
+
+  useEffect(() => {
+    if (isBaseFrequencyEditing) {
+      return
+    }
+    setBaseFrequencyDraft(`${baseFrequency}`)
+  }, [baseFrequency, isBaseFrequencyEditing])
+
+  useEffect(() => {
+    if (!isBaseFrequencyEditing) {
+      return
+    }
+    const input = baseFrequencyInputRef.current
+    if (!input) {
+      return
+    }
+    input.focus()
+    input.select()
+  }, [isBaseFrequencyEditing])
+
+  useEffect(() => {
+    if (isSequenceNameEditing) {
+      return
+    }
+    setSequenceNameDraft(selectedMeasureName)
+  }, [isSequenceNameEditing, selectedMeasureName])
+
+  useEffect(() => {
+    if (!isSequenceNameEditing) {
+      return
+    }
+    const input = sequenceNameInputRef.current
+    if (!input) {
+      return
+    }
+    input.focus()
+    input.select()
+  }, [isSequenceNameEditing])
+
+  const commitTimeSignature = useCallback(
+    async (value: string): Promise<boolean> => {
+      if (bridgeUnavailableMessage !== null) {
+        return false
+      }
+
+      const parsed = parseTimeSignatureInput(value)
+      if (!parsed) {
+        setStatusMessage('Invalid time signature. Use N/D, e.g. 4/4')
+        setStatusLevel('warning')
+        setTimeSignatureDraft(timeSignature)
+        setIsTimeSignatureEditing(false)
+        return false
+      }
+
+      const normalized = formatTimeSignature(parsed)
+      try {
+        await executeBackendCommand(`set sequence timeSignature ${normalized}`)
+        setIsTimeSignatureEditing(false)
+        return true
+      } catch (error) {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+        setTimeSignatureDraft(timeSignature)
+        setIsTimeSignatureEditing(false)
+        return false
+      }
+    },
+    [bridgeUnavailableMessage, executeBackendCommand, timeSignature]
+  )
+
+  const commitKey = useCallback(
+    async (value: string): Promise<boolean> => {
+      if (bridgeUnavailableMessage !== null) {
+        return false
+      }
+
+      const parsed = parseIntegerInput(value)
+      if (parsed === null) {
+        setStatusMessage('Invalid key. Use an integer value.')
+        setStatusLevel('warning')
+        setKeyDraft(`${keyDisplay}`)
+        setIsKeyEditing(false)
+        return false
+      }
+
+      try {
+        await executeBackendCommand(`set key ${parsed}`)
+        setIsKeyEditing(false)
+        return true
+      } catch (error) {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+        setKeyDraft(`${keyDisplay}`)
+        setIsKeyEditing(false)
+        return false
+      }
+    },
+    [bridgeUnavailableMessage, executeBackendCommand, keyDisplay]
+  )
+
+  const commitBaseFrequency = useCallback(
+    async (value: string): Promise<boolean> => {
+      if (bridgeUnavailableMessage !== null) {
+        return false
+      }
+
+      const parsed = parsePositiveFloatInput(value)
+      if (parsed === null) {
+        setStatusMessage('Invalid base frequency. Use a positive number.')
+        setStatusLevel('warning')
+        setBaseFrequencyDraft(`${baseFrequency}`)
+        setIsBaseFrequencyEditing(false)
+        return false
+      }
+
+      try {
+        await executeBackendCommand(`set baseFrequency ${parsed}`)
+        setIsBaseFrequencyEditing(false)
+        return true
+      } catch (error) {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+        setBaseFrequencyDraft(`${baseFrequency}`)
+        setIsBaseFrequencyEditing(false)
+        return false
+      }
+    },
+    [baseFrequency, bridgeUnavailableMessage, executeBackendCommand]
+  )
+
+  const commitSequenceName = useCallback(
+    async (value: string): Promise<boolean> => {
+      if (bridgeUnavailableMessage !== null) {
+        return false
+      }
+
+      const normalized = value.trim()
+      if (!normalized) {
+        setStatusMessage('Sequence name cannot be empty.')
+        setStatusLevel('warning')
+        setSequenceNameDraft(selectedMeasureName)
+        setIsSequenceNameEditing(false)
+        return false
+      }
+
+      try {
+        await executeBackendCommand(
+          `set sequence name ${quoteCommandArg(normalized)} ${selectedMeasureIndex}`
+        )
+        setIsSequenceNameEditing(false)
+        return true
+      } catch (error) {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+        setSequenceNameDraft(selectedMeasureName)
+        setIsSequenceNameEditing(false)
+        return false
+      }
+    },
+    [bridgeUnavailableMessage, executeBackendCommand, selectedMeasureIndex, selectedMeasureName]
+  )
+
+  const beginTimeSignatureEdit = useCallback((): void => {
+    setTimeSignatureDraft(timeSignature)
+    setIsTimeSignatureEditing(true)
+  }, [timeSignature])
+
+  const cancelTimeSignatureEdit = useCallback((): void => {
+    setTimeSignatureDraft(timeSignature)
+    setIsTimeSignatureEditing(false)
+  }, [timeSignature])
+
+  const beginKeyEdit = useCallback((): void => {
+    setKeyDraft(`${keyDisplay}`)
+    setIsKeyEditing(true)
+  }, [keyDisplay])
+
+  const cancelKeyEdit = useCallback((): void => {
+    setKeyDraft(`${keyDisplay}`)
+    setIsKeyEditing(false)
+  }, [keyDisplay])
+
+  const beginBaseFrequencyEdit = useCallback((): void => {
+    setBaseFrequencyDraft(`${baseFrequency}`)
+    setIsBaseFrequencyEditing(true)
+  }, [baseFrequency])
+
+  const cancelBaseFrequencyEdit = useCallback((): void => {
+    setBaseFrequencyDraft(`${baseFrequency}`)
+    setIsBaseFrequencyEditing(false)
+  }, [baseFrequency])
+
+  const beginSequenceNameEdit = useCallback((): void => {
+    setSequenceNameDraft(selectedMeasureName)
+    setIsSequenceNameEditing(true)
+  }, [selectedMeasureName])
+
+  const cancelSequenceNameEdit = useCallback((): void => {
+    setSequenceNameDraft(selectedMeasureName)
+    setIsSequenceNameEditing(false)
+  }, [selectedMeasureName])
+
+  const applyTimeSignatureScale = useCallback(
+    (mode: 'half' | 'double'): void => {
+      if (bridgeUnavailableMessage !== null || isTimeSignatureEditing) {
+        return
+      }
+
+      const parsed = parseTimeSignatureInput(timeSignature)
+      if (!parsed) {
+        return
+      }
+
+      const next =
+        mode === 'double'
+          ? formatTimeSignature({
+              numerator: parsed.numerator * 2,
+              denominator: parsed.denominator,
+            })
+          : parsed.numerator > 1
+            ? formatTimeSignature({
+                numerator: Math.max(1, Math.round(parsed.numerator / 2)),
+                denominator: parsed.denominator,
+              })
+            : formatTimeSignature({
+                numerator: 1,
+                denominator: parsed.denominator * 2,
+              })
+      void commitTimeSignature(next)
+    },
+    [bridgeUnavailableMessage, commitTimeSignature, isTimeSignatureEditing, timeSignature]
+  )
+
+  const scaleOptions = useMemo(() => {
+    const names = new Set<string>()
+    librarySnapshot.scales.forEach((scale) => names.add(scale.name))
+    if (scaleName.trim().length > 0) {
+      names.add(scaleName)
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [librarySnapshot.scales, scaleName])
+
+  const modeOptions = useMemo(() => {
+    const isChromatic = /chromatic/i.test(scaleName)
+    if (isChromatic || scaleSize <= 1) {
+      return [] as number[]
+    }
+    return Array.from({ length: scaleSize }, (_, index) => index + 1)
+  }, [scaleName, scaleSize])
+
+  const applyModeSelection = useCallback(
+    async (modeIndex: number): Promise<void> => {
+      if (
+        bridgeUnavailableMessage !== null ||
+        !Number.isFinite(modeIndex) ||
+        modeIndex < 0 ||
+        modeIndex === scaleMode
+      ) {
+        return
+      }
+
+      try {
+        await executeBackendCommand(`set mode ${modeIndex}`)
+      } catch (error) {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+      }
+    },
+    [bridgeUnavailableMessage, executeBackendCommand, scaleMode]
+  )
+
+  const applyScaleSelection = useCallback(
+    async (nextScaleName: string): Promise<void> => {
+      if (
+        bridgeUnavailableMessage !== null ||
+        isScaleUpdating ||
+        !nextScaleName ||
+        nextScaleName === scaleName
+      ) {
+        return
+      }
+
+      setIsScaleUpdating(true)
+      try {
+        await executeBackendCommand(`set scale ${quoteCommandArg(nextScaleName)}`)
+      } catch (error) {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+      } finally {
+        setIsScaleUpdating(false)
+      }
+    },
+    [bridgeUnavailableMessage, executeBackendCommand, isScaleUpdating, scaleName]
+  )
+
+  const toggleTranslateDirection = useCallback(async (): Promise<void> => {
+    if (bridgeUnavailableMessage !== null) {
+      return
+    }
+
+    const nextDirection: TranslateDirection = scaleTranslateDirection === 'down' ? 'up' : 'down'
+    try {
+      await executeBackendCommand(`set translateDirection ${nextDirection}`)
+    } catch (error) {
+      setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+      setStatusLevel('error')
+    }
+  }, [bridgeUnavailableMessage, executeBackendCommand, scaleTranslateDirection])
+
+  useEffect(() => {
+    if (isScaleUpdating) {
+      setOpenScaleMenu(false)
+    }
+  }, [isScaleUpdating])
+
+  useEffect(() => {
     if (previousLibraryTabRef.current === activeLibraryTab) {
       return
     }
@@ -3092,22 +3541,166 @@ function App() {
     void refreshLibraryView()
   }, [activeLibraryTab, refreshLibraryView])
 
+  useEffect(() => {
+    const handleContextMenu = (event: MouseEvent): void => {
+      event.preventDefault()
+    }
+
+    window.addEventListener('contextmenu', handleContextMenu)
+    return () => window.removeEventListener('contextmenu', handleContextMenu)
+  }, [])
+
   return (
     <div className="app">
       <header className="header">
         <div className="headerGroup">
-          <div className="headerGrid">
-            <div className="headerField">
+          <div className="headerGrid headerGrid-primary">
+            <div className="headerField headerField-timeSignature">
               <span className="fieldLabel">Time Signature</span>
-              <span className="fieldValue mono">{timeSignature}</span>
+              <div className="timeSignatureControl">
+                <div className="timeSignatureValueSlot">
+                  {isTimeSignatureEditing ? (
+                    <input
+                      ref={timeSignatureInputRef}
+                      className="timeSignatureInput mono"
+                      type="text"
+                      value={timeSignatureDraft}
+                      onChange={(event) => setTimeSignatureDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          void commitTimeSignature(timeSignatureDraft)
+                          return
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault()
+                          cancelTimeSignatureEdit()
+                        }
+                      }}
+                      onBlur={cancelTimeSignatureEdit}
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      aria-label="Edit time signature"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="timeSignatureDisplay fieldValue mono"
+                      onClick={beginTimeSignatureEdit}
+                      disabled={bridgeUnavailableMessage !== null}
+                      aria-label={`Time signature ${timeSignature}. Click to edit`}
+                    >
+                      {timeSignature}
+                    </button>
+                  )}
+                </div>
+                <div className="timeSignatureButtons" aria-label="Time signature quick actions">
+                  <button
+                    type="button"
+                    className="timeSignatureAction mono"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => applyTimeSignatureScale('half')}
+                    disabled={bridgeUnavailableMessage !== null || isTimeSignatureEditing}
+                    aria-label="Halve time signature numerator"
+                  >
+                    /2
+                  </button>
+                  <button
+                    type="button"
+                    className="timeSignatureAction mono"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => applyTimeSignatureScale('double')}
+                    disabled={bridgeUnavailableMessage !== null || isTimeSignatureEditing}
+                    aria-label="Double time signature numerator"
+                  >
+                    x2
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="headerField">
+            <div className="headerField headerField-key">
               <span className="fieldLabel">Key</span>
-              <span className="fieldValue mono">{keyDisplay}</span>
+              <div className="headerEditableValueSlot">
+                {isKeyEditing ? (
+                  <input
+                    ref={keyInputRef}
+                    className="headerEditableInput mono"
+                    type="text"
+                    value={keyDraft}
+                    onChange={(event) => setKeyDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        void commitKey(keyDraft)
+                        return
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault()
+                        cancelKeyEdit()
+                      }
+                    }}
+                    onBlur={cancelKeyEdit}
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    aria-label="Edit key"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="headerEditableDisplay fieldValue mono"
+                    onClick={beginKeyEdit}
+                    disabled={bridgeUnavailableMessage !== null}
+                    aria-label={`Key ${keyDisplay}. Click to edit`}
+                  >
+                    {keyDisplay}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="headerField">
+            <div className="headerField headerField-baseFrequency">
               <span className="fieldLabel">Zero Freq. (Hz)</span>
-              <span className="fieldValue mono">{baseFrequency}</span>
+              <div className="headerEditableValueSlot">
+                {isBaseFrequencyEditing ? (
+                  <input
+                    ref={baseFrequencyInputRef}
+                    className="headerEditableInput mono"
+                    type="text"
+                    value={baseFrequencyDraft}
+                    onChange={(event) => setBaseFrequencyDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        void commitBaseFrequency(baseFrequencyDraft)
+                        return
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault()
+                        cancelBaseFrequencyEdit()
+                      }
+                    }}
+                    onBlur={cancelBaseFrequencyEdit}
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    aria-label="Edit base frequency"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="headerEditableDisplay fieldValue mono"
+                    onClick={beginBaseFrequencyEdit}
+                    disabled={bridgeUnavailableMessage !== null}
+                    aria-label={`Zero frequency ${baseFrequency} hertz. Click to edit`}
+                  >
+                    {baseFrequency}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -3115,11 +3708,84 @@ function App() {
           <div className="headerGrid">
             <div className="headerField">
               <span className="fieldLabel">Scale</span>
-              <span className="fieldValue">{scaleName}</span>
+              <div className="headerScaleControl">
+                <div className="waveSelect headerScaleSelect" ref={scaleMenuRef}>
+                  <button
+                    type="button"
+                    className="waveSelectTrigger headerScaleTrigger fieldValue"
+                    onClick={() => setOpenScaleMenu((previous) => !previous)}
+                    disabled={
+                      bridgeUnavailableMessage !== null || isScaleUpdating || scaleOptions.length === 0
+                    }
+                    aria-haspopup="listbox"
+                    aria-expanded={openScaleMenu}
+                    aria-label="Select active scale"
+                  >
+                    <span className="headerScaleLabel">{scaleName}</span>
+                    <span className="waveSelectChevron" aria-hidden="true">
+                      ▾
+                    </span>
+                  </button>
+                  {openScaleMenu ? (
+                    <div className="waveSelectMenu headerScaleMenu" role="listbox" aria-label="Scale options">
+                      {scaleOptions.map((name) => (
+                        <button
+                          key={`scale-option-${name}`}
+                          type="button"
+                          className={`waveSelectOption${name === scaleName ? ' waveSelectOption-active' : ''}`}
+                          onClick={() => {
+                            setOpenScaleMenu(false)
+                            void applyScaleSelection(name)
+                          }}
+                          role="option"
+                          aria-selected={name === scaleName}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="scaleDirectionGlyph mono"
+                  onClick={() => {
+                    void toggleTranslateDirection()
+                  }}
+                  disabled={bridgeUnavailableMessage !== null}
+                  aria-label={`Translate direction ${scaleTranslateDirection}. Click to set ${
+                    scaleTranslateDirection === 'down' ? 'up' : 'down'
+                  }`}
+                  title={`Translate ${scaleTranslateDirection} (click to flip)`}
+                >
+                  {scaleTranslateDirection === 'down' ? '↓' : '↑'}
+                </button>
+              </div>
             </div>
             <div className="headerField">
               <span className="fieldLabel">Mode</span>
-              <span className="fieldValue mono">{scaleMode}</span>
+              <div className="modePicker" role="listbox" aria-label="Scale modes">
+                {modeOptions.length > 0 ? (
+                  modeOptions.map((modeIndex) => (
+                    <button
+                      key={`mode-option-${modeIndex}`}
+                      type="button"
+                      className={`modeChip mono${modeIndex === scaleMode ? ' modeChip-active' : ''}`}
+                      onClick={() => {
+                        void applyModeSelection(modeIndex)
+                      }}
+                      disabled={bridgeUnavailableMessage !== null}
+                      role="option"
+                      aria-selected={modeIndex === scaleMode}
+                      aria-label={`Set mode ${modeIndex}`}
+                    >
+                      {modeIndex}
+                    </button>
+                  ))
+                ) : (
+                  <span className="modePickerEmpty mono">n/a</span>
+                )}
+              </div>
             </div>
             <div className="headerField">
               <span className="fieldLabel">Tuning</span>
@@ -3129,13 +3795,49 @@ function App() {
         </div>
         <div className="headerGroup">
           <div className="headerGrid">
-            <div className="headerField">
-              <span className="fieldLabel">Sequence Index</span>
-              <span className="fieldValue mono">{selectedMeasureIndex}</span>
-            </div>
-            <div className="headerField">
+            <div className="headerField headerField-sequenceName">
               <span className="fieldLabel">Sequence Name</span>
-              <span className="fieldValue">{selectedMeasureName}</span>
+              <div className="sequenceNameControl">
+                <span className="sequenceNameIndex mono">{`${selectedMeasureIndex}:`}</span>
+                <div className="headerEditableValueWide sequenceNameValue">
+                  {isSequenceNameEditing ? (
+                    <input
+                      ref={sequenceNameInputRef}
+                      className="headerEditableInput fieldValue"
+                      type="text"
+                      value={sequenceNameDraft}
+                      onChange={(event) => setSequenceNameDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          void commitSequenceName(sequenceNameDraft)
+                          return
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault()
+                          cancelSequenceNameEdit()
+                        }
+                      }}
+                      onBlur={cancelSequenceNameEdit}
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      aria-label="Edit sequence name"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="headerEditableDisplay fieldValue"
+                      onClick={beginSequenceNameEdit}
+                      disabled={bridgeUnavailableMessage !== null}
+                      aria-label={`Sequence ${selectedMeasureIndex}: ${selectedMeasureName}. Click to edit`}
+                    >
+                      {selectedMeasureName}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

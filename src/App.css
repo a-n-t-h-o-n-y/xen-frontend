@@ -56,6 +56,7 @@
   color: var(--text-primary);
   user-select: none;
   -webkit-user-select: none;
+  cursor: default;
 }
 
 /* =========================================================
@@ -63,20 +64,26 @@
    ========================================================= */
 
 .header {
+  position: relative;
+  z-index: 40;
   display: flex;
   flex-wrap: nowrap;
   gap: var(--space-3);
   padding: 0;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .headerGroup {
-  flex: 1 1 0;
+  flex: 0.8 1 0;
   min-width: 240px;
   padding: var(--space-3);
   border: var(--border-subtle);
   border-radius: var(--radius-2);
   background: var(--surface-2);
+}
+
+.headerGroup:nth-child(2) {
+  flex: 1.4 1 0;
 }
 
 .headerGrid {
@@ -89,16 +96,19 @@
 .headerField {
   display: grid;
   flex: 1 1 0;
-  min-width: 110px;
+  min-width: 0;
   gap: var(--space-1);
 }
 
 .fieldLabel {
+  display: block;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fieldValue {
@@ -107,6 +117,311 @@
   line-height: 1.2;
   color: var(--text-primary);
   white-space: nowrap;
+}
+
+.timeSignatureControl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.5rem;
+}
+
+.timeSignatureValueSlot {
+  display: inline-flex;
+  align-items: center;
+  width: 6ch;
+}
+
+.timeSignatureDisplay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 1.35rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.timeSignatureDisplay:disabled {
+  opacity: 0.75;
+  cursor: default;
+  background: transparent;
+}
+
+.timeSignatureDisplay:hover:not(:disabled),
+.timeSignatureDisplay:focus-visible:not(:disabled) {
+  background: rgb(255 255 255 / 7%);
+}
+
+.timeSignatureInput {
+  width: 100%;
+  min-width: 0;
+  min-height: 1.35rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  background: rgb(255 255 255 / 14%);
+  font: inherit;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.headerEditableValueSlot {
+  display: inline-flex;
+  align-items: center;
+  width: 8ch;
+  min-height: 1.5rem;
+}
+
+.headerEditableDisplay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 1.35rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.headerEditableDisplay:disabled {
+  opacity: 0.75;
+  cursor: default;
+  background: transparent;
+}
+
+.headerEditableDisplay:hover:not(:disabled),
+.headerEditableDisplay:focus-visible:not(:disabled) {
+  background: rgb(255 255 255 / 7%);
+}
+
+.headerEditableInput {
+  width: 100%;
+  min-width: 0;
+  min-height: 1.35rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  background: rgb(255 255 255 / 14%);
+  font: inherit;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.headerEditableValueWide {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.headerEditableDisplay-editable {
+  cursor: text;
+}
+
+.modePicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.22rem;
+  min-height: 1.5rem;
+}
+
+.modeChip {
+  min-width: 1.35rem;
+  height: 1.1rem;
+  padding: 0 0.28rem;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.68rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 170ms ease,
+    border-color 170ms ease,
+    color 170ms ease;
+}
+
+.modeChip:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 32%);
+  background: rgb(255 255 255 / 9%);
+  color: rgb(255 255 255 / 86%);
+}
+
+.modeChip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modeChip-active {
+  border-color: rgb(245 196 90 / 48%);
+  background: rgb(245 196 90 / 20%);
+  color: rgb(252 245 223);
+}
+
+.modePickerEmpty {
+  font-size: 0.74rem;
+  color: rgb(255 255 255 / 45%);
+}
+
+.headerScaleSelect {
+  width: 100%;
+  max-width: 12.5rem;
+}
+
+.headerScaleControl {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.headerScaleTrigger {
+  width: 100%;
+  min-width: 0;
+  height: 1.5rem;
+  padding: 0.12rem 0.45rem;
+  line-height: 1.2;
+  font-size: 0.86rem;
+}
+
+.headerScaleTrigger:disabled {
+  opacity: 0.75;
+}
+
+.headerScaleLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerScaleMenu {
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.headerScaleMenu .waveSelectOption {
+  font-size: 0.78rem;
+}
+
+.scaleDirectionGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 82%);
+  font-size: 0.82rem;
+  line-height: 1;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.scaleDirectionGlyph:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.headerGrid-primary {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.headerField-timeSignature {
+  flex: 1.7 1 0;
+  min-width: 0;
+}
+
+.headerField-key {
+  flex: 0.7 1 0;
+  min-width: 0;
+}
+
+.headerField-baseFrequency {
+  flex: 1.1 1 0;
+  min-width: 0;
+}
+
+.headerField-sequenceName {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sequenceNameControl {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.sequenceNameIndex {
+  flex: 0 0 auto;
+  color: rgb(255 255 255 / 72%);
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.sequenceNameValue {
+  flex: 1 1 auto;
+}
+
+.timeSignatureButtons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.timeSignatureAction {
+  min-width: 2.2rem;
+  height: 1.1rem;
+  padding: 0 0.35rem;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.66rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.timeSignatureAction:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 30%);
+  background: rgb(255 255 255 / 9%);
+  color: rgb(255 255 255 / 80%);
+}
+
+.timeSignatureAction:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .mono {
