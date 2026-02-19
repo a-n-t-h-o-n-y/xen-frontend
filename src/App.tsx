@@ -25,6 +25,7 @@ type TranslateDirection = 'up' | 'down'
 type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
 
 type EnvelopePayload = Record<string, unknown>
+type SequenceViewKeymap = Record<string, string>
 
 type Envelope = {
   protocol: string
@@ -204,6 +205,163 @@ const getCommandStatus = (
 const getCommandSuffix = (payload: EnvelopePayload): string | null => {
   const suffix = payload.suffix
   return typeof suffix === 'string' ? suffix : null
+}
+
+const getSequenceViewKeymap = (payload: EnvelopePayload): SequenceViewKeymap => {
+  const keymapRoot = asRecord(payload.keymap)
+  if (!keymapRoot) {
+    return {}
+  }
+
+  const sequenceView = asRecord(keymapRoot.SequenceView)
+  if (!sequenceView) {
+    return {}
+  }
+
+  const entries = Object.entries(sequenceView).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string'
+  )
+  return Object.fromEntries(entries)
+}
+
+type ParsedKeyBinding = {
+  requiredMode: InputMode | null
+  requiresShift: boolean
+  requiresCmd: boolean
+  requiresAlt: boolean
+  key: string
+}
+
+const parseModeToken = (token: string): InputMode | null => {
+  const normalizedToken = token.trim().toLowerCase()
+  if (normalizedToken === '[p]') return 'pitch'
+  if (normalizedToken === '[v]') return 'velocity'
+  if (normalizedToken === '[d]') return 'delay'
+  if (normalizedToken === '[g]') return 'gate'
+  if (normalizedToken === '[c]') return 'scale'
+  return null
+}
+
+const normalizeKeyToken = (token: string): string => {
+  const trimmed = token.trim()
+  if (trimmed.toLowerCase() === 'plus') {
+    return '+'
+  }
+  return trimmed.toLowerCase()
+}
+
+const parseKeyBinding = (binding: string): ParsedKeyBinding | null => {
+  const tokens = binding
+    .split('+')
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0)
+
+  if (tokens.length === 0) {
+    return null
+  }
+
+  let requiredMode: InputMode | null = null
+  let requiresShift = false
+  let requiresCmd = false
+  let requiresAlt = false
+  let key = ''
+
+  for (const token of tokens) {
+    const lowerToken = token.toLowerCase()
+    const mode = parseModeToken(token)
+    if (mode) {
+      requiredMode = mode
+      continue
+    }
+
+    if (lowerToken === 'shift') {
+      requiresShift = true
+      continue
+    }
+
+    if (lowerToken === 'cmd') {
+      requiresCmd = true
+      continue
+    }
+
+    if (lowerToken === 'alt') {
+      requiresAlt = true
+      continue
+    }
+
+    key = normalizeKeyToken(token)
+  }
+
+  if (!key) {
+    return null
+  }
+
+  return {
+    requiredMode,
+    requiresShift,
+    requiresCmd,
+    requiresAlt,
+    key,
+  }
+}
+
+const getEventKeyAliases = (event: KeyboardEvent): Set<string> => {
+  const aliases = new Set<string>()
+  const key = event.key
+  const lower = key.toLowerCase()
+  aliases.add(lower)
+
+  if (key === '+') {
+    aliases.add('+')
+  }
+  if (key === '=' && event.shiftKey) {
+    aliases.add('+')
+  }
+
+  if (lower === 'escape') aliases.add('escape')
+  if (lower === 'arrowleft') aliases.add('arrowleft')
+  if (lower === 'arrowright') aliases.add('arrowright')
+  if (lower === 'arrowup') aliases.add('arrowup')
+  if (lower === 'arrowdown') aliases.add('arrowdown')
+  if (lower === 'delete') aliases.add('delete')
+  if (lower === 'pagedown') aliases.add('pagedown')
+  if (lower === 'pageup') aliases.add('pageup')
+  if (lower === 'tab') aliases.add('tab')
+
+  return aliases
+}
+
+const matchesBinding = (
+  parsedBinding: ParsedKeyBinding,
+  event: KeyboardEvent,
+  inputMode: InputMode
+): boolean => {
+  if (parsedBinding.requiredMode && parsedBinding.requiredMode !== inputMode) {
+    return false
+  }
+
+  const commandModifier = event.metaKey || event.ctrlKey
+  if (parsedBinding.requiresCmd !== commandModifier) {
+    return false
+  }
+
+  if (parsedBinding.requiresShift !== event.shiftKey) {
+    return false
+  }
+
+  if (parsedBinding.requiresAlt !== event.altKey) {
+    return false
+  }
+
+  const aliases = getEventKeyAliases(event)
+  return aliases.has(parsedBinding.key)
+}
+
+const applyNumberParameter = (command: string, pendingDigits: string): string => {
+  const hasPendingNumber = pendingDigits.length > 0
+  return command.replace(/:N=(\d+):/g, (_, defaultValue: string) =>
+    hasPendingNumber ? pendingDigits : defaultValue
+  )
 }
 
 const isEditableTarget = (target: EventTarget | null): boolean => {
@@ -573,12 +731,14 @@ function App() {
   const [commandText, setCommandText] = useState('')
   const [commandSuffix, setCommandSuffix] = useState('')
   const [commandHistory, setCommandHistory] = useState<string[]>([])
+  const [sequenceViewKeymap, setSequenceViewKeymap] = useState<SequenceViewKeymap>({})
   const [historyIndex, setHistoryIndex] = useState<number>(-1)
   const eventTokenRef = useRef<unknown>(null)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const liveCommandBufferRef = useRef('')
   const lastSnapshotVersionRef = useRef<number>(-1)
   const completionRequestVersionRef = useRef(0)
+  const pendingNumberRef = useRef('')
 
   const sendBridgeRequest = useCallback(
     async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
@@ -618,6 +778,32 @@ function App() {
     setCurrentInputMode(parsedSnapshot.editor.input_mode)
     return parsedSnapshot.snapshot_version
   }, [])
+
+  const executeBackendCommand = useCallback(
+    async (command: string): Promise<void> => {
+      const response = await sendBridgeRequest('command.execute', { command })
+      const payloadError = getPayloadError(response.payload)
+      if (payloadError) {
+        throw new Error(payloadError)
+      }
+
+      const commandSnapshot = getCommandSnapshot(response.payload)
+      const commandSnapshotVersion = applySnapshot(commandSnapshot)
+      const commandStatus = getCommandStatus(response.payload)
+
+      if (commandStatus) {
+        setStatusMessage(commandStatus.message)
+        setStatusLevel(commandStatus.level)
+      } else if (commandSnapshotVersion !== null) {
+        setStatusMessage(`Command applied (snapshot ${commandSnapshotVersion})`)
+        setStatusLevel('info')
+      } else {
+        setStatusMessage(`Command applied: ${command}`)
+        setStatusLevel('info')
+      }
+    },
+    [applySnapshot, sendBridgeRequest]
+  )
 
   const openCommandMode = useCallback((): void => {
     liveCommandBufferRef.current = commandText
@@ -678,6 +864,15 @@ function App() {
         }
 
         applySnapshot(stateResponse.payload)
+
+        const keymapResponse = await sendBridgeRequest('keymap.get', {})
+        const keymapError = getPayloadError(keymapResponse.payload)
+        if (keymapError) {
+          throw new Error(keymapError)
+        }
+        if (isMounted) {
+          setSequenceViewKeymap(getSequenceViewKeymap(keymapResponse.payload))
+        }
 
         const welcomeResponse = await sendBridgeRequest('command.execute', { command: 'welcome' })
         const welcomeError = getPayloadError(welcomeResponse.payload)
@@ -773,15 +968,7 @@ function App() {
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent): void => {
-      if (isCommandMode || bridgeUnavailableMessage !== null) {
-        return
-      }
-
-      if (event.key !== ':') {
-        return
-      }
-
-      if (event.metaKey || event.ctrlKey || event.altKey) {
+      if (bridgeUnavailableMessage !== null) {
         return
       }
 
@@ -789,13 +976,64 @@ function App() {
         return
       }
 
-      event.preventDefault()
-      openCommandMode()
+      const isDigitKey =
+        event.key.length === 1 &&
+        event.key >= '0' &&
+        event.key <= '9' &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+
+      if (!isCommandMode && isDigitKey) {
+        pendingNumberRef.current = `${pendingNumberRef.current}${event.key}`
+        event.preventDefault()
+        return
+      }
+
+      const matchedBinding = Object.entries(sequenceViewKeymap).find(([binding]) => {
+        const parsedBinding = parseKeyBinding(binding)
+        if (!parsedBinding) {
+          return false
+        }
+
+        return matchesBinding(parsedBinding, event, currentInputMode)
+      })
+
+      if (matchedBinding) {
+        event.preventDefault()
+        const command = applyNumberParameter(matchedBinding[1], pendingNumberRef.current)
+        pendingNumberRef.current = ''
+        void executeBackendCommand(command).catch((error: unknown) => {
+          setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+          setStatusLevel('error')
+        })
+        return
+      }
+
+      if (!isDigitKey) {
+        pendingNumberRef.current = ''
+      }
+
+      if (isCommandMode) {
+        return
+      }
+
+      if (event.key === ':' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault()
+        openCommandMode()
+      }
     }
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [bridgeUnavailableMessage, isCommandMode, openCommandMode])
+  }, [
+    bridgeUnavailableMessage,
+    currentInputMode,
+    executeBackendCommand,
+    isCommandMode,
+    openCommandMode,
+    sequenceViewKeymap,
+  ])
 
   const submitCommand = useCallback(
     async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -814,26 +1052,7 @@ function App() {
       let shouldClearCommandText = false
 
       try {
-        const response = await sendBridgeRequest('command.execute', { command })
-        const payloadError = getPayloadError(response.payload)
-        if (payloadError) {
-          throw new Error(payloadError)
-        }
-
-        const commandSnapshot = getCommandSnapshot(response.payload)
-        const commandSnapshotVersion = applySnapshot(commandSnapshot)
-        const commandStatus = getCommandStatus(response.payload)
-
-        if (commandStatus) {
-          setStatusMessage(commandStatus.message)
-          setStatusLevel(commandStatus.level)
-        } else if (commandSnapshotVersion !== null) {
-          setStatusMessage(`Command applied (snapshot ${commandSnapshotVersion})`)
-          setStatusLevel('info')
-        } else {
-          setStatusMessage(`Command applied: ${command}`)
-          setStatusLevel('info')
-        }
+        await executeBackendCommand(command)
 
         shouldClearCommandText = true
       } catch (error) {
@@ -843,7 +1062,7 @@ function App() {
         closeCommandMode({ preserveText: !shouldClearCommandText })
       }
     },
-    [applySnapshot, closeCommandMode, commandText, sendBridgeRequest]
+    [closeCommandMode, commandText, executeBackendCommand]
   )
 
   const {
