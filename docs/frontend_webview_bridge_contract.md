@@ -227,19 +227,31 @@ Response payload:
   };
   sequence_banks: Array<{
     name: string;    // e.g. "demo.xss"
-    stem: string;    // e.g. "demo"
+    relative_path: string; // slash-delimited, e.g. "demos/demo.xss"
+    stem: string;    // slash-delimited path without extension, e.g. "demos/demo"
     path: string;    // absolute path
-    command: string; // e.g. "load sequenceBank demo"
+    command: string; // e.g. "load sequenceBank \"demos/demo\""
   }>;
   tunings: Array<{
     name: string;    // e.g. "edo12.scl"
-    stem: string;    // e.g. "edo12"
+    relative_path: string; // slash-delimited, e.g. "micro/edo12.scl"
+    stem: string;    // slash-delimited path without extension, e.g. "micro/edo12"
     path: string;    // absolute path
-    command: string; // e.g. "load tuning edo12"
+    command: string; // e.g. "load tuning \"micro/edo12\""
+    description: string; // Scala first non-comment line
+    intervals: number[]; // cents offsets excluding the period
+    octave: number;      // Scala period (usually 1200)
+    note_count: number;  // same as intervals.length
   }>;
   scales: Array<{
     name: string;    // includes "chromatic"
-    command: string; // e.g. "set scale major"
+    intervals: number[];
+    command: string; // e.g. "set scale \"major pentatonic\""
+  }>;
+  chords: Array<{
+    name: string;
+    intervals: number[];
+    command: string; // e.g. "arp \"major\""
   }>;
   commands: {
     reload_scales: "load scales";
@@ -255,9 +267,10 @@ Response payload:
 
 Semantics:
 
-1. `sequence_banks` and `tunings` are read from disk at request time.
+1. `sequence_banks` and `tunings` are read recursively from disk at request time.
 1. Use this endpoint for explicit refresh in Library View so newly added files appear.
-1. `scales` reflects currently loaded scales in backend memory. To pick up edited scale files, execute `load scales` and request `library.get` again.
+1. `scales` and `chords` reflect currently loaded backend memory. To pick up edited files, execute `load scales` / `load chords` and request `library.get` again.
+1. Tuning metadata is parsed from each `.scl` using the same parser as `load tuning`.
 
 ## 4. Event map (C++ -> frontend)
 

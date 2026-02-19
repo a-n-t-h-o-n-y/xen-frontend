@@ -59,11 +59,23 @@ type LibraryCommandEntry = {
   stem: string
   path: string
   command: string
+  relativePath: string
+  description: string
+  intervals: number[]
+  octave: number | null
+  noteCount: number | null
 }
 
 type LibraryScaleEntry = {
   name: string
   command: string
+  intervals: number[]
+}
+
+type LibraryChordEntry = {
+  name: string
+  command: string
+  intervals: number[]
 }
 
 type LibraryHierarchyRow = {
@@ -83,6 +95,7 @@ type LibrarySnapshot = {
   sequenceBanks: LibraryCommandEntry[]
   tunings: LibraryCommandEntry[]
   scales: LibraryScaleEntry[]
+  chords: LibraryChordEntry[]
   commands: {
     reloadScales: string
     reloadChords: string
@@ -93,6 +106,8 @@ type LibrarySnapshot = {
     scaleName: string | null
   }
 }
+
+type TuningSortMode = 'name' | 'noteCount' | 'octave'
 
 type Envelope = {
   protocol: string
@@ -606,6 +621,11 @@ const parseLibraryCommandEntries = (value: unknown): LibraryCommandEntry[] => {
           stem,
           path: '',
           command: '',
+          relativePath: '',
+          description: '',
+          intervals: [],
+          octave: null,
+          noteCount: null,
         } satisfies LibraryCommandEntry
       }
 
@@ -637,11 +657,34 @@ const parseLibraryCommandEntries = (value: unknown): LibraryCommandEntry[] => {
             ? record.full_path
             : ''
       const command = typeof record.command === 'string' ? record.command : ''
+      const relativePath =
+        typeof record.relative_path === 'string'
+          ? record.relative_path
+          : typeof record.relativePath === 'string'
+            ? record.relativePath
+            : ''
+      const description = typeof record.description === 'string' ? record.description : ''
+      const intervals = Array.isArray(record.intervals)
+        ? record.intervals.filter((value): value is number => typeof value === 'number')
+        : []
+      const octave =
+        typeof record.octave === 'number' && Number.isFinite(record.octave) ? record.octave : null
+      const noteCount =
+        typeof record.note_count === 'number' && Number.isFinite(record.note_count)
+          ? record.note_count
+          : typeof record.noteCount === 'number' && Number.isFinite(record.noteCount)
+            ? record.noteCount
+            : null
       return {
         name,
         stem,
         path,
         command,
+        relativePath,
+        description,
+        intervals,
+        octave,
+        noteCount,
       } satisfies LibraryCommandEntry
     })
     .filter((entry): entry is LibraryCommandEntry => entry !== null)
@@ -655,12 +698,36 @@ const parseLibraryScaleEntries = (value: unknown): LibraryScaleEntry[] => {
       if (!record || typeof record.name !== 'string' || typeof record.command !== 'string') {
         return null
       }
+      const intervals = Array.isArray(record.intervals)
+        ? record.intervals.filter((value): value is number => typeof value === 'number')
+        : []
       return {
         name: record.name,
         command: record.command,
+        intervals,
       } satisfies LibraryScaleEntry
     })
     .filter((entry): entry is LibraryScaleEntry => entry !== null)
+}
+
+const parseLibraryChordEntries = (value: unknown): LibraryChordEntry[] => {
+  const rows = Array.isArray(value) ? value : []
+  return rows
+    .map((row) => {
+      const record = asRecord(row)
+      if (!record || typeof record.name !== 'string' || typeof record.command !== 'string') {
+        return null
+      }
+      const intervals = Array.isArray(record.intervals)
+        ? record.intervals.filter((value): value is number => typeof value === 'number')
+        : []
+      return {
+        name: record.name,
+        command: record.command,
+        intervals,
+      } satisfies LibraryChordEntry
+    })
+    .filter((entry): entry is LibraryChordEntry => entry !== null)
 }
 
 const getLibrarySnapshot = (payload: EnvelopePayload): LibrarySnapshot => {
@@ -677,6 +744,7 @@ const getLibrarySnapshot = (payload: EnvelopePayload): LibrarySnapshot => {
     sequenceBanks: parseLibraryCommandEntries(payload.sequence_banks ?? payload.sequenceBanks),
     tunings: parseLibraryCommandEntries(payload.tunings),
     scales: parseLibraryScaleEntries(payload.scales),
+    chords: parseLibraryChordEntries(payload.chords),
     commands: {
       reloadScales: typeof commands?.reload_scales === 'string' ? commands.reload_scales : '',
       reloadChords: typeof commands?.reload_chords === 'string' ? commands.reload_chords : '',
@@ -692,13 +760,21 @@ const getLibrarySnapshot = (payload: EnvelopePayload): LibrarySnapshot => {
 
 const quoteCommandArg = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
 
-const getHierarchyRows = (entries: LibraryCommandEntry[]): LibraryHierarchyRow[] => {
+const formatOctaveForDisplay = (value: number): string => {
+  const rounded = value.toFixed(2)
+  return rounded.endsWith('.00') ? rounded.slice(0, -3) : rounded
+}
+
+const getHierarchyRows = (
+  entries: LibraryCommandEntry[],
+  options?: { sortByName?: boolean }
+): LibraryHierarchyRow[] => {
   const directoryRows = new Set<string>()
   const rows: LibraryHierarchyRow[] = []
 
-  const sortedEntries = [...entries].sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-  )
+  const sortedEntries = options?.sortByName === false
+    ? [...entries]
+    : [...entries].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 
   for (const entry of sortedEntries) {
     const normalized = entry.name.replace(/\\/g, '/')
@@ -1440,9 +1516,16 @@ function App() {
   )
   const [activeModulatorTab, setActiveModulatorTab] = useState(0)
   const [activeReferenceTab, setActiveReferenceTab] = useState<'commands' | 'keybindings'>('commands')
-  const [activeLibraryTab, setActiveLibraryTab] = useState<'scales' | 'tunings' | 'sequences'>(
-    'scales'
-  )
+  const [referenceCommandSearch, setReferenceCommandSearch] = useState('')
+  const referenceSearchInputRef = useRef<HTMLInputElement>(null)
+  const [tuningSearch, setTuningSearch] = useState('')
+  const tuningSearchInputRef = useRef<HTMLInputElement>(null)
+  const [sequenceSearch, setSequenceSearch] = useState('')
+  const sequenceSearchInputRef = useRef<HTMLInputElement>(null)
+  const [tuningSortMode, setTuningSortMode] = useState<TuningSortMode>('name')
+  const [activeLibraryTab, setActiveLibraryTab] = useState<
+    'tunings' | 'sequences' | 'scales' | 'chords'
+  >('tunings')
   const [sessionReference, setSessionReference] = useState<SessionReference>({
     commands: [],
     keybindings: [],
@@ -1456,6 +1539,7 @@ function App() {
     sequenceBanks: [],
     tunings: [],
     scales: [],
+    chords: [],
     commands: {
       reloadScales: '',
       reloadChords: '',
@@ -1553,18 +1637,12 @@ function App() {
       }
 
       const commandSnapshot = getCommandSnapshot(response.payload)
-      const commandSnapshotVersion = applySnapshot(commandSnapshot)
+      applySnapshot(commandSnapshot)
       const commandStatus = getCommandStatus(response.payload)
 
-      if (commandStatus) {
+      if (commandStatus && commandStatus.level !== 'debug') {
         setStatusMessage(commandStatus.message)
         setStatusLevel(commandStatus.level)
-      } else if (commandSnapshotVersion !== null) {
-        setStatusMessage(`Command applied (snapshot ${commandSnapshotVersion})`)
-        setStatusLevel('info')
-      } else {
-        setStatusMessage(`Command applied: ${command}`)
-        setStatusLevel('info')
       }
     },
     [applySnapshot, sendBridgeRequest]
@@ -1746,19 +1824,13 @@ function App() {
         }
 
         const welcomeSnapshot = getCommandSnapshot(welcomeResponse.payload)
-        const welcomeSnapshotVersion = applySnapshot(welcomeSnapshot)
+        applySnapshot(welcomeSnapshot)
         const welcomeStatus = getCommandStatus(welcomeResponse.payload)
 
         if (isMounted) {
-          if (welcomeStatus) {
+          if (welcomeStatus && welcomeStatus.level !== 'debug') {
             setStatusMessage(welcomeStatus.message)
             setStatusLevel(welcomeStatus.level)
-          } else if (welcomeSnapshotVersion !== null) {
-            setStatusMessage(`Command applied (snapshot ${welcomeSnapshotVersion})`)
-            setStatusLevel('info')
-          } else {
-            setStatusMessage('Command applied: welcome')
-            setStatusLevel('info')
           }
         }
       } catch (error) {
@@ -2186,14 +2258,103 @@ function App() {
     [sessionReference.keybindings]
   )
 
+  const filteredReferenceCommands = useMemo(() => {
+    const query = referenceCommandSearch.trim().toLowerCase()
+    if (!query) {
+      return sessionReference.commands
+    }
+
+    return sessionReference.commands.filter((command) => command.id.toLowerCase().includes(query))
+  }, [referenceCommandSearch, sessionReference.commands])
+
+  const focusCommandBarWithText = useCallback(
+    (commandTemplate: string): void => {
+      const commandWithoutPlaceholders = commandTemplate.replace(/\[[^\]]*]/g, '')
+      const normalizedCommand = commandWithoutPlaceholders.replace(/\s+/g, ' ').trim()
+      if (!normalizedCommand) {
+        return
+      }
+
+      const nextCommandText = `${normalizedCommand} `
+      if (historyIndex !== -1) {
+        setHistoryIndex(-1)
+      }
+      setIsCommandMode(true)
+      setCommandText(nextCommandText)
+      liveCommandBufferRef.current = nextCommandText
+
+      requestAnimationFrame(() => {
+        const input = commandInputRef.current
+        if (!input) {
+          return
+        }
+        input.focus()
+        const textLength = input.value.length
+        input.setSelectionRange(textLength, textLength)
+      })
+    },
+    [historyIndex]
+  )
+
   const tuningHierarchyRows = useMemo(
-    () => getHierarchyRows(librarySnapshot.tunings),
-    [librarySnapshot.tunings]
+    () => {
+      const query = tuningSearch.trim().toLowerCase()
+      const tunings =
+        query.length === 0
+          ? librarySnapshot.tunings
+          : librarySnapshot.tunings.filter((tuning) => tuning.stem.toLowerCase().includes(query))
+
+      const sortedTunings = [...tunings].sort((a, b) => {
+        if (tuningSortMode === 'name') {
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        }
+
+        if (tuningSortMode === 'noteCount') {
+          const aCount = a.noteCount
+          const bCount = b.noteCount
+          if (aCount !== null && bCount !== null && aCount !== bCount) {
+            return aCount - bCount
+          }
+          if (aCount === null && bCount !== null) {
+            return 1
+          }
+          if (aCount !== null && bCount === null) {
+            return -1
+          }
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        }
+
+        const aOctave = a.octave
+        const bOctave = b.octave
+        if (aOctave !== null && bOctave !== null && aOctave !== bOctave) {
+          return aOctave - bOctave
+        }
+        if (aOctave === null && bOctave !== null) {
+          return 1
+        }
+        if (aOctave !== null && bOctave === null) {
+          return -1
+        }
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      })
+
+      return getHierarchyRows(sortedTunings, { sortByName: false })
+    },
+    [librarySnapshot.tunings, tuningSearch, tuningSortMode]
   )
 
   const sequenceHierarchyRows = useMemo(
-    () => getHierarchyRows(librarySnapshot.sequenceBanks),
-    [librarySnapshot.sequenceBanks]
+    () => {
+      const query = sequenceSearch.trim().toLowerCase()
+      const sequenceBanks =
+        query.length === 0
+          ? librarySnapshot.sequenceBanks
+          : librarySnapshot.sequenceBanks.filter((sequenceBank) =>
+              sequenceBank.stem.toLowerCase().includes(query)
+            )
+      return getHierarchyRows(sequenceBanks)
+    },
+    [librarySnapshot.sequenceBanks, sequenceSearch]
   )
 
   const displayedLeafFlags = useMemo(() => {
@@ -2807,7 +2968,7 @@ function App() {
   }, [])
 
   const refreshLibraryView = useCallback(async (): Promise<void> => {
-    if (bridgeUnavailableMessage !== null) {
+    if (bridgeUnavailableMessage !== null || libraryLoading) {
       return
     }
 
@@ -2826,7 +2987,7 @@ function App() {
     } finally {
       setLibraryLoading(false)
     }
-  }, [bridgeUnavailableMessage, sendBridgeRequest])
+  }, [bridgeUnavailableMessage, libraryLoading, sendBridgeRequest])
 
   const runLibraryCommand = useCallback(
     async (command: string): Promise<void> => {
@@ -2844,26 +3005,15 @@ function App() {
     [bridgeUnavailableMessage, executeBackendCommand]
   )
 
+  const previousLibraryTabRef = useRef(activeLibraryTab)
+
   useEffect(() => {
-    if (libraryLoading) {
+    if (previousLibraryTabRef.current === activeLibraryTab) {
       return
     }
-
-    if (activeLibraryTab === 'tunings' && librarySnapshot.tunings.length === 0) {
-      void refreshLibraryView()
-      return
-    }
-
-    if (activeLibraryTab === 'sequences' && librarySnapshot.sequenceBanks.length === 0) {
-      void refreshLibraryView()
-    }
-  }, [
-    activeLibraryTab,
-    libraryLoading,
-    librarySnapshot.sequenceBanks.length,
-    librarySnapshot.tunings.length,
-    refreshLibraryView,
-  ])
+    previousLibraryTabRef.current = activeLibraryTab
+    void refreshLibraryView()
+  }, [activeLibraryTab, refreshLibraryView])
 
   return (
     <div className="app">
@@ -3317,7 +3467,7 @@ function App() {
                 }}
                 title="Drag handle: horizontal = frequency, vertical = phase offset. Shift=frequency only. Option/Alt=offset only."
               >
-                <svg viewBox="0 0 420 140" preserveAspectRatio="none">
+                <svg viewBox="-2 -2 424 144" preserveAspectRatio="none">
                   <line x1="0" y1="70" x2="420" y2="70" className="modWaveAxis" />
                   <line x1="210" y1="0" x2="210" y2="140" className="modWaveAxis" />
                   <line
@@ -3533,17 +3683,53 @@ function App() {
                 </button>
               </div>
             </div>
-            <div className="referenceBody">
+            <div className="referenceContent">
               {activeReferenceTab === 'commands' ? (
                 sessionReference.commands.length > 0 ? (
                   <div className="referenceCommands">
-                    {sessionReference.commands.map((command) => (
-                      <div key={`reference-command-${command.id}`} className="referenceCommandRow">
-                        <p className="referenceCommandId mono">{command.id}</p>
-                        <p className="referenceCommandSignature mono">{command.signature}</p>
-                        <p className="referenceCommandDescription">{command.description}</p>
-                      </div>
-                    ))}
+                    <div className="referenceCommandSearchField">
+                      <input
+                        ref={referenceSearchInputRef}
+                        type="search"
+                        className="referenceCommandSearchInput mono"
+                        value={referenceCommandSearch}
+                        onChange={(event) => setReferenceCommandSearch(event.target.value)}
+                        placeholder="Search command name..."
+                        aria-label="Search command name"
+                      />
+                      {referenceCommandSearch.length > 0 ? (
+                        <button
+                          type="button"
+                          className="referenceCommandSearchClear"
+                          aria-label="Clear command search"
+                          onMouseDown={(event) => {
+                            event.preventDefault()
+                          }}
+                          onClick={() => {
+                            setReferenceCommandSearch('')
+                            referenceSearchInputRef.current?.focus()
+                          }}
+                        >
+                          x
+                        </button>
+                      ) : null}
+                    </div>
+                    {filteredReferenceCommands.length > 0 ? (
+                      filteredReferenceCommands.map((command) => (
+                        <button
+                          key={`reference-command-${command.id}`}
+                          type="button"
+                          className="referenceCommandRow referenceCommandButton"
+                          onClick={() => focusCommandBarWithText(command.signature || command.id)}
+                        >
+                          <p className="referenceCommandId mono">{command.id}</p>
+                          <p className="referenceCommandSignature mono">{command.signature}</p>
+                          <p className="referenceCommandDescription">{command.description}</p>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="referencePlaceholder">No commands match that search.</p>
+                    )}
                   </div>
                 ) : (
                   <p className="referencePlaceholder">No command reference data received.</p>
@@ -3586,61 +3772,54 @@ function App() {
           <article className="bottomModule bottomModule-rowItem bottomModule-library">
           <div className="bottomModuleHeader">
             <p className="bottomModuleLabel">Library View</p>
-            <div className="libraryActions">
+            <div className="libraryTabs" role="tablist" aria-label="Library tabs">
               <button
                 type="button"
-                className="libraryActionButton mono"
-                onClick={() => {
-                  void refreshLibraryView()
-                }}
-                disabled={libraryLoading}
+                className={`libraryTab${activeLibraryTab === 'tunings' ? ' libraryTab-active' : ''}`}
+                role="tab"
+                aria-selected={activeLibraryTab === 'tunings'}
+                onClick={() => setActiveLibraryTab('tunings')}
               >
-                {libraryLoading ? 'Loading…' : 'Refresh'}
+                Tunings
+              </button>
+              <button
+                type="button"
+                className={`libraryTab${activeLibraryTab === 'sequences' ? ' libraryTab-active' : ''}`}
+                role="tab"
+                aria-selected={activeLibraryTab === 'sequences'}
+                onClick={() => setActiveLibraryTab('sequences')}
+              >
+                Sequences
+              </button>
+              <button
+                type="button"
+                className={`libraryTab${activeLibraryTab === 'scales' ? ' libraryTab-active' : ''}`}
+                role="tab"
+                aria-selected={activeLibraryTab === 'scales'}
+                onClick={() => setActiveLibraryTab('scales')}
+              >
+                Scales
+              </button>
+              <button
+                type="button"
+                className={`libraryTab${activeLibraryTab === 'chords' ? ' libraryTab-active' : ''}`}
+                role="tab"
+                aria-selected={activeLibraryTab === 'chords'}
+                onClick={() => setActiveLibraryTab('chords')}
+              >
+                Chords
               </button>
             </div>
-          </div>
-          <div className="libraryTabs" role="tablist" aria-label="Library tabs">
-            <button
-              type="button"
-              className={`libraryTab${activeLibraryTab === 'scales' ? ' libraryTab-active' : ''}`}
-              role="tab"
-              aria-selected={activeLibraryTab === 'scales'}
-              onClick={() => setActiveLibraryTab('scales')}
-            >
-              Scales
-            </button>
-            <button
-              type="button"
-              className={`libraryTab${activeLibraryTab === 'tunings' ? ' libraryTab-active' : ''}`}
-              role="tab"
-              aria-selected={activeLibraryTab === 'tunings'}
-              onClick={() => setActiveLibraryTab('tunings')}
-            >
-              Tunings
-            </button>
-            <button
-              type="button"
-              className={`libraryTab${activeLibraryTab === 'sequences' ? ' libraryTab-active' : ''}`}
-              role="tab"
-              aria-selected={activeLibraryTab === 'sequences'}
-              onClick={() => setActiveLibraryTab('sequences')}
-            >
-              Sequences Saved
-            </button>
           </div>
           <div className="libraryList" role="list">
             {activeLibraryTab === 'scales' ? (
               librarySnapshot.scales.length > 0 ? (
                 librarySnapshot.scales.map((scale, index) => {
-                  const isActive =
-                    librarySnapshot.active.scaleName !== null &&
-                    scale.name.toLowerCase() === librarySnapshot.active.scaleName.toLowerCase()
-
                   return (
                     <button
                       key={`library-scale-${index}-${scale.name}`}
                       type="button"
-                      className={`libraryItem${isActive ? ' libraryItem-active' : ''}`}
+                      className="libraryItem"
                       onClick={() => {
                         void runLibraryCommand(
                           scale.command || `set scale ${quoteCommandArg(scale.name)}`
@@ -3648,7 +3827,11 @@ function App() {
                       }}
                     >
                       <span className="libraryItemName mono">{scale.name}</span>
-                      <span className="libraryItemMeta mono">{scale.command}</span>
+                      <span className="libraryItemMeta mono">
+                        {scale.intervals.length > 0
+                          ? `[${scale.intervals.join(', ')}]`
+                          : 'Intervals unavailable'}
+                      </span>
                     </button>
                   )
                 })
@@ -3658,95 +3841,232 @@ function App() {
             ) : null}
 
             {activeLibraryTab === 'tunings' ? (
-              tuningHierarchyRows.length > 0 ? (
-                tuningHierarchyRows.map((row) => {
-                  if (row.kind === 'directory') {
-                    return (
-                      <div
-                        key={row.key}
-                        className="libraryDirectoryRow mono"
-                        style={{ paddingLeft: `${row.depth * 0.9 + 0.4}rem` }}
-                      >
-                        <span className="libraryDirectoryCaret" aria-hidden="true">
-                          ▸
-                        </span>
-                        <span className="libraryDirectoryName">{row.label}</span>
-                      </div>
-                    )
-                  }
-
-                  const tuning = row.entry
-                  if (!tuning) {
-                    return null
-                  }
-                  const isActive =
-                    tuning.name.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase() ||
-                    tuning.stem.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase()
-
-                  return (
+              <>
+                <div className="referenceCommandSearchField">
+                  <input
+                    ref={tuningSearchInputRef}
+                    type="search"
+                    className="referenceCommandSearchInput mono"
+                    value={tuningSearch}
+                    onChange={(event) => setTuningSearch(event.target.value)}
+                    placeholder="Search tuning stem..."
+                    aria-label="Search tunings by stem"
+                  />
+                  {tuningSearch.length > 0 ? (
                     <button
-                      key={row.key}
                       type="button"
-                      className={`libraryItem${isActive ? ' libraryItem-active' : ''}`}
-                      style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
+                      className="referenceCommandSearchClear"
+                      aria-label="Clear tuning search"
+                      onMouseDown={(event) => {
+                        event.preventDefault()
+                      }}
                       onClick={() => {
-                        void runLibraryCommand(
-                          tuning.command || `load tuning ${quoteCommandArg(tuning.name)}`
-                        )
+                        setTuningSearch('')
+                        tuningSearchInputRef.current?.focus()
                       }}
                     >
-                      <span className="libraryItemName mono">{row.label}</span>
-                      <span className="libraryItemMeta mono">{tuning.path}</span>
+                      x
                     </button>
-                  )
-                })
-              ) : (
-                <p className="libraryPlaceholder">No tuning files found.</p>
-              )
+                  ) : null}
+                </div>
+                <div className="librarySortChips" role="group" aria-label="Tune sort">
+                  <button
+                    type="button"
+                    className={`librarySortChip${tuningSortMode === 'name' ? ' librarySortChip-active' : ''}`}
+                    onClick={() => setTuningSortMode('name')}
+                  >
+                    Name
+                  </button>
+                  <button
+                    type="button"
+                    className={`librarySortChip${tuningSortMode === 'noteCount' ? ' librarySortChip-active' : ''}`}
+                    onClick={() => setTuningSortMode('noteCount')}
+                  >
+                    Notes
+                  </button>
+                  <button
+                    type="button"
+                    className={`librarySortChip${tuningSortMode === 'octave' ? ' librarySortChip-active' : ''}`}
+                    onClick={() => setTuningSortMode('octave')}
+                  >
+                    Oct
+                  </button>
+                </div>
+                {tuningHierarchyRows.length > 0 ? (
+                  tuningHierarchyRows.map((row) => {
+                    if (row.kind === 'directory') {
+                      return (
+                        <div
+                          key={row.key}
+                          className="libraryDirectoryRow mono"
+                          style={{ paddingLeft: `${row.depth * 0.9 + 0.4}rem` }}
+                        >
+                          <span className="libraryDirectoryCaret" aria-hidden="true">
+                            ▸
+                          </span>
+                          <span className="libraryDirectoryName">{row.label}</span>
+                        </div>
+                      )
+                    }
+
+                    const tuning = row.entry
+                    if (!tuning) {
+                      return null
+                    }
+                    const isActive =
+                      tuning.name.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase() ||
+                      tuning.stem.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase()
+                    const stemParts = tuning.stem.split('/').filter((part) => part.length > 0)
+                    const tuningNameLeaf = stemParts[stemParts.length - 1] || row.label
+                    const tuningFolderPath = stemParts.slice(0, -1).join('/')
+
+                    return (
+                      <button
+                        key={row.key}
+                        type="button"
+                        className={`libraryItem${isActive ? ' libraryItem-active' : ''}`}
+                        style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
+                        onClick={() => {
+                          void runLibraryCommand(
+                            tuning.command || `load tuning ${quoteCommandArg(tuning.name)}`
+                          )
+                        }}
+                      >
+                        <span className="libraryItemName mono">
+                          {tuningFolderPath ? (
+                            <span className="libraryItemPathPrefix">{`${tuningFolderPath}/`}</span>
+                          ) : null}
+                          <span className="libraryItemPathLeaf">{tuningNameLeaf}</span>
+                        </span>
+                        <span className="libraryItemMeta libraryItemMeta-multiline mono">
+                          {[
+                            tuning.description || tuning.stem || tuning.relativePath || tuning.path,
+                            tuning.noteCount !== null ? `${tuning.noteCount} notes` : '',
+                            tuning.octave !== null
+                              ? `octave ${formatOctaveForDisplay(tuning.octave)}`
+                              : '',
+                          ]
+                            .filter((value) => value.length > 0)
+                            .join(' · ')}
+                        </span>
+                      </button>
+                    )
+                  })
+                ) : (
+                  <p className="libraryPlaceholder">
+                    {tuningSearch.trim() ? 'No tunings match that search.' : 'No tuning files found.'}
+                  </p>
+                )}
+              </>
             ) : null}
 
             {activeLibraryTab === 'sequences' ? (
-              sequenceHierarchyRows.length > 0 ? (
-                sequenceHierarchyRows.map((row) => {
-                  if (row.kind === 'directory') {
-                    return (
-                      <div
-                        key={row.key}
-                        className="libraryDirectoryRow mono"
-                        style={{ paddingLeft: `${row.depth * 0.9 + 0.4}rem` }}
-                      >
-                        <span className="libraryDirectoryCaret" aria-hidden="true">
-                          ▸
-                        </span>
-                        <span className="libraryDirectoryName">{row.label}</span>
-                      </div>
-                    )
-                  }
-
-                  const sequenceBank = row.entry
-                  if (!sequenceBank) {
-                    return null
-                  }
-                  return (
+              <>
+                <div className="referenceCommandSearchField">
+                  <input
+                    ref={sequenceSearchInputRef}
+                    type="search"
+                    className="referenceCommandSearchInput mono"
+                    value={sequenceSearch}
+                    onChange={(event) => setSequenceSearch(event.target.value)}
+                    placeholder="Search sequence stem..."
+                    aria-label="Search sequences by stem"
+                  />
+                  {sequenceSearch.length > 0 ? (
                     <button
-                      key={row.key}
                       type="button"
-                      className="libraryItem"
-                      style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
+                      className="referenceCommandSearchClear"
+                      aria-label="Clear sequence search"
+                      onMouseDown={(event) => {
+                        event.preventDefault()
+                      }}
                       onClick={() => {
-                        void runLibraryCommand(
-                          sequenceBank.command ||
-                            `load sequenceBank ${quoteCommandArg(sequenceBank.name)}`
-                        )
+                        setSequenceSearch('')
+                        sequenceSearchInputRef.current?.focus()
                       }}
                     >
-                      <span className="libraryItemName mono">{row.label}</span>
-                      <span className="libraryItemMeta mono">{sequenceBank.path}</span>
+                      x
                     </button>
-                  )
-                })
+                  ) : null}
+                </div>
+                {sequenceHierarchyRows.length > 0 ? (
+                  sequenceHierarchyRows.map((row) => {
+                    if (row.kind === 'directory') {
+                      return (
+                        <div
+                          key={row.key}
+                          className="libraryDirectoryRow mono"
+                          style={{ paddingLeft: `${row.depth * 0.9 + 0.4}rem` }}
+                        >
+                          <span className="libraryDirectoryCaret" aria-hidden="true">
+                            ▸
+                          </span>
+                          <span className="libraryDirectoryName">{row.label}</span>
+                        </div>
+                      )
+                    }
+
+                    const sequenceBank = row.entry
+                    if (!sequenceBank) {
+                      return null
+                    }
+                    const stemParts = sequenceBank.stem.split('/').filter((part) => part.length > 0)
+                    const sequenceNameLeaf = stemParts[stemParts.length - 1] || row.label
+                    const sequenceFolderPath = stemParts.slice(0, -1).join('/')
+                    return (
+                      <button
+                        key={row.key}
+                        type="button"
+                        className="libraryItem"
+                        style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
+                        onClick={() => {
+                          void runLibraryCommand(
+                            sequenceBank.command ||
+                              `load sequenceBank ${quoteCommandArg(sequenceBank.name)}`
+                          )
+                        }}
+                      >
+                        <span className="libraryItemName mono">
+                          {sequenceFolderPath ? (
+                            <span className="libraryItemPathPrefix">{`${sequenceFolderPath}/`}</span>
+                          ) : null}
+                          <span className="libraryItemPathLeaf">{sequenceNameLeaf}</span>
+                        </span>
+                        <span className="libraryItemMeta mono">
+                          {sequenceBank.relativePath || sequenceBank.path}
+                        </span>
+                      </button>
+                    )
+                  })
+                ) : (
+                  <p className="libraryPlaceholder">
+                    {sequenceSearch.trim() ? 'No sequences match that search.' : 'No saved sequences found.'}
+                  </p>
+                )}
+              </>
+            ) : null}
+
+            {activeLibraryTab === 'chords' ? (
+              librarySnapshot.chords.length > 0 ? (
+                librarySnapshot.chords.map((chord, index) => (
+                  <button
+                    key={`library-chord-${index}-${chord.name}`}
+                    type="button"
+                    className="libraryItem"
+                    onClick={() => {
+                      void runLibraryCommand(chord.command || `arp ${quoteCommandArg(chord.name)}`)
+                    }}
+                  >
+                    <span className="libraryItemName mono">{chord.name}</span>
+                    <span className="libraryItemMeta mono">
+                      {chord.intervals.length > 0
+                        ? `[${chord.intervals.join(', ')}]`
+                        : 'Intervals unavailable'}
+                    </span>
+                  </button>
+                ))
               ) : (
-                <p className="libraryPlaceholder">No saved sequences found.</p>
+                <p className="libraryPlaceholder">No chords loaded.</p>
               )
             ) : null}
           </div>
