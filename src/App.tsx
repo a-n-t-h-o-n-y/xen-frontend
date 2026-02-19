@@ -786,7 +786,6 @@ function App() {
   const animationFrameRef = useRef<number | null>(null)
   const lastAnimationFrameMsRef = useRef<number | null>(null)
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
-  const [selectedSequenceIndex, setSelectedSequenceIndex] = useState<number | null>(null)
   const [activeSequenceFlags, setActiveSequenceFlags] = useState<boolean[]>(
     Array(TRANSPORT_SEQUENCE_COUNT).fill(false)
   )
@@ -1296,15 +1295,10 @@ function App() {
 
     const rawTuningLength = snapshot.engine.tuning.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
-    const snapshotSelectedIndex = Math.max(
+    const selectedIndex = Math.max(
       0,
       Math.min(snapshot.editor.selected.measure, snapshot.engine.sequence_bank.length - 1)
     )
-    const maxSequenceIndex = Math.max(snapshot.engine.sequence_bank.length - 1, 0)
-    const selectedIndex =
-      selectedSequenceIndex === null
-        ? snapshotSelectedIndex
-        : Math.max(0, Math.min(selectedSequenceIndex, maxSequenceIndex))
     const selectedMeasure = snapshot.engine.sequence_bank[selectedIndex] ?? null
     const sequenceName = snapshot.engine.sequence_names[selectedIndex] ?? `Sequence ${selectedIndex}`
     const scaleValidPitches = snapshot.engine.scale
@@ -1379,7 +1373,7 @@ function App() {
       rulerRatios: tuningRatios,
       highlightedPitches: mappedHighlights,
     }
-  }, [selectedSequenceIndex, snapshot])
+  }, [snapshot])
 
   useEffect(() => {
     selectedMeasureIndexRef.current = selectedMeasureIndex
@@ -1419,9 +1413,19 @@ function App() {
   )
 
   const currentInputModeLetter = currentInputMode.charAt(0).toUpperCase()
-  const selectSequenceFromBank = useCallback((sequenceIndex: number): void => {
-    setSelectedSequenceIndex(sequenceIndex)
-  }, [])
+  const selectSequenceFromBank = useCallback(
+    (sequenceIndex: number): void => {
+      if (bridgeUnavailableMessage !== null) {
+        return
+      }
+
+      void executeBackendCommand(`select sequence ${sequenceIndex}`).catch((error: unknown) => {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+      })
+    },
+    [bridgeUnavailableMessage, executeBackendCommand]
+  )
 
   const sequenceBankCells = useMemo(
     () =>
