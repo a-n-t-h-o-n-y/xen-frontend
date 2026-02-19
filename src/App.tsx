@@ -653,6 +653,7 @@ const getCellWeight = (weight: number): number => (weight > 0 ? weight : 1)
 
 type LeafCell = {
   weight: number
+  path: number[]
   note:
     | {
         pitch: number
@@ -666,18 +667,18 @@ type LeafCell = {
 const flattenLeafCells = (cells: Cell[], tuningLength: number): LeafCell[] => {
   const result: LeafCell[] = []
 
-  const walk = (cell: Cell, parentWeight: number): void => {
+  const walk = (cell: Cell, parentWeight: number, path: number[]): void => {
     const accumulatedWeight = parentWeight * getCellWeight(cell.weight)
 
     if (cell.type === 'Sequence') {
       if (cell.cells.length === 0) {
-        result.push({ weight: accumulatedWeight, note: null })
+        result.push({ weight: accumulatedWeight, path, note: null })
         return
       }
 
-      for (const nestedCell of cell.cells) {
-        walk(nestedCell, accumulatedWeight)
-      }
+      cell.cells.forEach((nestedCell, index) => {
+        walk(nestedCell, accumulatedWeight, [...path, index])
+      })
       return
     }
 
@@ -688,6 +689,7 @@ const flattenLeafCells = (cells: Cell[], tuningLength: number): LeafCell[] => {
 
       result.push({
         weight: accumulatedWeight,
+        path,
         note: {
           pitch: normalizePitch(cell.pitch, tuningLength),
           velocity: normalizedVelocity,
@@ -698,14 +700,26 @@ const flattenLeafCells = (cells: Cell[], tuningLength: number): LeafCell[] => {
       return
     }
 
-    result.push({ weight: accumulatedWeight, note: null })
+    result.push({ weight: accumulatedWeight, path, note: null })
   }
 
-  for (const cell of cells) {
-    walk(cell, 1)
-  }
+  cells.forEach((cell, index) => walk(cell, 1, [index]))
 
   return result
+}
+
+const isPathPrefix = (prefix: number[], path: number[]): boolean => {
+  if (prefix.length > path.length) {
+    return false
+  }
+
+  for (let index = 0; index < prefix.length; index += 1) {
+    if (prefix[index] !== path[index]) {
+      return false
+    }
+  }
+
+  return true
 }
 
 const getSelectedMeasure = (snapshot: UiStateSnapshot): Measure | null => {
@@ -1077,6 +1091,7 @@ function App() {
     baseFrequency,
     staffLineBandByPitch,
     leafCells,
+    selectedLeafFlags,
     rulerRatios,
     highlightedPitches,
   } = useMemo(() => {
@@ -1097,6 +1112,7 @@ function App() {
         baseFrequency: 440,
         staffLineBandByPitch: defaultStaffLineBand,
         leafCells: [] as LeafCell[],
+        selectedLeafFlags: [] as boolean[],
         rulerRatios: getTuningRatios(Array.from({ length: DEFAULT_TUNING_LENGTH }, (_, i) => i * 100)),
         highlightedPitches: new Set<number>(),
       }
@@ -1155,6 +1171,11 @@ function App() {
     const signature = selectedMeasure?.time_signature
       ? `${selectedMeasure.time_signature.numerator}/${selectedMeasure.time_signature.denominator}`
       : '4/4'
+    const flattenedLeafCells = flattenLeafCells(directCells, derivedTuningLength)
+    const selectionPath = snapshot.editor.selected.cell
+    const selectionFlags = flattenedLeafCells.map((leafCell) =>
+      isPathPrefix(selectionPath, leafCell.path)
+    )
 
     return {
       tuningLength: derivedTuningLength,
@@ -1167,7 +1188,8 @@ function App() {
       keyDisplay: snapshot.engine.key,
       baseFrequency: snapshot.engine.base_frequency,
       staffLineBandByPitch: staffLineBands,
-      leafCells: flattenLeafCells(directCells, derivedTuningLength),
+      leafCells: flattenedLeafCells,
+      selectedLeafFlags: selectionFlags,
       rulerRatios: tuningRatios,
       highlightedPitches: mappedHighlights,
     }
@@ -1265,43 +1287,49 @@ function App() {
 
             <div className="pianoRoll" role="img" aria-label="Single octave piano roll">
               <div className="rollIslands" aria-hidden="true">
-                {(leafCells.length > 0 ? leafCells : [{ weight: 1, note: null }]).map(
-                  (leafCell, index) => (
-                  <div
-                    key={`roll-island-${index}`}
-                    className="rollIsland"
-                    style={
-                      {
-                        flexGrow: leafCell.weight,
-                        flexBasis: 0,
-                      } as CSSProperties
-                    }
-                  >
-                    <div className="rollIslandGrid">
-                      {pitchRows.map((pitch) => (
-                        <div
-                          key={`roll-island-${index}-row-${pitch}`}
-                          className={`rollRow ${(staffLineBandByPitch[pitch] ?? 0) === 0 ? 'rollRow-bandEven' : 'rollRow-bandOdd'}`}
-                        >
-                          <div className="rollRowLine" aria-hidden="true" />
-                          {leafCell.note?.pitch === pitch ? (
+                {(leafCells.length > 0 ? leafCells : [{ weight: 1, path: [0], note: null }]).map(
+                  (leafCell, index) => {
+                    const isSelected = selectedLeafFlags[index] ?? false
+                    const isSelectedStart = isSelected && !(selectedLeafFlags[index - 1] ?? false)
+                    const isSelectedEnd = isSelected && !(selectedLeafFlags[index + 1] ?? false)
+
+                    return (
+                      <div
+                        key={`roll-island-${index}`}
+                        className={`rollIsland${isSelected ? ' rollIsland-selected' : ''}${isSelectedStart ? ' rollIsland-selectedStart' : ''}${isSelectedEnd ? ' rollIsland-selectedEnd' : ''}`}
+                        style={
+                          {
+                            flexGrow: leafCell.weight,
+                            flexBasis: 0,
+                          } as CSSProperties
+                        }
+                      >
+                        <div className="rollIslandGrid">
+                          {pitchRows.map((pitch) => (
                             <div
-                              className={`rollNote${leafCell.note.delay > 0 ? ' rollNote-hasDelay' : ''}${leafCell.note.gate < 1 ? ' rollNote-shortGate' : ''}`}
-                              style={
-                                {
-                                  left: `${leafCell.note.delay * 100}%`,
-                                  width: `max(${(1 - leafCell.note.delay) * leafCell.note.gate * 100}%, 4px)`,
-                                  background: `rgb(220 136 122 / ${0.04 + leafCell.note.velocity * 0.9})`,
-                                } as CSSProperties
-                              }
-                              aria-hidden="true"
-                            />
-                          ) : null}
+                              key={`roll-island-${index}-row-${pitch}`}
+                              className={`rollRow ${(staffLineBandByPitch[pitch] ?? 0) === 0 ? 'rollRow-bandEven' : 'rollRow-bandOdd'}`}
+                            >
+                              <div className="rollRowLine" aria-hidden="true" />
+                              {leafCell.note?.pitch === pitch ? (
+                                <div
+                                  className={`rollNote${leafCell.note.delay > 0 ? ' rollNote-hasDelay' : ''}${leafCell.note.gate < 1 ? ' rollNote-shortGate' : ''}`}
+                                  style={
+                                    {
+                                      left: `${leafCell.note.delay * 100}%`,
+                                      width: `max(${(1 - leafCell.note.delay) * leafCell.note.gate * 100}%, 4px)`,
+                                      background: `rgb(220 136 122 / ${0.04 + leafCell.note.velocity * 0.9})`,
+                                    } as CSSProperties
+                                  }
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )
+                      </div>
+                    )
+                  }
                 )}
               </div>
             </div>

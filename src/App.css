@@ -158,6 +158,27 @@
   overflow: hidden;
 }
 
+.rollIsland-selected {
+  border-color: rgb(255 255 255 / 75%);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 45%),
+    inset 0 0 0 1px rgb(255 255 255 / 22%);
+}
+
+.rollIsland-selectedStart {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 45%),
+    inset 0 0 0 1px rgb(255 255 255 / 22%),
+    -2px 0 0 0 rgb(255 255 255 / 85%);
+}
+
+.rollIsland-selectedEnd {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 45%),
+    inset 0 0 0 1px rgb(255 255 255 / 22%),
+    2px 0 0 0 rgb(255 255 255 / 85%);
+}
+
 .rollIslandGrid {
   display: grid;
   grid-auto-rows: 1fr;

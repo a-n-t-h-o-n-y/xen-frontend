@@ -17,7 +17,7 @@ C++ exposes:
 `xenBridgeRequest` contract:
 
 - Input: first argument must be a JSON string request envelope
-- Output: JSON string response envelope
+- Output: parsed response envelope object (not a JSON string)
 
 Frontend usage with JUCE helper:
 
@@ -25,13 +25,11 @@ Frontend usage with JUCE helper:
 import { getNativeFunction } from "./juce";
 
 const xenBridgeRequest = getNativeFunction("xenBridgeRequest");
-const rawResponse = await xenBridgeRequest(JSON.stringify(requestEnvelope));
-const responseEnvelope = JSON.parse(String(rawResponse));
+const responseEnvelope = await xenBridgeRequest(JSON.stringify(requestEnvelope));
 
 const removalToken = window.__JUCE__.backend.addEventListener(
   "xenBridgeEvent",
-  (rawEvent) => {
-    const eventEnvelope = JSON.parse(String(rawEvent));
+  (eventEnvelope) => {
     // handle state.changed
   }
 );
@@ -126,7 +124,7 @@ Response payload:
 Notes:
 
 1. `status.level` may be `error` while snapshot still reflects partial/previous state.
-1. Frontend should not send UI navigation commands (`show`/`focus`). Handle those locally.
+1. Frontend should not send UI navigation commands through the bridge. Handle those locally.
 
 ### `command.completeText`
 
@@ -220,6 +218,70 @@ Emission behavior:
 1. Emitted when `snapshot_version` changes.
 1. No `request_id` on events.
 1. Do not assume an initial event on startup; call `state.get` after handshake.
+
+### `transport.trigger.noteOn`
+
+Envelope:
+
+```ts
+{
+  protocol: "xen.bridge.v1";
+  type: "event";
+  name: "transport.trigger.noteOn";
+  payload: {
+    sequence_index: number; // 0..15
+  };
+}
+```
+
+Emission behavior:
+
+1. Emitted when a trigger sequence transitions from inactive to active.
+1. `sequence_index` is the trigger slot index, not a raw MIDI note number.
+
+### `transport.trigger.noteOff`
+
+Envelope:
+
+```ts
+{
+  protocol: "xen.bridge.v1";
+  type: "event";
+  name: "transport.trigger.noteOff";
+  payload: {
+    sequence_index: number; // 0..15
+  };
+}
+```
+
+Emission behavior:
+
+1. Emitted when a trigger sequence transitions from active to inactive.
+
+### `transport.phase.sync`
+
+Envelope:
+
+```ts
+{
+  protocol: "xen.bridge.v1";
+  type: "event";
+  name: "transport.phase.sync";
+  payload: {
+    bpm: number;
+    phases: Array<{
+      sequence_index: number; // 0..15
+      phase: number; // normalized [0, 1)
+    }>;
+  };
+}
+```
+
+Emission behavior:
+
+1. Emitted on the host timer while at least one trigger is active.
+1. `phases` only includes currently active trigger indices.
+1. Phase is derived from trigger note start time + current BPM + measure time signature.
 
 ## 5. Snapshot payload (`UiStateSnapshot`)
 
@@ -338,13 +400,13 @@ Typical triggers:
 1. Call `state.get` and set store from returned snapshot.
 1. Call `catalog.get` and `keymap.get` and cache both.
 1. Start normal command loop with `command.execute` and `state.changed` updates.
+1. Listen for `transport.trigger.noteOn`, `transport.trigger.noteOff`, and `transport.phase.sync` to drive playhead animation.
 
 ## 8. Frontend implementation checklist
 
 1. Add runtime validation (zod/io-ts) for envelopes and every endpoint payload.
 1. Treat `state.get` and `state.changed` as the same snapshot schema.
-1. Deduplicate by `snapshot_version`: apply only snapshots with `snapshot_version > lastAppliedVersion`.
-1. Treat `command.execute` response `snapshot` as immediate frontend state.
-1. If a following `state.changed` event has the same `snapshot_version` as the already-applied `command.execute` snapshot, ignore that event.
-1. Keep `show`/`focus` as frontend-local actions (do not send through bridge).
+1. Use `snapshot_version` to drop stale state updates.
+1. Keep UI navigation as frontend-local actions (do not send through bridge).
 1. Preserve raw keymap command strings exactly as delivered.
+1. Treat transport events as transient UI animation signals; snapshot remains authoritative for editor/engine data.
