@@ -546,45 +546,37 @@
   content: '';
   position: absolute;
   inset: 0;
-  border: 0 solid transparent;
+  background: transparent;
   border-radius: inherit;
   pointer-events: none;
   z-index: 20;
 }
 
 .rollIsland-selected {
-  border-color: transparent;
+  border-color: var(--seq-grid-line);
 }
 
 .rollIsland-selected::after {
-  border-width: 1px;
-  border-color: rgb(245 196 90 / 58%);
-  box-shadow:
-    0 0 0 1px var(--seq-selection-soft);
+  background: transparent;
+  box-shadow: 0 0 8px 1.5px rgb(245 196 90 / 28%);
 }
 
 .rollIsland-selectedStart {
-  border-color: transparent;
+  border-color: var(--seq-grid-line);
 }
 
 .rollIsland-selectedStart::after {
-  border-width: 1px;
-  border-color: rgb(245 196 90 / 58%);
-  box-shadow:
-    0 0 0 1px var(--seq-selection-soft),
-    inset 1px 0 0 0 var(--seq-selection);
+  background: transparent;
+  box-shadow: 0 0 8px 1.5px rgb(245 196 90 / 28%);
 }
 
 .rollIsland-selectedEnd {
-  border-color: transparent;
+  border-color: var(--seq-grid-line);
 }
 
 .rollIsland-selectedEnd::after {
-  border-width: 1px;
-  border-color: rgb(245 196 90 / 58%);
-  box-shadow:
-    0 0 0 1px var(--seq-selection-soft),
-    inset -1px 0 0 0 var(--seq-selection);
+  background: transparent;
+  box-shadow: 0 0 8px 1.5px rgb(245 196 90 / 28%);
 }
 
 .rollIslandGrid {
