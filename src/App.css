@@ -15,6 +15,18 @@
   --surface-2: #0d0d0d;
   --text-primary: #fff;
   --text-secondary: #c9c9c9;
+  --sequencer-max-height: calc(24rem - 15px);
+  --seq-shell-bg: #070707;
+  --seq-panel-bg: #101010;
+  --seq-border: 1px solid rgb(255 255 255 / 20%);
+  --seq-grid-line: rgb(255 255 255 / 14%);
+  --seq-row-even: rgb(22 22 22 / 94%);
+  --seq-row-odd: rgb(33 33 33 / 94%);
+  --seq-playhead: rgb(255 255 255 / 88%);
+  --seq-note: rgb(241 245 249 / 86%);
+  --seq-note-text: rgb(10 10 10 / 92%);
+  --seq-selection: rgb(245 196 90 / 58%);
+  --seq-selection-soft: rgb(245 196 90 / 20%);
 }
 
 /* =========================================================
@@ -26,7 +38,7 @@
 
 .app {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, var(--sequencer-max-height)) auto minmax(0, 1fr);
   gap: var(--space-3);
 
   min-height: 300px;
@@ -103,11 +115,14 @@
    ========================================================= */
 
 .sequencer {
+  height: 100%;
+  width: 100%;
+  max-height: var(--sequencer-max-height);
   min-height: 0;
   padding: var(--space-2);
-  border: var(--border-subtle);
+  border: var(--seq-border);
   border-radius: var(--radius-2);
-  background: var(--surface-1);
+  background: var(--seq-shell-bg);
 }
 
 .sequencerShell {
@@ -121,9 +136,9 @@
 .pitchIndexBar {
   display: grid;
   grid-auto-rows: 1fr;
-  border: var(--border-subtle);
+  border: var(--seq-border);
   border-radius: var(--radius-1);
-  background: var(--surface-2);
+  background: var(--seq-panel-bg);
   overflow: hidden;
 }
 
@@ -132,7 +147,7 @@
   place-items: center;
   font-size: 0.72rem;
   color: var(--text-secondary);
-  border-bottom: 1px solid rgb(255 255 255 / 14%);
+  border-bottom: 1px solid var(--seq-grid-line);
 }
 
 .pitchIndexRow:last-child {
@@ -156,38 +171,38 @@
   top: 4px;
   bottom: 4px;
   width: 2px;
-  background: rgb(255 255 255 / 88%);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 45%);
+  background: var(--seq-playhead);
+  box-shadow: 0 0 0 1px rgb(8 15 24 / 62%);
   transform: translateX(-1px);
   pointer-events: none;
 }
 
 .rollIsland {
   min-width: 0;
-  border: 1px solid rgb(255 255 255 / 14%);
+  border: 1px solid var(--seq-grid-line);
   border-radius: 10px;
   overflow: hidden;
 }
 
 .rollIsland-selected {
-  border-color: rgb(255 255 255 / 75%);
+  border-color: var(--seq-selection);
   box-shadow:
-    0 0 0 1px rgb(255 255 255 / 45%),
-    inset 0 0 0 1px rgb(255 255 255 / 22%);
+    0 0 0 1px var(--seq-selection-soft),
+    inset 0 0 0 1px rgb(245 196 90 / 16%);
 }
 
 .rollIsland-selectedStart {
   box-shadow:
-    0 0 0 1px rgb(255 255 255 / 45%),
-    inset 0 0 0 1px rgb(255 255 255 / 22%),
-    -2px 0 0 0 rgb(255 255 255 / 85%);
+    0 0 0 1px var(--seq-selection-soft),
+    inset 0 0 0 1px rgb(245 196 90 / 16%),
+    -1px 0 0 0 var(--seq-selection);
 }
 
 .rollIsland-selectedEnd {
   box-shadow:
-    0 0 0 1px rgb(255 255 255 / 45%),
-    inset 0 0 0 1px rgb(255 255 255 / 22%),
-    2px 0 0 0 rgb(255 255 255 / 85%);
+    0 0 0 1px var(--seq-selection-soft),
+    inset 0 0 0 1px rgb(245 196 90 / 16%),
+    1px 0 0 0 var(--seq-selection);
 }
 
 .rollIslandGrid {
@@ -198,15 +213,15 @@
 
 .rollRow {
   position: relative;
-  border-bottom: 1px solid rgb(0 0 0 / 35%);
+  border-bottom: 1px solid var(--seq-grid-line);
 }
 
 .rollRow-bandEven {
-  background: rgb(74 70 84 / 90%);
+  background: var(--seq-row-even);
 }
 
 .rollRow-bandOdd {
-  background: rgb(102 98 112 / 90%);
+  background: var(--seq-row-odd);
 }
 
 .rollRow:last-child {
@@ -219,29 +234,39 @@
   right: 0;
   top: 0;
   height: 1px;
-  background: rgb(0 0 0 / 42%);
+  background: rgb(5 12 20 / 54%);
 }
 
 .rollNote {
   position: absolute;
+  display: grid;
+  place-items: center;
   top: 0;
   bottom: 0;
-  background: rgb(220 136 122 / 92%);
+  background: var(--seq-note);
+}
+
+.rollNoteOctave {
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--seq-note-text);
+  text-shadow: 0 1px 0 rgb(15 23 42 / 24%);
 }
 
 .rollNote-hasDelay {
-  border-left: 1px solid rgb(0 0 0 / 65%);
+  border-left: 1px solid rgb(15 23 42 / 52%);
 }
 
 .rollNote-shortGate {
-  border-right: 1px solid rgb(0 0 0 / 65%);
+  border-right: 1px solid rgb(15 23 42 / 52%);
 }
 
 .tuningRuler {
   position: relative;
-  border: var(--border-subtle);
+  border: var(--seq-border);
   border-radius: var(--radius-1);
-  background: var(--surface-2);
+  background: var(--seq-panel-bg);
 }
 
 .tuningRulerLine {
@@ -250,7 +275,7 @@
   bottom: var(--space-2);
   left: 50%;
   width: 1px;
-  background: rgb(255 255 255 / 70%);
+  background: rgb(148 163 184 / 72%);
   transform: translateX(-0.5px);
 }
 
@@ -263,17 +288,17 @@
 .rulerMark-reference {
   left: 50%;
   width: 0.65rem;
-  background: rgb(255 255 255 / 70%);
+  background: rgb(148 163 184 / 72%);
 }
 
 .rulerMark-tuning {
   right: 50%;
   width: 0.65rem;
-  background: rgb(255 255 255 / 35%);
+  background: rgb(148 163 184 / 42%);
 }
 
 .rulerMark-active {
-  background: #fff;
+  background: var(--seq-selection);
 }
 
 .bridgeNotice {
@@ -428,4 +453,50 @@
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
+}
+
+/* =========================================================
+   Temporary bottom modules
+   ========================================================= */
+
+.bottomModules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-subtle);
+  border-radius: var(--radius-2);
+  background: var(--surface-1);
+  min-height: 0;
+}
+
+.bottomModuleCard {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: var(--radius-1);
+  background: var(--surface-2);
+}
+
+.bottomModuleLabel {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.bottomModuleBody {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+@media (max-width: 860px) {
+  .bottomModules {
+    grid-template-columns: 1fr;
+  }
 }

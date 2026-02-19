@@ -681,6 +681,7 @@ type LeafCell = {
   note:
     | {
         pitch: number
+        octave: number
         velocity: number
         delay: number
         gate: number
@@ -691,43 +692,58 @@ type LeafCell = {
 const flattenLeafCells = (cells: Cell[], tuningLength: number): LeafCell[] => {
   const result: LeafCell[] = []
 
-  const walk = (cell: Cell, parentWeight: number, path: number[]): void => {
-    const accumulatedWeight = parentWeight * getCellWeight(cell.weight)
+  const walk = (groupCells: Cell[], parentShare: number, parentPath: number[]): void => {
+    if (groupCells.length === 0) {
+      return
+    }
 
-    if (cell.type === 'Sequence') {
-      if (cell.cells.length === 0) {
-        result.push({ weight: accumulatedWeight, path, note: null })
+    const normalizedWeights = groupCells.map((cell) => getCellWeight(cell.weight))
+    const totalGroupWeight = normalizedWeights.reduce((sum, weight) => sum + weight, 0)
+    if (totalGroupWeight <= 0) {
+      return
+    }
+
+    groupCells.forEach((cell, index) => {
+      const cellShare = parentShare * (normalizedWeights[index] / totalGroupWeight)
+      const path = [...parentPath, index]
+
+      if (cell.type === 'Sequence') {
+        if (cell.cells.length === 0) {
+          result.push({ weight: cellShare, path, note: null })
+          return
+        }
+
+        walk(cell.cells, cellShare, path)
         return
       }
 
-      cell.cells.forEach((nestedCell, index) => {
-        walk(nestedCell, accumulatedWeight, [...path, index])
-      })
-      return
-    }
+      if (cell.type === 'Note') {
+        const normalizedVelocity = Math.min(Math.max(cell.velocity, 0), 1)
+        const normalizedDelay = Math.min(Math.max(cell.delay, 0), 1)
+        const normalizedGate = Math.min(Math.max(cell.gate, 0), 1)
+        const normalizedPitch =
+          tuningLength > 0 ? normalizePitch(cell.pitch, tuningLength) : Math.trunc(cell.pitch)
+        const octave = tuningLength > 0 ? Math.floor(cell.pitch / tuningLength) : 0
 
-    if (cell.type === 'Note') {
-      const normalizedVelocity = Math.min(Math.max(cell.velocity, 0), 1)
-      const normalizedDelay = Math.min(Math.max(cell.delay, 0), 1)
-      const normalizedGate = Math.min(Math.max(cell.gate, 0), 1)
+        result.push({
+          weight: cellShare,
+          path,
+          note: {
+            pitch: normalizedPitch,
+            octave,
+            velocity: normalizedVelocity,
+            delay: normalizedDelay,
+            gate: normalizedGate,
+          },
+        })
+        return
+      }
 
-      result.push({
-        weight: accumulatedWeight,
-        path,
-        note: {
-          pitch: normalizePitch(cell.pitch, tuningLength),
-          velocity: normalizedVelocity,
-          delay: normalizedDelay,
-          gate: normalizedGate,
-        },
-      })
-      return
-    }
-
-    result.push({ weight: accumulatedWeight, path, note: null })
+      result.push({ weight: cellShare, path, note: null })
+    })
   }
 
-  cells.forEach((cell, index) => walk(cell, 1, [index]))
+  walk(cells, 1, [])
 
   return result
 }
@@ -1488,11 +1504,19 @@ function App() {
                                     {
                                       left: `${leafCell.note.delay * 100}%`,
                                       width: `max(${(1 - leafCell.note.delay) * leafCell.note.gate * 100}%, 4px)`,
-                                      background: `rgb(220 136 122 / ${0.04 + leafCell.note.velocity * 0.9})`,
+                                      background: `rgb(241 245 249 / ${0.18 + leafCell.note.velocity * 0.72})`,
                                     } as CSSProperties
                                   }
                                   aria-hidden="true"
-                                />
+                                >
+                                  {leafCell.note.octave !== 0 ? (
+                                    <span className="rollNoteOctave mono">
+                                      {leafCell.note.octave > 0
+                                        ? `+${leafCell.note.octave}`
+                                        : leafCell.note.octave}
+                                    </span>
+                                  ) : null}
+                                </div>
                               ) : null}
                             </div>
                           ))}
@@ -1633,6 +1657,16 @@ function App() {
           <span className={`statusText status-${statusLevel}`}>{statusMessage}</span>
         )}
       </footer>
+      <section className="bottomModules" aria-label="Temporary module area">
+        <article className="bottomModuleCard">
+          <p className="bottomModuleLabel">Temporary Module A</p>
+          <p className="bottomModuleBody">Placeholder area for in-progress controls.</p>
+        </article>
+        <article className="bottomModuleCard">
+          <p className="bottomModuleLabel">Temporary Module B</p>
+          <p className="bottomModuleBody">Use this space to test stacking and spacing.</p>
+        </article>
+      </section>
     </div>
   )
 }
