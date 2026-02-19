@@ -108,6 +108,211 @@ type TransportState = {
   bpm: number
 }
 
+type ModTarget = 'pitch' | 'velocity' | 'delay' | 'gate' | 'weights'
+type WaveType = 'sine' | 'triangle' | 'sawtooth_up' | 'sawtooth_down' | 'square'
+
+type ConstantModulator = {
+  type: 'constant'
+  value: number
+}
+
+type OscillatorModulator = {
+  type: 'sine' | 'triangle' | 'sawtooth_up' | 'sawtooth_down'
+  frequency: number
+  amplitude: number
+  phase: number
+}
+
+type SquareModulator = {
+  type: 'square'
+  frequency: number
+  amplitude: number
+  phase: number
+  pulse_width: number
+}
+
+type ScaleModulator = {
+  type: 'scale'
+  factor: number
+}
+
+type BiasModulator = {
+  type: 'bias'
+  amount: number
+}
+
+type ClampModulator = {
+  type: 'clamp'
+  min: number
+  max: number
+}
+
+type ChainModulator = {
+  type: 'chain'
+  children: Modulator[]
+}
+
+type BlendModulator = {
+  type: 'blend'
+  children: Modulator[]
+}
+
+type Modulator =
+  | ConstantModulator
+  | OscillatorModulator
+  | SquareModulator
+  | ScaleModulator
+  | BiasModulator
+  | ClampModulator
+  | ChainModulator
+  | BlendModulator
+
+type ModTargetSpec = {
+  label: string
+  min: number
+  max: number
+  defaultCenter: number
+  defaultScalar: number
+  step: number
+  integer: boolean
+}
+
+type TargetControl = {
+  enabled: boolean
+  useScalar: boolean
+  center: number
+  amount: number
+  scalar: number
+}
+
+const MOD_TARGET_SPECS: Record<ModTarget, ModTargetSpec> = {
+  pitch: {
+    label: 'Pitch',
+    min: -24,
+    max: 24,
+    defaultCenter: 0,
+    defaultScalar: 0,
+    step: 1,
+    integer: true,
+  },
+  velocity: {
+    label: 'Velocity',
+    min: 0,
+    max: 1,
+    defaultCenter: 0.5,
+    defaultScalar: 0.787402,
+    step: 0.01,
+    integer: false,
+  },
+  delay: {
+    label: 'Delay',
+    min: 0,
+    max: 1,
+    defaultCenter: 0.5,
+    defaultScalar: 0,
+    step: 0.01,
+    integer: false,
+  },
+  gate: {
+    label: 'Gate',
+    min: 0,
+    max: 1,
+    defaultCenter: 0.5,
+    defaultScalar: 1,
+    step: 0.01,
+    integer: false,
+  },
+  weights: {
+    label: 'Weights',
+    min: 0,
+    max: 1,
+    defaultCenter: 0.5,
+    defaultScalar: 0.5,
+    step: 0.01,
+    integer: false,
+  },
+}
+
+const MOD_TARGET_ORDER: ModTarget[] = ['pitch', 'velocity', 'delay', 'gate', 'weights']
+const WAVE_OPTIONS: WaveType[] = ['sine', 'triangle', 'sawtooth_up', 'sawtooth_down', 'square']
+const WAVE_OPTION_LABELS: Record<WaveType, string> = {
+  sine: 'Sine',
+  triangle: 'Triangle',
+  sawtooth_up: 'Saw Up',
+  sawtooth_down: 'Saw Down',
+  square: 'Square',
+}
+const LFO_FREQUENCY_RANGE_RATIO = 1000
+const LFO_FREQUENCY_MIN = 1 / Math.sqrt(LFO_FREQUENCY_RANGE_RATIO)
+const LFO_FREQUENCY_MAX = Math.sqrt(LFO_FREQUENCY_RANGE_RATIO)
+const LFO_PHASE_OFFSET_MIN = -0.5
+const LFO_PHASE_OFFSET_MAX = 0.5
+
+const clampNumber = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value))
+
+const roundByStep = (value: number, step: number): number =>
+  step <= 0 ? value : Math.round(value / step) * step
+
+const toNormalizedPhase = (phaseOffset: number): number =>
+  ((phaseOffset % 1) + 1) % 1
+
+const frequencyToRatio = (frequency: number): number => {
+  const clamped = clampNumber(frequency, LFO_FREQUENCY_MIN, LFO_FREQUENCY_MAX)
+  const span = Math.log(LFO_FREQUENCY_MAX / LFO_FREQUENCY_MIN)
+  if (span <= 0) {
+    return 0
+  }
+  return clampNumber(Math.log(clamped / LFO_FREQUENCY_MIN) / span, 0, 1)
+}
+
+const ratioToFrequency = (ratio: number): number => {
+  const clampedRatio = clampNumber(ratio, 0, 1)
+  const base = LFO_FREQUENCY_MAX / LFO_FREQUENCY_MIN
+  if (base <= 0) {
+    return LFO_FREQUENCY_MIN
+  }
+  return LFO_FREQUENCY_MIN * Math.pow(base, clampedRatio)
+}
+
+const createInitialTargetControls = (): Record<ModTarget, TargetControl> => ({
+  pitch: {
+    enabled: false,
+    useScalar: false,
+    center: MOD_TARGET_SPECS.pitch.defaultCenter,
+    amount: 0,
+    scalar: MOD_TARGET_SPECS.pitch.defaultScalar,
+  },
+  velocity: {
+    enabled: false,
+    useScalar: false,
+    center: MOD_TARGET_SPECS.velocity.defaultCenter,
+    amount: 0,
+    scalar: MOD_TARGET_SPECS.velocity.defaultScalar,
+  },
+  delay: {
+    enabled: false,
+    useScalar: false,
+    center: MOD_TARGET_SPECS.delay.defaultCenter,
+    amount: 0,
+    scalar: MOD_TARGET_SPECS.delay.defaultScalar,
+  },
+  gate: {
+    enabled: false,
+    useScalar: false,
+    center: MOD_TARGET_SPECS.gate.defaultCenter,
+    amount: 0,
+    scalar: MOD_TARGET_SPECS.gate.defaultScalar,
+  },
+  weights: {
+    enabled: false,
+    useScalar: false,
+    center: MOD_TARGET_SPECS.weights.defaultCenter,
+    amount: 0,
+    scalar: MOD_TARGET_SPECS.weights.defaultScalar,
+  },
+})
+
 const REFERENCE_RATIOS = [
   Math.log2(1 / 1),
   Math.log2(3 / 2),
@@ -438,6 +643,135 @@ const getPatternIndices = (sequenceLength: number, pattern: PatternPrefix): Set<
   }
 
   return matches
+}
+
+const sampleWaveShape = (type: WaveType, phase: number, pulseWidth: number): number => {
+  const wrappedPhase = ((phase % 1) + 1) % 1
+  const clampedPulseWidth = clampNumber(pulseWidth, 0.01, 0.99)
+
+  if (type === 'sine') {
+    return Math.sin(wrappedPhase * Math.PI * 2)
+  }
+
+  if (type === 'triangle') {
+    return 1 - 4 * Math.abs(wrappedPhase - 0.5)
+  }
+
+  if (type === 'sawtooth_up') {
+    return wrappedPhase * 2 - 1
+  }
+
+  if (type === 'sawtooth_down') {
+    return 1 - wrappedPhase * 2
+  }
+
+  return wrappedPhase < clampedPulseWidth ? 1 : -1
+}
+
+const createWaveModulator = (
+  waveType: WaveType,
+  frequency: number,
+  phase: number,
+  pulseWidth: number
+): Modulator => {
+  if (waveType === 'square') {
+    return {
+      type: 'square',
+      frequency,
+      amplitude: 1,
+      phase,
+      pulse_width: clampNumber(pulseWidth, 0.01, 0.99),
+    }
+  }
+
+  return {
+    type: waveType,
+    frequency,
+    amplitude: 1,
+    phase,
+  }
+}
+
+const createMorphModulator = (
+  waveAType: WaveType,
+  waveBType: WaveType,
+  waveAPulseWidth: number,
+  waveBPulseWidth: number,
+  waveAFrequency: number,
+  waveAPhase: number,
+  waveBFrequency: number,
+  waveBPhase: number,
+  lerp: number
+): Modulator => {
+  const clampedLerp = clampNumber(lerp, 0, 1)
+  const waveA = createWaveModulator(waveAType, waveAFrequency, waveAPhase, waveAPulseWidth)
+  const waveB = createWaveModulator(waveBType, waveBFrequency, waveBPhase, waveBPulseWidth)
+
+  if (clampedLerp <= 0) {
+    return waveA
+  }
+  if (clampedLerp >= 1) {
+    return waveB
+  }
+
+  return {
+    type: 'blend',
+    children: [
+      {
+        type: 'chain',
+        children: [waveA, { type: 'scale', factor: 1 - clampedLerp }],
+      },
+      {
+        type: 'chain',
+        children: [waveB, { type: 'scale', factor: clampedLerp }],
+      },
+    ],
+  }
+}
+
+const createTargetModulator = (
+  base: Modulator,
+  spec: ModTargetSpec,
+  center: number,
+  amount: number
+): Modulator => {
+  const clampedCenter = clampNumber(center, spec.min, spec.max)
+  const boundedAmount = clampNumber(amount, -1, 1)
+  const maxPositiveSpan = spec.max - clampedCenter
+  const maxNegativeSpan = clampedCenter - spec.min
+  const spanMagnitude = Math.min(maxPositiveSpan, maxNegativeSpan)
+  const signedSpan = spanMagnitude * boundedAmount
+
+  return {
+    type: 'chain',
+    children: [
+      base,
+      { type: 'scale', factor: signedSpan },
+      { type: 'bias', amount: clampedCenter },
+      { type: 'clamp', min: spec.min, max: spec.max },
+    ],
+  }
+}
+
+const buildCommandForTarget = (
+  target: ModTarget,
+  control: TargetControl,
+  baseModulator: Modulator
+): string => {
+  const spec = MOD_TARGET_SPECS[target]
+  const modulator = createTargetModulator(baseModulator, spec, control.center, control.amount)
+  return `set ${target} ${JSON.stringify(modulator)}`
+}
+
+const buildCommandLines = (
+  controls: Record<ModTarget, TargetControl>,
+  baseModulator: Modulator,
+  onlyTargets?: ModTarget[]
+): string[] => {
+  const filterSet = onlyTargets ? new Set(onlyTargets) : null
+  return MOD_TARGET_ORDER.filter((target) => controls[target].enabled)
+    .filter((target) => (filterSet ? filterSet.has(target) : true))
+    .map((target) => buildCommandForTarget(target, controls[target], baseModulator))
 }
 
 const isEditableTarget = (target: EventTarget | null): boolean => {
@@ -851,6 +1185,41 @@ function App() {
   const [activeSequenceFlags, setActiveSequenceFlags] = useState<boolean[]>(
     Array(TRANSPORT_SEQUENCE_COUNT).fill(false)
   )
+  const [waveAType, setWaveAType] = useState<WaveType>('sine')
+  const [waveBType, setWaveBType] = useState<WaveType>('triangle')
+  const [waveAPulseWidth, setWaveAPulseWidth] = useState(0.5)
+  const [waveBPulseWidth, setWaveBPulseWidth] = useState(0.5)
+  const [waveLerp, setWaveLerp] = useState(0)
+  const [lfoAFrequency, setLfoAFrequency] = useState(1)
+  const [lfoAPhaseOffset, setLfoAPhaseOffset] = useState(0)
+  const [lfoBFrequency, setLfoBFrequency] = useState(1)
+  const [lfoBPhaseOffset, setLfoBPhaseOffset] = useState(0)
+  const [openWaveMenu, setOpenWaveMenu] = useState<'a' | 'b' | null>(null)
+  const [targetControls, setTargetControls] = useState<Record<ModTarget, TargetControl>>(
+    createInitialTargetControls()
+  )
+  const padDragRef = useRef<{
+    pointerId: number
+    target: ModTarget
+    mode: 'amount' | 'center'
+    host: HTMLDivElement
+    startClientX: number
+    startClientY: number
+    startAmount: number
+    startCenter: number
+  } | null>(null)
+  const wavePadDragRef = useRef<{
+    pointerId: number
+    wave: 'a' | 'b'
+    host: HTMLDivElement
+    startClientX: number
+    startClientY: number
+    moved: boolean
+  } | null>(null)
+  const lastWaveHandleUsedRef = useRef<'a' | 'b'>('a')
+  const liveEmitFrameRef = useRef<number | null>(null)
+  const liveEmitCommandsRef = useRef<string[] | null>(null)
+  const waveMenuRef = useRef<HTMLDivElement | null>(null)
 
   const sendBridgeRequest = useCallback(
     async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
@@ -1527,6 +1896,370 @@ function App() {
     topLevelCellCount,
   ])
 
+  const { waveAPreviewPath, waveBPreviewPath, morphedWavePreviewPath } = useMemo(() => {
+    const width = 420
+    const height = 140
+    const steps = 96
+    const waveAPoints: string[] = []
+    const waveBPoints: string[] = []
+    const mixedPoints: string[] = []
+    const normalizedWaveAPhase = toNormalizedPhase(lfoAPhaseOffset)
+    const normalizedWaveBPhase = toNormalizedPhase(lfoBPhaseOffset)
+
+    for (let index = 0; index <= steps; index += 1) {
+      const progress = index / steps
+      const x = progress * width
+      const waveA = sampleWaveShape(
+        waveAType,
+        progress * lfoAFrequency + normalizedWaveAPhase,
+        waveAPulseWidth
+      )
+      const waveB = sampleWaveShape(
+        waveBType,
+        progress * lfoBFrequency + normalizedWaveBPhase,
+        waveBPulseWidth
+      )
+      const mixed = clampNumber(waveA * (1 - waveLerp) + waveB * waveLerp, -1, 1)
+      const waveAY = (1 - (waveA + 1) / 2) * height
+      const waveBY = (1 - (waveB + 1) / 2) * height
+      const mixedY = (1 - (mixed + 1) / 2) * height
+      waveAPoints.push(`${x.toFixed(2)},${waveAY.toFixed(2)}`)
+      waveBPoints.push(`${x.toFixed(2)},${waveBY.toFixed(2)}`)
+      mixedPoints.push(`${x.toFixed(2)},${mixedY.toFixed(2)}`)
+    }
+
+    return {
+      waveAPreviewPath: waveAPoints.join(' '),
+      waveBPreviewPath: waveBPoints.join(' '),
+      morphedWavePreviewPath: mixedPoints.join(' '),
+    }
+  }, [
+    lfoAFrequency,
+    lfoAPhaseOffset,
+    lfoBFrequency,
+    lfoBPhaseOffset,
+    waveAType,
+    waveAPulseWidth,
+    waveBType,
+    waveBPulseWidth,
+    waveLerp,
+  ])
+
+  const baseMorphModulator = useMemo(
+    () =>
+      createMorphModulator(
+        waveAType,
+        waveBType,
+        waveAPulseWidth,
+        waveBPulseWidth,
+        lfoAFrequency,
+        toNormalizedPhase(lfoAPhaseOffset),
+        lfoBFrequency,
+        toNormalizedPhase(lfoBPhaseOffset),
+        waveLerp
+      ),
+    [
+      lfoAFrequency,
+      lfoAPhaseOffset,
+      lfoBFrequency,
+      lfoBPhaseOffset,
+      waveAType,
+      waveAPulseWidth,
+      waveBType,
+      waveBPulseWidth,
+      waveLerp,
+    ]
+  )
+
+  const emitCommandsNow = useCallback(
+    (commands: string[]): void => {
+      if (bridgeUnavailableMessage !== null || commands.length === 0) {
+        return
+      }
+
+      void executeBackendCommand(commands.join('; ')).catch((error: unknown) => {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+      })
+    },
+    [bridgeUnavailableMessage, executeBackendCommand]
+  )
+
+  const scheduleLiveEmit = useCallback(
+    (commands: string[]): void => {
+      if (bridgeUnavailableMessage !== null || commands.length === 0) {
+        return
+      }
+
+      liveEmitCommandsRef.current = commands
+      if (liveEmitFrameRef.current !== null) {
+        return
+      }
+
+      liveEmitFrameRef.current = requestAnimationFrame(() => {
+        liveEmitFrameRef.current = null
+        const pending = liveEmitCommandsRef.current
+        liveEmitCommandsRef.current = null
+        if (!pending || pending.length === 0) {
+          return
+        }
+        emitCommandsNow(pending)
+      })
+    },
+    [bridgeUnavailableMessage, emitCommandsNow]
+  )
+
+  useEffect(
+    () => () => {
+      if (liveEmitFrameRef.current !== null) {
+        cancelAnimationFrame(liveEmitFrameRef.current)
+        liveEmitFrameRef.current = null
+      }
+      liveEmitCommandsRef.current = null
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (openWaveMenu === null) {
+      return
+    }
+
+    const handlePointerDown = (event: MouseEvent): void => {
+      const host = waveMenuRef.current
+      if (!host) {
+        return
+      }
+      if (event.target instanceof Node && !host.contains(event.target)) {
+        setOpenWaveMenu(null)
+      }
+    }
+
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setOpenWaveMenu(null)
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleEscape)
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [openWaveMenu])
+
+  const updateTargetControl = useCallback(
+    (target: ModTarget, update: Partial<TargetControl>): void => {
+      setTargetControls((previous) => ({
+        ...previous,
+        [target]: {
+          ...previous[target],
+          ...update,
+        },
+      }))
+    },
+    []
+  )
+
+  const applyPadMotion = useCallback(
+    (
+      target: ModTarget,
+      host: HTMLDivElement,
+      clientX: number,
+      clientY: number,
+      mode: 'amount' | 'center',
+      dragStart?: {
+        startClientX: number
+        startClientY: number
+        startAmount: number
+        startCenter: number
+      },
+      speedMode?: 'coarse' | 'fine'
+    ) => {
+      const spec = MOD_TARGET_SPECS[target]
+      const bounds = host.getBoundingClientRect()
+      const xRatio = clampNumber((clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
+      const currentControl = targetControls[target]
+
+      if (mode === 'center') {
+        const nextCenterRaw =
+          dragStart && bounds.width > 0
+            ? dragStart.startCenter + ((clientX - dragStart.startClientX) / bounds.width) * (spec.max - spec.min)
+            : spec.min + xRatio * (spec.max - spec.min)
+        const nextCenter = roundByStep(nextCenterRaw, spec.step)
+        const resolvedCenter = clampNumber(nextCenter, spec.min, spec.max)
+        updateTargetControl(target, { center: resolvedCenter })
+        scheduleLiveEmit([
+          buildCommandForTarget(target, { ...currentControl, enabled: true, center: resolvedCenter }, baseMorphModulator),
+        ])
+        return
+      }
+
+      const deltaY = dragStart ? dragStart.startClientY - clientY : 0
+      const sensitivityDivisor = speedMode === 'fine' ? 620 : 260
+      const nextAmount = clampNumber(
+        (dragStart?.startAmount ?? currentControl.amount) + deltaY / sensitivityDivisor,
+        -1,
+        1
+      )
+      updateTargetControl(target, { amount: nextAmount })
+      scheduleLiveEmit([
+        buildCommandForTarget(target, { ...currentControl, enabled: true, amount: nextAmount }, baseMorphModulator),
+      ])
+    },
+    [baseMorphModulator, scheduleLiveEmit, targetControls, updateTargetControl]
+  )
+
+  const getWaveHandlePosition = useCallback((frequency: number, phaseOffset: number) => {
+    const clampedFrequencyRatio = frequencyToRatio(frequency)
+    const phaseRatio = 0.5 - phaseOffset
+    return {
+      x: clampedFrequencyRatio * 100,
+      y: clampNumber(phaseRatio, 0, 1) * 100,
+    }
+  }, [])
+
+  const waveHandleA = useMemo(
+    () => getWaveHandlePosition(lfoAFrequency, lfoAPhaseOffset),
+    [getWaveHandlePosition, lfoAFrequency, lfoAPhaseOffset]
+  )
+  const waveHandleB = useMemo(
+    () => getWaveHandlePosition(lfoBFrequency, lfoBPhaseOffset),
+    [getWaveHandlePosition, lfoBFrequency, lfoBPhaseOffset]
+  )
+  const waveAOpacity = clampNumber(1 - waveLerp, 0, 1)
+  const waveBOpacity = clampNumber(waveLerp, 0, 1)
+
+  const applyWavePadMotion = useCallback(
+    (
+      wave: 'a' | 'b',
+      host: HTMLDivElement,
+      clientX: number,
+      clientY: number,
+      lockMode?: 'none' | 'frequency' | 'offset'
+    ): void => {
+      const bounds = host.getBoundingClientRect()
+      const xRatio = clampNumber((clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
+      const yRatio = clampNumber((clientY - bounds.top) / Math.max(bounds.height, 1), 0, 1)
+      const rawNextFrequency = ratioToFrequency(xRatio)
+      const rawNextPhaseOffset = clampNumber(0.5 - yRatio, LFO_PHASE_OFFSET_MIN, LFO_PHASE_OFFSET_MAX)
+
+      const nextFrequency =
+        lockMode === 'offset'
+          ? wave === 'a'
+            ? lfoAFrequency
+            : lfoBFrequency
+          : rawNextFrequency
+      const nextPhaseOffset =
+        lockMode === 'frequency'
+          ? wave === 'a'
+            ? lfoAPhaseOffset
+            : lfoBPhaseOffset
+          : rawNextPhaseOffset
+      const nextAFrequency = wave === 'a' ? nextFrequency : lfoAFrequency
+      const nextAPhaseOffset = wave === 'a' ? nextPhaseOffset : lfoAPhaseOffset
+      const nextBFrequency = wave === 'b' ? nextFrequency : lfoBFrequency
+      const nextBPhaseOffset = wave === 'b' ? nextPhaseOffset : lfoBPhaseOffset
+
+      if (wave === 'a') {
+        setLfoAFrequency(nextFrequency)
+        setLfoAPhaseOffset(nextPhaseOffset)
+      } else {
+        setLfoBFrequency(nextFrequency)
+        setLfoBPhaseOffset(nextPhaseOffset)
+      }
+      lastWaveHandleUsedRef.current = wave
+
+      const liveBase = createMorphModulator(
+        waveAType,
+        waveBType,
+        waveAPulseWidth,
+        waveBPulseWidth,
+        nextAFrequency,
+        toNormalizedPhase(nextAPhaseOffset),
+        nextBFrequency,
+        toNormalizedPhase(nextBPhaseOffset),
+        waveLerp
+      )
+      scheduleLiveEmit(buildCommandLines(targetControls, liveBase))
+    },
+    [
+      lfoAFrequency,
+      lfoAPhaseOffset,
+      lfoBFrequency,
+      lfoBPhaseOffset,
+      scheduleLiveEmit,
+      targetControls,
+      waveAPulseWidth,
+      waveAType,
+      waveBPulseWidth,
+      waveBType,
+      waveLerp,
+    ]
+  )
+
+  const snapWaveToCenterGuides = useCallback(
+    (wave: 'a' | 'b', options: { snapFrequency?: boolean; snapOffset?: boolean }): void => {
+      const nextAFrequency = wave === 'a' && options.snapFrequency ? 1 : lfoAFrequency
+      const nextBFrequency = wave === 'b' && options.snapFrequency ? 1 : lfoBFrequency
+      const nextAPhaseOffset = wave === 'a' && options.snapOffset ? 0 : lfoAPhaseOffset
+      const nextBPhaseOffset = wave === 'b' && options.snapOffset ? 0 : lfoBPhaseOffset
+
+      if (wave === 'a') {
+        if (options.snapFrequency) {
+          setLfoAFrequency(1)
+        }
+        if (options.snapOffset) {
+          setLfoAPhaseOffset(0)
+        }
+      } else {
+        if (options.snapFrequency) {
+          setLfoBFrequency(1)
+        }
+        if (options.snapOffset) {
+          setLfoBPhaseOffset(0)
+        }
+      }
+      lastWaveHandleUsedRef.current = wave
+
+      const liveBase = createMorphModulator(
+        waveAType,
+        waveBType,
+        waveAPulseWidth,
+        waveBPulseWidth,
+        nextAFrequency,
+        toNormalizedPhase(nextAPhaseOffset),
+        nextBFrequency,
+        toNormalizedPhase(nextBPhaseOffset),
+        waveLerp
+      )
+      scheduleLiveEmit(buildCommandLines(targetControls, liveBase))
+    },
+    [
+      lfoAFrequency,
+      lfoAPhaseOffset,
+      lfoBFrequency,
+      lfoBPhaseOffset,
+      scheduleLiveEmit,
+      targetControls,
+      waveAPulseWidth,
+      waveAType,
+      waveBPulseWidth,
+      waveBType,
+      waveLerp,
+    ]
+  )
+
+  const selectWaveType = useCallback((wave: 'a' | 'b', waveType: WaveType): void => {
+    if (wave === 'a') {
+      setWaveAType(waveType)
+    } else {
+      setWaveBType(waveType)
+    }
+    setOpenWaveMenu(null)
+  }, [])
+
   return (
     <div className="app">
       <header className="header">
@@ -1807,6 +2540,397 @@ function App() {
           </article>
           <article className="bottomModule bottomModule-square">
             <p className="bottomModuleLabel">Modulators</p>
+            <div className="modulatorPanel">
+              <div className="modulatorTopRow" ref={waveMenuRef}>
+                <div className="waveSelect">
+                  <button
+                    type="button"
+                    className="waveSelectTrigger mono"
+                    onClick={() => setOpenWaveMenu((previous) => (previous === 'a' ? null : 'a'))}
+                    aria-haspopup="listbox"
+                    aria-expanded={openWaveMenu === 'a'}
+                    aria-label="Wave A type"
+                  >
+                    <span>{WAVE_OPTION_LABELS[waveAType]}</span>
+                    <span className="waveSelectChevron" aria-hidden="true">
+                      ▾
+                    </span>
+                  </button>
+                  {openWaveMenu === 'a' ? (
+                    <div className="waveSelectMenu" role="listbox" aria-label="Wave A options">
+                      {WAVE_OPTIONS.map((waveType) => (
+                        <button
+                          key={`wave-a-option-${waveType}`}
+                          type="button"
+                          className={`waveSelectOption mono${waveType === waveAType ? ' waveSelectOption-active' : ''}`}
+                          onClick={() => selectWaveType('a', waveType)}
+                          role="option"
+                          aria-selected={waveType === waveAType}
+                        >
+                          {WAVE_OPTION_LABELS[waveType]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <input
+                  className="modulatorSlider modulatorTopLerp"
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={waveLerp}
+                  onChange={(event) => setWaveLerp(Number(event.target.value))}
+                  aria-label="Wave lerp"
+                />
+                <div className="waveSelect">
+                  <button
+                    type="button"
+                    className="waveSelectTrigger mono"
+                    onClick={() => setOpenWaveMenu((previous) => (previous === 'b' ? null : 'b'))}
+                    aria-haspopup="listbox"
+                    aria-expanded={openWaveMenu === 'b'}
+                    aria-label="Wave B type"
+                  >
+                    <span>{WAVE_OPTION_LABELS[waveBType]}</span>
+                    <span className="waveSelectChevron" aria-hidden="true">
+                      ▾
+                    </span>
+                  </button>
+                  {openWaveMenu === 'b' ? (
+                    <div className="waveSelectMenu" role="listbox" aria-label="Wave B options">
+                      {WAVE_OPTIONS.map((waveType) => (
+                        <button
+                          key={`wave-b-option-${waveType}`}
+                          type="button"
+                          className={`waveSelectOption mono${waveType === waveBType ? ' waveSelectOption-active' : ''}`}
+                          onClick={() => selectWaveType('b', waveType)}
+                          role="option"
+                          aria-selected={waveType === waveBType}
+                        >
+                          {WAVE_OPTION_LABELS[waveType]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {(waveAType === 'square' || waveBType === 'square') && (
+                <div className="modulatorRow">
+                  {waveAType === 'square' ? (
+                    <label className="modulatorField">
+                      <span className="modulatorFieldLabel">Wave A Pulse Width</span>
+                      <input
+                        className="modulatorSlider"
+                        type="range"
+                        min={0.05}
+                        max={0.95}
+                        step={0.01}
+                        value={waveAPulseWidth}
+                        onChange={(event) => setWaveAPulseWidth(Number(event.target.value))}
+                      />
+                    </label>
+                  ) : (
+                    <div className="modulatorField modulatorField-empty" />
+                  )}
+                  {waveBType === 'square' ? (
+                    <label className="modulatorField">
+                      <span className="modulatorFieldLabel">Wave B Pulse Width</span>
+                      <input
+                        className="modulatorSlider"
+                        type="range"
+                        min={0.05}
+                        max={0.95}
+                        step={0.01}
+                        value={waveBPulseWidth}
+                        onChange={(event) => setWaveBPulseWidth(Number(event.target.value))}
+                      />
+                    </label>
+                  ) : (
+                    <div className="modulatorField modulatorField-empty" />
+                  )}
+                </div>
+              )}
+
+              <div
+                className="modWavePreview"
+                aria-label="Morphed wave preview"
+                onPointerDown={(event) => {
+                  if (!(event.currentTarget instanceof HTMLDivElement)) {
+                    return
+                  }
+                  const bounds = event.currentTarget.getBoundingClientRect()
+                  const xRatio = clampNumber((event.clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
+                  const yRatio = clampNumber((event.clientY - bounds.top) / Math.max(bounds.height, 1), 0, 1)
+                  const distanceA = Math.hypot(xRatio - waveHandleA.x / 100, yRatio - waveHandleA.y / 100)
+                  const distanceB = Math.hypot(xRatio - waveHandleB.x / 100, yRatio - waveHandleB.y / 100)
+                  const selectedWave: 'a' | 'b' = distanceA <= distanceB ? 'a' : 'b'
+                  wavePadDragRef.current = {
+                    pointerId: event.pointerId,
+                    wave: selectedWave,
+                    host: event.currentTarget,
+                    startClientX: event.clientX,
+                    startClientY: event.clientY,
+                    moved: false,
+                  }
+                  event.currentTarget.setPointerCapture(event.pointerId)
+                }}
+                onPointerMove={(event) => {
+                  const drag = wavePadDragRef.current
+                  if (!drag || drag.pointerId !== event.pointerId) {
+                    return
+                  }
+                  const movedDistance = Math.hypot(
+                    event.clientX - drag.startClientX,
+                    event.clientY - drag.startClientY
+                  )
+                  if (!drag.moved && movedDistance >= 3) {
+                    drag.moved = true
+                  }
+                  if (!drag.moved) {
+                    return
+                  }
+                  const lockMode = event.shiftKey
+                    ? 'frequency'
+                    : event.altKey
+                      ? 'offset'
+                      : 'none'
+                  applyWavePadMotion(drag.wave, drag.host, event.clientX, event.clientY, lockMode)
+                }}
+                onPointerUp={(event) => {
+                  const drag = wavePadDragRef.current
+                  if (drag?.pointerId === event.pointerId) {
+                    if (!drag.moved) {
+                      const clickWave = lastWaveHandleUsedRef.current
+                      const bounds = drag.host.getBoundingClientRect()
+                      const xRatio = clampNumber(
+                        (event.clientX - bounds.left) / Math.max(bounds.width, 1),
+                        0,
+                        1
+                      )
+                      const yRatio = clampNumber(
+                        (event.clientY - bounds.top) / Math.max(bounds.height, 1),
+                        0,
+                        1
+                      )
+                      const isNearFreqCenterLine = Math.abs(xRatio - 0.5) <= 0.06
+                      const isNearCenterLine = Math.abs(yRatio - 0.5) <= 0.06
+                      if (isNearCenterLine || isNearFreqCenterLine) {
+                        snapWaveToCenterGuides(clickWave, {
+                          snapFrequency: isNearFreqCenterLine,
+                          snapOffset: isNearCenterLine,
+                        })
+                      } else {
+                        const lockMode = event.shiftKey
+                          ? 'frequency'
+                          : event.altKey
+                            ? 'offset'
+                            : 'none'
+                        applyWavePadMotion(clickWave, drag.host, event.clientX, event.clientY, lockMode)
+                      }
+                    }
+                    wavePadDragRef.current = null
+                  }
+                }}
+                onPointerCancel={(event) => {
+                  if (wavePadDragRef.current?.pointerId === event.pointerId) {
+                    wavePadDragRef.current = null
+                  }
+                }}
+                title="Drag handle: horizontal = frequency, vertical = phase offset. Shift=frequency only. Option/Alt=offset only."
+              >
+                <svg viewBox="0 0 420 140" preserveAspectRatio="none">
+                  <line x1="0" y1="70" x2="420" y2="70" className="modWaveAxis" />
+                  <line x1="210" y1="0" x2="210" y2="140" className="modWaveAxis" />
+                  <line
+                    x1={`${waveHandleA.x * 4.2}`}
+                    y1="0"
+                    x2={`${waveHandleA.x * 4.2}`}
+                    y2="140"
+                    className="modWaveGuide modWaveGuide-a"
+                    style={{ opacity: waveAOpacity }}
+                  />
+                  <line
+                    x1="0"
+                    y1={`${waveHandleA.y * 1.4}`}
+                    x2="420"
+                    y2={`${waveHandleA.y * 1.4}`}
+                    className="modWaveGuide modWaveGuide-a"
+                    style={{ opacity: waveAOpacity }}
+                  />
+                  <line
+                    x1={`${waveHandleB.x * 4.2}`}
+                    y1="0"
+                    x2={`${waveHandleB.x * 4.2}`}
+                    y2="140"
+                    className="modWaveGuide modWaveGuide-b"
+                    style={{ opacity: waveBOpacity }}
+                  />
+                  <line
+                    x1="0"
+                    y1={`${waveHandleB.y * 1.4}`}
+                    x2="420"
+                    y2={`${waveHandleB.y * 1.4}`}
+                    className="modWaveGuide modWaveGuide-b"
+                    style={{ opacity: waveBOpacity }}
+                  />
+                  <polyline
+                    points={waveAPreviewPath}
+                    className="modWaveLine modWaveLine-a"
+                    style={{ opacity: waveAOpacity }}
+                  />
+                  <polyline
+                    points={waveBPreviewPath}
+                    className="modWaveLine modWaveLine-b"
+                    style={{ opacity: waveBOpacity }}
+                  />
+                  <polyline points={morphedWavePreviewPath} className="modWaveLine modWaveLine-mix" />
+                  <circle
+                    cx={`${waveHandleA.x * 4.2}`}
+                    cy={`${waveHandleA.y * 1.4}`}
+                    r="5"
+                    className="modWaveHandle modWaveHandle-a"
+                    style={{ opacity: waveAOpacity }}
+                  />
+                  <circle
+                    cx={`${waveHandleB.x * 4.2}`}
+                    cy={`${waveHandleB.y * 1.4}`}
+                    r="5"
+                    className="modWaveHandle modWaveHandle-b"
+                    style={{ opacity: waveBOpacity }}
+                  />
+                </svg>
+              </div>
+              <div className="modTargetList">
+                {MOD_TARGET_ORDER.map((target) => {
+                  const spec = MOD_TARGET_SPECS[target]
+                  const control = targetControls[target]
+                  const clampedCenter = clampNumber(control.center, spec.min, spec.max)
+                  const maxPositiveSpan = spec.max - clampedCenter
+                  const maxNegativeSpan = clampedCenter - spec.min
+                  const spanMagnitude = Math.min(maxPositiveSpan, maxNegativeSpan) * Math.abs(control.amount)
+                  const isInverted = control.amount < 0
+                  const spanMin = clampNumber(clampedCenter - spanMagnitude, spec.min, spec.max)
+                  const spanMax = clampNumber(clampedCenter + spanMagnitude, spec.min, spec.max)
+                  const left = ((spanMin - spec.min) / (spec.max - spec.min)) * 100
+                  const right = ((spanMax - spec.min) / (spec.max - spec.min)) * 100
+                  const center = ((clampedCenter - spec.min) / (spec.max - spec.min)) * 100
+
+                  return (
+                    <div key={`mod-target-${target}`} className="modTargetRow">
+                      <label className="modTargetHeader">
+                        <input
+                          className="modTargetLed"
+                          type="checkbox"
+                          checked={control.enabled}
+                          onChange={(event) => updateTargetControl(target, { enabled: event.target.checked })}
+                        />
+                        <span className="mono">{spec.label}</span>
+                      </label>
+                      <div
+                        className={`modRangePad${control.enabled ? '' : ' modRangePad-disabled'}`}
+                        onPointerDown={(event) => {
+                          if (!(event.currentTarget instanceof HTMLDivElement)) {
+                            return
+                          }
+                          if (!control.enabled) {
+                            updateTargetControl(target, { enabled: true })
+                          }
+                          const mode = event.metaKey || event.ctrlKey ? 'center' : 'amount'
+                          padDragRef.current = {
+                            pointerId: event.pointerId,
+                            target,
+                            mode,
+                            host: event.currentTarget,
+                            startClientX: event.clientX,
+                            startClientY: event.clientY,
+                            startAmount: control.amount,
+                            startCenter: control.center,
+                          }
+                          event.currentTarget.setPointerCapture(event.pointerId)
+                          applyPadMotion(
+                            target,
+                            event.currentTarget,
+                            event.clientX,
+                            event.clientY,
+                            mode,
+                            {
+                              startClientX: event.clientX,
+                              startClientY: event.clientY,
+                              startAmount: control.amount,
+                              startCenter: control.center,
+                            },
+                            event.shiftKey ? 'fine' : 'coarse'
+                          )
+                        }}
+                        onPointerMove={(event) => {
+                          const drag = padDragRef.current
+                          if (!drag || drag.pointerId !== event.pointerId || drag.target !== target) {
+                            return
+                          }
+                          applyPadMotion(
+                            target,
+                            drag.host,
+                            event.clientX,
+                            event.clientY,
+                            drag.mode,
+                            {
+                              startClientX: drag.startClientX,
+                              startClientY: drag.startClientY,
+                              startAmount: drag.startAmount,
+                              startCenter: drag.startCenter,
+                            },
+                            event.shiftKey ? 'fine' : 'coarse'
+                          )
+                        }}
+                        onPointerUp={(event) => {
+                          if (padDragRef.current?.pointerId === event.pointerId) {
+                            padDragRef.current = null
+                          }
+                        }}
+                        onPointerCancel={(event) => {
+                          if (padDragRef.current?.pointerId === event.pointerId) {
+                            padDragRef.current = null
+                          }
+                        }}
+                        onDoubleClick={() => {
+                          const resetCenter = spec.defaultCenter
+                          const resetAmount = 0
+                          updateTargetControl(target, {
+                            center: resetCenter,
+                            amount: resetAmount,
+                          })
+                          if (control.enabled) {
+                            scheduleLiveEmit([
+                              buildCommandForTarget(
+                                target,
+                                {
+                                  ...control,
+                                  center: resetCenter,
+                                  amount: resetAmount,
+                                },
+                                baseMorphModulator
+                              ),
+                            ])
+                          }
+                        }}
+                        title="Drag up/down to set depth and inversion. Shift=finer. Cmd/Ctrl+drag moves center."
+                      >
+                        <div className="modRangeTrack" />
+                        <div
+                          className={`modRangeBand${isInverted ? ' modRangeBand-inverted' : ''}`}
+                          style={{ left: `${left}%`, width: `${Math.max(0, right - left)}%` }}
+                        />
+                        <div className="modRangeCenter" style={{ left: `${center}%` }} />
+                      </div>
+
+                    </div>
+                  )
+                })}
+              </div>
+
+            </div>
           </article>
         </div>
         <article className="bottomModule bottomModule-library">
