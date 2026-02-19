@@ -762,19 +762,6 @@ const isPathPrefix = (prefix: number[], path: number[]): boolean => {
   return true
 }
 
-const getSelectedMeasure = (snapshot: UiStateSnapshot): Measure | null => {
-  const sequenceBank = snapshot.engine.sequence_bank
-  if (sequenceBank.length === 0) {
-    return null
-  }
-
-  const selectedIndex = Math.max(
-    0,
-    Math.min(snapshot.editor.selected.measure, sequenceBank.length - 1)
-  )
-  return sequenceBank[selectedIndex] ?? null
-}
-
 function App() {
   const [currentInputMode, setCurrentInputMode] = useState<InputMode>('pitch')
   const [statusMessage, setStatusMessage] = useState('')
@@ -799,6 +786,10 @@ function App() {
   const animationFrameRef = useRef<number | null>(null)
   const lastAnimationFrameMsRef = useRef<number | null>(null)
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
+  const [selectedSequenceIndex, setSelectedSequenceIndex] = useState<number | null>(null)
+  const [activeSequenceFlags, setActiveSequenceFlags] = useState<boolean[]>(
+    Array(TRANSPORT_SEQUENCE_COUNT).fill(false)
+  )
 
   const sendBridgeRequest = useCallback(
     async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
@@ -912,6 +903,14 @@ function App() {
               }
 
               transportRef.current.active[sequenceIndex] = true
+              setActiveSequenceFlags((previous) => {
+                if (previous[sequenceIndex]) {
+                  return previous
+                }
+                const next = [...previous]
+                next[sequenceIndex] = true
+                return next
+              })
               if (sequenceIndex === selectedMeasureIndexRef.current) {
                 setPlayheadPhase(transportRef.current.phase[sequenceIndex] ?? 0)
               }
@@ -925,6 +924,14 @@ function App() {
               }
 
               transportRef.current.active[sequenceIndex] = false
+              setActiveSequenceFlags((previous) => {
+                if (!previous[sequenceIndex]) {
+                  return previous
+                }
+                const next = [...previous]
+                next[sequenceIndex] = false
+                return next
+              })
               transportRef.current.phase[sequenceIndex] = 0
               if (sequenceIndex === selectedMeasureIndexRef.current) {
                 setPlayheadPhase(null)
@@ -1244,6 +1251,7 @@ function App() {
 
   const {
     tuningLength,
+    sequenceCount,
     selectedMeasureIndex,
     selectedMeasureNumerator,
     selectedMeasureDenominator,
@@ -1267,6 +1275,7 @@ function App() {
       )
       return {
         tuningLength: DEFAULT_TUNING_LENGTH,
+        sequenceCount: TRANSPORT_SEQUENCE_COUNT,
         selectedMeasureIndex: 0,
         selectedMeasureNumerator: 4,
         selectedMeasureDenominator: 4,
@@ -1287,11 +1296,16 @@ function App() {
 
     const rawTuningLength = snapshot.engine.tuning.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
-    const selectedMeasure = getSelectedMeasure(snapshot)
-    const selectedIndex = Math.max(
+    const snapshotSelectedIndex = Math.max(
       0,
       Math.min(snapshot.editor.selected.measure, snapshot.engine.sequence_bank.length - 1)
     )
+    const maxSequenceIndex = Math.max(snapshot.engine.sequence_bank.length - 1, 0)
+    const selectedIndex =
+      selectedSequenceIndex === null
+        ? snapshotSelectedIndex
+        : Math.max(0, Math.min(selectedSequenceIndex, maxSequenceIndex))
+    const selectedMeasure = snapshot.engine.sequence_bank[selectedIndex] ?? null
     const sequenceName = snapshot.engine.sequence_names[selectedIndex] ?? `Sequence ${selectedIndex}`
     const scaleValidPitches = snapshot.engine.scale
       ? generateValidPitches(snapshot.engine.scale, derivedTuningLength)
@@ -1348,6 +1362,7 @@ function App() {
 
     return {
       tuningLength: derivedTuningLength,
+      sequenceCount: snapshot.engine.sequence_bank.length,
       selectedMeasureIndex: selectedIndex,
       selectedMeasureNumerator: selectedNumerator,
       selectedMeasureDenominator: selectedDenominator,
@@ -1364,7 +1379,7 @@ function App() {
       rulerRatios: tuningRatios,
       highlightedPitches: mappedHighlights,
     }
-  }, [snapshot])
+  }, [selectedSequenceIndex, snapshot])
 
   useEffect(() => {
     selectedMeasureIndexRef.current = selectedMeasureIndex
@@ -1404,6 +1419,20 @@ function App() {
   )
 
   const currentInputModeLetter = currentInputMode.charAt(0).toUpperCase()
+  const selectSequenceFromBank = useCallback((sequenceIndex: number): void => {
+    setSelectedSequenceIndex(sequenceIndex)
+  }, [])
+
+  const sequenceBankCells = useMemo(
+    () =>
+      Array.from({ length: TRANSPORT_SEQUENCE_COUNT }, (_, index) => {
+        const row = 4 - Math.floor(index / 4)
+        const column = (index % 4) + 1
+        return { index, row, column }
+      }),
+    []
+  )
+
   return (
     <div className="app">
       <header className="header">
@@ -1658,13 +1687,36 @@ function App() {
         )}
       </footer>
       <section className="bottomModules" aria-label="Temporary module area">
-        <article className="bottomModuleCard">
-          <p className="bottomModuleLabel">Temporary Module A</p>
-          <p className="bottomModuleBody">Placeholder area for in-progress controls.</p>
-        </article>
-        <article className="bottomModuleCard">
-          <p className="bottomModuleLabel">Temporary Module B</p>
-          <p className="bottomModuleBody">Use this space to test stacking and spacing.</p>
+        <div className="bottomModuleRow">
+          <article className="bottomModule bottomModule-square">
+            <p className="bottomModuleLabel">Sequence Bank</p>
+            <div className="sequenceBankGrid" role="grid" aria-label="Sequence bank">
+              {sequenceBankCells.map(({ index, row, column }) => {
+                const isSelected = index === selectedMeasureIndex
+                const isActive = activeSequenceFlags[index] ?? false
+                const isDisabled = index >= sequenceCount
+                return (
+                  <button
+                    key={`sequence-bank-cell-${index}`}
+                    type="button"
+                    className={`sequenceBankCell${isSelected ? ' sequenceBankCell-selected' : ''}${isActive ? ' sequenceBankCell-active' : ''}`}
+                    style={{ gridRow: row, gridColumn: column }}
+                    onClick={() => selectSequenceFromBank(index)}
+                    disabled={isDisabled}
+                    aria-label={`Select sequence 0x${index.toString(16).toUpperCase()}`}
+                  >
+                    <span className="mono">{`0x${index.toString(16).toUpperCase()}`}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </article>
+          <article className="bottomModule bottomModule-square">
+            <p className="bottomModuleLabel">Modulators</p>
+          </article>
+        </div>
+        <article className="bottomModule bottomModule-library">
+          <p className="bottomModuleLabel">Library View</p>
         </article>
       </section>
     </div>
