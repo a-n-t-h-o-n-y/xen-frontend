@@ -22,6 +22,24 @@ const DEFAULT_TUNING_LENGTH = 12
 const TRANSPORT_SEQUENCE_COUNT = 16
 const DEFAULT_TRANSPORT_BPM = 120
 
+const isApplePlatform = (): boolean => {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+
+  const userAgentData = (navigator as Navigator & { userAgentData?: { platform?: string } })
+    .userAgentData
+  const platform = userAgentData?.platform ?? navigator.platform ?? ''
+  if (/mac|iphone|ipad|ipod/i.test(platform)) {
+    return true
+  }
+
+  const userAgent = navigator.userAgent ?? ''
+  return /macintosh|iphone|ipad|ipod/i.test(userAgent)
+}
+
+const usesMetaForCommand = isApplePlatform()
+
 type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
 type TranslateDirection = 'up' | 'down'
 type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
@@ -926,7 +944,7 @@ const matchesBinding = (
     return false
   }
 
-  const commandModifier = event.metaKey || event.ctrlKey
+  const commandModifier = usesMetaForCommand ? event.metaKey : event.ctrlKey
   if (parsedBinding.requiresCmd !== commandModifier) {
     return false
   }
@@ -1642,6 +1660,9 @@ function App() {
   const lastSnapshotVersionRef = useRef<number>(-1)
   const completionRequestVersionRef = useRef(0)
   const pendingNumberRef = useRef('')
+  const lastShortcutCommandRef = useRef<{ command: 'copy' | 'cut' | 'paste'; at: number } | null>(
+    null
+  )
   const transportRef = useRef<TransportState>(createTransportState())
   const selectedMeasureIndexRef = useRef(0)
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
@@ -2094,11 +2115,13 @@ function App() {
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent): void => {
+      const editableTarget = isEditableTarget(event.target)
+
       if (bridgeUnavailableMessage !== null) {
         return
       }
 
-      if (isEditableTarget(event.target)) {
+      if (editableTarget) {
         return
       }
 
@@ -2128,6 +2151,10 @@ function App() {
       if (matchedBinding) {
         event.preventDefault()
         const command = applyNumberParameter(matchedBinding[1], pendingNumberRef.current)
+        const normalizedCommand = command.trim().toLowerCase()
+        if (normalizedCommand === 'copy' || normalizedCommand === 'cut' || normalizedCommand === 'paste') {
+          lastShortcutCommandRef.current = { command: normalizedCommand, at: Date.now() }
+        }
         pendingNumberRef.current = ''
         void executeBackendCommand(command).catch((error: unknown) => {
           setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
@@ -2159,6 +2186,55 @@ function App() {
     isCommandMode,
     openCommandMode,
     sequenceViewKeymap,
+  ])
+
+  useEffect(() => {
+    const handleClipboardCommand = (command: string, event: ClipboardEvent): void => {
+      const recentShortcut = lastShortcutCommandRef.current
+      if (
+        recentShortcut &&
+        recentShortcut.command === command &&
+        Date.now() - recentShortcut.at < 250
+      ) {
+        return
+      }
+
+      const editableTarget = isEditableTarget(event.target)
+
+      if (bridgeUnavailableMessage !== null || editableTarget || isCommandMode) {
+        return
+      }
+
+      event.preventDefault()
+
+      void executeBackendCommand(command).catch((error: unknown) => {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+      })
+    }
+
+    const handleCopy = (event: ClipboardEvent): void => {
+      handleClipboardCommand('copy', event)
+    }
+    const handleCut = (event: ClipboardEvent): void => {
+      handleClipboardCommand('cut', event)
+    }
+    const handlePaste = (event: ClipboardEvent): void => {
+      handleClipboardCommand('paste', event)
+    }
+
+    window.addEventListener('copy', handleCopy)
+    window.addEventListener('cut', handleCut)
+    window.addEventListener('paste', handlePaste)
+    return () => {
+      window.removeEventListener('copy', handleCopy)
+      window.removeEventListener('cut', handleCut)
+      window.removeEventListener('paste', handlePaste)
+    }
+  }, [
+    bridgeUnavailableMessage,
+    executeBackendCommand,
+    isCommandMode,
   ])
 
   const submitCommand = useCallback(
