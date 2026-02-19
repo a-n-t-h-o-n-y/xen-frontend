@@ -151,6 +151,17 @@
   padding: 4px;
 }
 
+.rollPlayhead {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 45%);
+  transform: translateX(-1px);
+  pointer-events: none;
+}
+
 .rollIsland {
   min-width: 0;
   border: 1px solid rgb(255 255 255 / 14%);

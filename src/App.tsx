@@ -19,6 +19,8 @@ const FRONTEND_APP = 'xen-frontend-skeleton'
 const FRONTEND_VERSION = '0.2.0'
 const MAX_COMMAND_HISTORY = 100
 const DEFAULT_TUNING_LENGTH = 12
+const TRANSPORT_SEQUENCE_COUNT = 16
+const DEFAULT_TRANSPORT_BPM = 120
 
 type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
 type TranslateDirection = 'up' | 'down'
@@ -96,6 +98,12 @@ type UiStateSnapshot = {
   }
 }
 
+type TransportState = {
+  active: boolean[]
+  phase: number[]
+  bpm: number
+}
+
 const REFERENCE_RATIOS = [
   Math.log2(1 / 1),
   Math.log2(3 / 2),
@@ -118,6 +126,12 @@ const createRequestId = (): string => {
 
   return `req-${Date.now()}`
 }
+
+const createTransportState = (): TransportState => ({
+  active: Array(TRANSPORT_SEQUENCE_COUNT).fill(false),
+  phase: Array(TRANSPORT_SEQUENCE_COUNT).fill(0),
+  bpm: DEFAULT_TRANSPORT_BPM,
+})
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
@@ -384,6 +398,16 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
   }
 
   return value as Record<string, unknown>
+}
+
+const toSequenceIndex = (value: unknown): number | null => {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    return null
+  }
+  if (value < 0 || value >= TRANSPORT_SEQUENCE_COUNT) {
+    return null
+  }
+  return value
 }
 
 const toNumberArray = (value: unknown): number[] => {
@@ -753,6 +777,12 @@ function App() {
   const lastSnapshotVersionRef = useRef<number>(-1)
   const completionRequestVersionRef = useRef(0)
   const pendingNumberRef = useRef('')
+  const transportRef = useRef<TransportState>(createTransportState())
+  const selectedMeasureIndexRef = useRef(0)
+  const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
+  const animationFrameRef = useRef<number | null>(null)
+  const lastAnimationFrameMsRef = useRef<number | null>(null)
+  const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
 
   const sendBridgeRequest = useCallback(
     async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
@@ -845,11 +875,80 @@ function App() {
         eventTokenRef.current = addXenBridgeListener((rawEvent) => {
           try {
             const eventEnvelope = parseWireEnvelope(rawEvent)
-            if (eventEnvelope.name !== 'state.changed') {
+            if (eventEnvelope.type !== 'event') {
               return
             }
 
-            applySnapshot(eventEnvelope.payload)
+            if (eventEnvelope.name === 'state.changed') {
+              applySnapshot(eventEnvelope.payload)
+              return
+            }
+
+            const payload = asRecord(eventEnvelope.payload)
+            if (!payload) {
+              return
+            }
+
+            if (eventEnvelope.name === 'transport.trigger.noteOn') {
+              const sequenceIndex = toSequenceIndex(payload.sequence_index)
+              if (sequenceIndex === null) {
+                return
+              }
+
+              transportRef.current.active[sequenceIndex] = true
+              if (sequenceIndex === selectedMeasureIndexRef.current) {
+                setPlayheadPhase(transportRef.current.phase[sequenceIndex] ?? 0)
+              }
+              return
+            }
+
+            if (eventEnvelope.name === 'transport.trigger.noteOff') {
+              const sequenceIndex = toSequenceIndex(payload.sequence_index)
+              if (sequenceIndex === null) {
+                return
+              }
+
+              transportRef.current.active[sequenceIndex] = false
+              transportRef.current.phase[sequenceIndex] = 0
+              if (sequenceIndex === selectedMeasureIndexRef.current) {
+                setPlayheadPhase(null)
+              }
+              return
+            }
+
+            if (eventEnvelope.name === 'transport.phase.sync') {
+              if (typeof payload.bpm === 'number' && Number.isFinite(payload.bpm) && payload.bpm > 0) {
+                transportRef.current.bpm = payload.bpm
+              }
+
+              const phases = Array.isArray(payload.phases) ? payload.phases : []
+              for (const rawPhaseEntry of phases) {
+                const phaseEntry = asRecord(rawPhaseEntry)
+                if (!phaseEntry) {
+                  continue
+                }
+
+                const sequenceIndex = toSequenceIndex(phaseEntry.sequence_index)
+                if (sequenceIndex === null) {
+                  continue
+                }
+
+                const phase = phaseEntry.phase
+                if (typeof phase !== 'number' || !Number.isFinite(phase)) {
+                  continue
+                }
+
+                const normalizedPhase = ((phase % 1) + 1) % 1
+                transportRef.current.phase[sequenceIndex] = normalizedPhase
+              }
+
+              const selectedIndex = selectedMeasureIndexRef.current
+              if (transportRef.current.active[selectedIndex]) {
+                setPlayheadPhase(transportRef.current.phase[selectedIndex] ?? 0)
+              } else {
+                setPlayheadPhase(null)
+              }
+            }
           } catch {
             // Keep footer status reserved for command responses only.
           }
@@ -981,6 +1080,54 @@ function App() {
   }, [bridgeUnavailableMessage, commandText, isCommandMode, sendBridgeRequest])
 
   useEffect(() => {
+    const tick = (frameTimeMs: number): void => {
+      if (lastAnimationFrameMsRef.current === null) {
+        lastAnimationFrameMsRef.current = frameTimeMs
+      }
+
+      const dtSec = Math.max(0, (frameTimeMs - (lastAnimationFrameMsRef.current ?? frameTimeMs)) / 1000)
+      lastAnimationFrameMsRef.current = frameTimeMs
+
+      const selectedIndex = selectedMeasureIndexRef.current
+      const { numerator, denominator } = selectedTimeSignatureRef.current
+      const transport = transportRef.current
+
+      if (
+        !transport.active[selectedIndex] ||
+        transport.bpm <= 0 ||
+        numerator <= 0 ||
+        denominator <= 0
+      ) {
+        setPlayheadPhase((previous) => (previous === null ? previous : null))
+        animationFrameRef.current = requestAnimationFrame(tick)
+        return
+      }
+
+      const quartersPerLoop = numerator * (4 / denominator)
+      const loopSec = (quartersPerLoop * 60) / transport.bpm
+      if (loopSec <= 0) {
+        setPlayheadPhase((previous) => (previous === null ? previous : null))
+        animationFrameRef.current = requestAnimationFrame(tick)
+        return
+      }
+
+      const nextPhase = (transport.phase[selectedIndex] + dtSec / loopSec) % 1
+      transport.phase[selectedIndex] = nextPhase
+      setPlayheadPhase(nextPhase)
+      animationFrameRef.current = requestAnimationFrame(tick)
+    }
+
+    animationFrameRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
+      }
+      lastAnimationFrameMsRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent): void => {
       if (bridgeUnavailableMessage !== null) {
         return
@@ -1082,6 +1229,8 @@ function App() {
   const {
     tuningLength,
     selectedMeasureIndex,
+    selectedMeasureNumerator,
+    selectedMeasureDenominator,
     selectedMeasureName,
     timeSignature,
     scaleName,
@@ -1103,6 +1252,8 @@ function App() {
       return {
         tuningLength: DEFAULT_TUNING_LENGTH,
         selectedMeasureIndex: 0,
+        selectedMeasureNumerator: 4,
+        selectedMeasureDenominator: 4,
         selectedMeasureName: 'Init Test',
         timeSignature: '4/4',
         scaleName: 'major diatonic',
@@ -1171,6 +1322,8 @@ function App() {
     const signature = selectedMeasure?.time_signature
       ? `${selectedMeasure.time_signature.numerator}/${selectedMeasure.time_signature.denominator}`
       : '4/4'
+    const selectedNumerator = selectedMeasure?.time_signature?.numerator ?? 4
+    const selectedDenominator = selectedMeasure?.time_signature?.denominator ?? 4
     const flattenedLeafCells = flattenLeafCells(directCells, derivedTuningLength)
     const selectionPath = snapshot.editor.selected.cell
     const selectionFlags = flattenedLeafCells.map((leafCell) =>
@@ -1180,6 +1333,8 @@ function App() {
     return {
       tuningLength: derivedTuningLength,
       selectedMeasureIndex: selectedIndex,
+      selectedMeasureNumerator: selectedNumerator,
+      selectedMeasureDenominator: selectedDenominator,
       selectedMeasureName: sequenceName,
       timeSignature: signature,
       scaleName: snapshot.engine.scale?.name ?? 'none',
@@ -1194,6 +1349,21 @@ function App() {
       highlightedPitches: mappedHighlights,
     }
   }, [snapshot])
+
+  useEffect(() => {
+    selectedMeasureIndexRef.current = selectedMeasureIndex
+    selectedTimeSignatureRef.current = {
+      numerator: selectedMeasureNumerator,
+      denominator: selectedMeasureDenominator,
+    }
+
+    if (transportRef.current.active[selectedMeasureIndex]) {
+      setPlayheadPhase(transportRef.current.phase[selectedMeasureIndex] ?? 0)
+      return
+    }
+
+    setPlayheadPhase(null)
+  }, [selectedMeasureDenominator, selectedMeasureIndex, selectedMeasureNumerator])
 
   const pitchRows = useMemo(
     () => Array.from({ length: tuningLength }, (_, index) => tuningLength - 1 - index),
@@ -1332,6 +1502,13 @@ function App() {
                   }
                 )}
               </div>
+              {playheadPhase !== null ? (
+                <div
+                  className="rollPlayhead"
+                  style={{ left: `${Math.max(0, Math.min(playheadPhase, 1)) * 100}%` }}
+                  aria-hidden="true"
+                />
+              ) : null}
             </div>
 
             <aside className="tuningRuler" aria-label="Tuning ruler">
