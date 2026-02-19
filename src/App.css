@@ -27,6 +27,10 @@
   --seq-note-text: rgb(10 10 10 / 92%);
   --seq-selection: rgb(245 196 90 / 58%);
   --seq-selection-soft: rgb(245 196 90 / 20%);
+  --roll-island-gap: 5px;
+  --roll-divider-x-bias: 0px;
+  --roll-divider-edge-inset-base: 12px;
+  --roll-divider-edge-inset-step: 12px;
   --extras-row-height: 21rem;
   --square-module-label-offset: 2.5rem;
 }
@@ -163,9 +167,22 @@
 
 .rollIslands {
   display: flex;
-  gap: 5px;
+  gap: var(--roll-island-gap);
   height: 100%;
+  min-width: 0;
   padding: 4px;
+}
+
+.rollBranch {
+  display: flex;
+  gap: var(--roll-island-gap);
+  height: 100%;
+  min-width: 0;
+}
+
+.rollSegment {
+  position: relative;
+  min-width: 0;
 }
 
 .rollPlayhead {
@@ -181,11 +198,33 @@
 
 .rollIsland {
   position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
   min-width: 0;
   border: 1px solid var(--seq-grid-line);
   border-radius: 10px;
-  overflow: hidden;
+  overflow: visible;
   isolation: isolate;
+}
+
+.rollSegment-sequenceBoundary::before {
+  content: '';
+  position: absolute;
+  top: calc(
+    var(--roll-divider-edge-inset-base) +
+      (var(--roll-sequence-boundary-depth, 0) * var(--roll-divider-edge-inset-step))
+  );
+  bottom: calc(
+    var(--roll-divider-edge-inset-base) +
+      (var(--roll-sequence-boundary-depth, 0) * var(--roll-divider-edge-inset-step))
+  );
+  left: calc((var(--roll-island-gap) / -2) + var(--roll-divider-x-bias));
+  transform: translateX(-50%);
+  width: 1px;
+  background: rgb(148 163 184 / 76%);
+  pointer-events: none;
+  z-index: 26;
 }
 
 .rollIsland::after {
@@ -234,6 +273,9 @@
 }
 
 .rollIslandGrid {
+  position: relative;
+  border-radius: inherit;
+  overflow: hidden;
   display: grid;
   grid-auto-rows: 1fr;
   height: 100%;
@@ -495,8 +537,7 @@
   gap: var(--space-3);
   padding: 0;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 .bottomModule {
@@ -523,22 +564,144 @@
   min-height: var(--extras-row-height);
 }
 
+.libraryActions {
+  display: inline-flex;
+  align-items: center;
+}
+
+.libraryActionButton {
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 5%);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 0.28rem 0.48rem;
+}
+
+.libraryActionButton:disabled {
+  opacity: 0.6;
+}
+
+.libraryTabs {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.libraryTab {
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 0.3rem 0.5rem;
+}
+
+.libraryTab-active {
+  border-color: rgb(245 196 90 / 58%);
+  background: rgb(245 196 90 / 14%);
+  color: rgb(252 245 223);
+}
+
+.libraryList {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.libraryItem {
+  display: grid;
+  gap: 0.2rem;
+  align-items: start;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-primary);
+  padding: 0.42rem 0.5rem;
+}
+
+.libraryItem:hover {
+  border-color: rgb(255 255 255 / 26%);
+  background: rgb(255 255 255 / 6%);
+}
+
+.libraryItem-active {
+  border-color: rgb(245 196 90 / 56%);
+  background: rgb(245 196 90 / 14%);
+}
+
+.libraryDirectoryRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.45rem;
+  color: rgb(255 255 255 / 66%);
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.libraryDirectoryCaret {
+  color: rgb(255 255 255 / 45%);
+  font-size: 0.6rem;
+}
+
+.libraryDirectoryName {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libraryItemName {
+  min-width: 0;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libraryItemMeta {
+  min-width: 0;
+  font-size: 0.64rem;
+  line-height: 1.25;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libraryPlaceholder {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
 .bottomModuleRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
   gap: var(--space-3);
 }
 
-.bottomModule-square {
-  flex: 0 0 var(--extras-row-height);
+.bottomModule-rowItem {
+  min-width: 0;
+  height: calc(var(--extras-row-height) + var(--square-module-label-offset));
+  max-height: calc(var(--extras-row-height) + var(--square-module-label-offset));
   min-height: calc(var(--extras-row-height) + var(--square-module-label-offset));
+  overflow: hidden;
 }
 
 .bottomModule-reference {
-  flex: 1 1 16rem;
   min-width: 0;
-  min-height: calc(var(--extras-row-height) + var(--square-module-label-offset));
 }
 
 .modulatorPanel {
@@ -1045,26 +1208,135 @@
 
 .referenceBody {
   display: grid;
-  align-content: center;
-  justify-items: start;
+  align-content: start;
+  justify-items: stretch;
+  flex: 1 1 auto;
   width: 100%;
   height: 100%;
   min-height: 0;
   border: 1px solid rgb(255 255 255 / 14%);
   border-radius: var(--radius-1);
-  padding: var(--space-3);
+  padding: var(--space-2);
   background: rgb(255 255 255 / 4%);
+  overflow: auto;
+}
+
+.referenceCommands,
+.referenceKeybindings {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.referenceModeLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.referenceModeBadge {
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text-secondary);
+  font-size: 0.64rem;
+  line-height: 1;
+  padding: 0.18rem 0.38rem;
+}
+
+.referenceCommandRow,
+.referenceKeybindingGroup {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.referenceCommandId {
+  margin: 0;
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgb(245 196 90 / 90%);
+}
+
+.referenceCommandSignature {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.referenceCommandDescription {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--text-secondary);
+}
+
+.referenceKeybindingRows {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.referenceKeybindingTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.referenceKeybindingTable th,
+.referenceKeybindingTable td {
+  padding: 0.26rem 0.22rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.referenceKeybindingTable th {
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(245 196 90 / 88%);
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
+}
+
+.referenceKeybindingTable tbody tr + tr td {
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.referenceKeybindingTable th:first-child,
+.referenceKeybindingTable td:first-child {
+  width: 7.5rem;
+}
+
+.referenceKeybindingKey {
+  font-size: 0.68rem;
+  color: var(--text-primary);
+}
+
+.referenceKeybindingCommand {
+  min-width: 0;
+  font-size: 0.7rem;
+  line-height: 1.25;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .referencePlaceholder {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   color: var(--text-secondary);
 }
 
 @media (max-width: 860px) {
   .bottomModuleRow {
-    flex-wrap: wrap;
+    grid-template-columns: 1fr;
   }
 
   .modulatorRow {

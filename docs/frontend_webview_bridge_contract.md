@@ -81,6 +81,20 @@ Response payload:
   protocol: "xen.bridge.v1";
   snapshot_schema_version: 1;
   plugin_version: string;
+  reference: {
+    commands: Array<{
+      id: string;
+      signature: string;
+      description: string;
+    }>;
+    keybindings: Array<{
+      component: string;
+      bindings: Array<{
+        key: string;
+        command: string;
+      }>;
+    }>;
+  };
 }
 ```
 
@@ -197,6 +211,53 @@ Keymap semantics:
 1. Values are raw command strings.
 1. Raw strings may contain command chains (`;`) and placeholders like `:N=2:`.
 1. Frontend owns parsing/execution policy for UI-local actions.
+
+### `library.get`
+
+Request payload must be an empty object.
+
+Response payload:
+
+```ts
+{
+  paths: {
+    library: string;
+    sequences: string;
+    tunings: string;
+  };
+  sequence_banks: Array<{
+    name: string;    // e.g. "demo.xss"
+    stem: string;    // e.g. "demo"
+    path: string;    // absolute path
+    command: string; // e.g. "load sequenceBank demo"
+  }>;
+  tunings: Array<{
+    name: string;    // e.g. "edo12.scl"
+    stem: string;    // e.g. "edo12"
+    path: string;    // absolute path
+    command: string; // e.g. "load tuning edo12"
+  }>;
+  scales: Array<{
+    name: string;    // includes "chromatic"
+    command: string; // e.g. "set scale major"
+  }>;
+  commands: {
+    reload_scales: "load scales";
+    reload_chords: "load chords";
+    library_directory: "libraryDirectory";
+  };
+  active: {
+    tuning_name: string;
+    scale_name: string | null;
+  };
+}
+```
+
+Semantics:
+
+1. `sequence_banks` and `tunings` are read from disk at request time.
+1. Use this endpoint for explicit refresh in Library View so newly added files appear.
+1. `scales` reflects currently loaded scales in backend memory. To pick up edited scale files, execute `load scales` and request `library.get` again.
 
 ## 4. Event map (C++ -> frontend)
 
@@ -397,8 +458,9 @@ Typical triggers:
 1. Bind `xenBridgeRequest` and subscribe to `xenBridgeEvent`.
 1. Send `session.hello`.
 1. Validate response protocol/schema.
+1. Cache `session.hello.payload.reference` for command/help UI.
 1. Call `state.get` and set store from returned snapshot.
-1. Call `catalog.get` and `keymap.get` and cache both.
+1. Call `library.get` when opening Library View and on user refresh.
 1. Start normal command loop with `command.execute` and `state.changed` updates.
 1. Listen for `transport.trigger.noteOn`, `transport.trigger.noteOff`, and `transport.phase.sync` to drive playhead animation.
 

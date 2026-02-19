@@ -33,6 +33,67 @@ type PatternPrefix = {
   intervals: number[]
 }
 
+type CommandReferenceEntry = {
+  id: string
+  signature: string
+  description: string
+}
+
+type KeybindingReferenceEntry = {
+  key: string
+  command: string
+}
+
+type KeybindingReferenceGroup = {
+  component: string
+  bindings: KeybindingReferenceEntry[]
+}
+
+type SessionReference = {
+  commands: CommandReferenceEntry[]
+  keybindings: KeybindingReferenceGroup[]
+}
+
+type LibraryCommandEntry = {
+  name: string
+  stem: string
+  path: string
+  command: string
+}
+
+type LibraryScaleEntry = {
+  name: string
+  command: string
+}
+
+type LibraryHierarchyRow = {
+  kind: 'directory' | 'file'
+  key: string
+  label: string
+  depth: number
+  entry?: LibraryCommandEntry
+}
+
+type LibrarySnapshot = {
+  paths: {
+    library: string
+    sequences: string
+    tunings: string
+  }
+  sequenceBanks: LibraryCommandEntry[]
+  tunings: LibraryCommandEntry[]
+  scales: LibraryScaleEntry[]
+  commands: {
+    reloadScales: string
+    reloadChords: string
+    libraryDirectory: string
+  }
+  active: {
+    tuningName: string
+    scaleName: string | null
+  }
+}
+
 type Envelope = {
   protocol: string
   type: 'request' | 'response' | 'event'
@@ -471,6 +532,206 @@ const getSequenceViewKeymap = (payload: EnvelopePayload): SequenceViewKeymap => 
     (entry): entry is [string, string] => typeof entry[1] === 'string'
   )
   return Object.fromEntries(entries)
+}
+
+const getSessionReference = (payload: EnvelopePayload): SessionReference => {
+  const root = asRecord(payload.reference)
+  if (!root) {
+    return { commands: [], keybindings: [] }
+  }
+
+  const rawCommands = Array.isArray(root.commands) ? root.commands : []
+  const commands = rawCommands
+    .map((value) => {
+      const record = asRecord(value)
+      if (!record) {
+        return null
+      }
+      if (
+        typeof record.id !== 'string' ||
+        typeof record.signature !== 'string' ||
+        typeof record.description !== 'string'
+      ) {
+        return null
+      }
+      return {
+        id: record.id,
+        signature: record.signature,
+        description: record.description,
+      } satisfies CommandReferenceEntry
+    })
+    .filter((entry): entry is CommandReferenceEntry => entry !== null)
+
+  const rawKeybindingGroups = Array.isArray(root.keybindings) ? root.keybindings : []
+  const keybindings = rawKeybindingGroups
+    .map((groupValue) => {
+      const group = asRecord(groupValue)
+      if (!group || typeof group.component !== 'string') {
+        return null
+      }
+
+      const rawBindings = Array.isArray(group.bindings) ? group.bindings : []
+      const bindings = rawBindings
+        .map((bindingValue) => {
+          const binding = asRecord(bindingValue)
+          if (!binding || typeof binding.key !== 'string' || typeof binding.command !== 'string') {
+            return null
+          }
+          return {
+            key: binding.key,
+            command: binding.command,
+          } satisfies KeybindingReferenceEntry
+        })
+        .filter((binding): binding is KeybindingReferenceEntry => binding !== null)
+
+      return {
+        component: group.component,
+        bindings,
+      } satisfies KeybindingReferenceGroup
+    })
+    .filter((group): group is KeybindingReferenceGroup => group !== null)
+
+  return { commands, keybindings }
+}
+
+const parseLibraryCommandEntries = (value: unknown): LibraryCommandEntry[] => {
+  const rows = Array.isArray(value) ? value : []
+  return rows
+    .map((row) => {
+      if (typeof row === 'string') {
+        const name = row
+        const stem = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : name
+        return {
+          name,
+          stem,
+          path: '',
+          command: '',
+        } satisfies LibraryCommandEntry
+      }
+
+      const record = asRecord(row)
+      if (!record) {
+        return null
+      }
+      const name =
+        typeof record.name === 'string'
+          ? record.name
+          : typeof record.filename === 'string'
+            ? record.filename
+            : typeof record.file === 'string'
+              ? record.file
+              : null
+      if (!name) {
+        return null
+      }
+      const stem =
+        typeof record.stem === 'string'
+          ? record.stem
+          : name.includes('.')
+            ? name.slice(0, name.lastIndexOf('.'))
+            : name
+      const path =
+        typeof record.path === 'string'
+          ? record.path
+          : typeof record.full_path === 'string'
+            ? record.full_path
+            : ''
+      const command = typeof record.command === 'string' ? record.command : ''
+      return {
+        name,
+        stem,
+        path,
+        command,
+      } satisfies LibraryCommandEntry
+    })
+    .filter((entry): entry is LibraryCommandEntry => entry !== null)
+}
+
+const parseLibraryScaleEntries = (value: unknown): LibraryScaleEntry[] => {
+  const rows = Array.isArray(value) ? value : []
+  return rows
+    .map((row) => {
+      const record = asRecord(row)
+      if (!record || typeof record.name !== 'string' || typeof record.command !== 'string') {
+        return null
+      }
+      return {
+        name: record.name,
+        command: record.command,
+      } satisfies LibraryScaleEntry
+    })
+    .filter((entry): entry is LibraryScaleEntry => entry !== null)
+}
+
+const getLibrarySnapshot = (payload: EnvelopePayload): LibrarySnapshot => {
+  const paths = asRecord(payload.paths)
+  const commands = asRecord(payload.commands)
+  const active = asRecord(payload.active)
+
+  return {
+    paths: {
+      library: typeof paths?.library === 'string' ? paths.library : '',
+      sequences: typeof paths?.sequences === 'string' ? paths.sequences : '',
+      tunings: typeof paths?.tunings === 'string' ? paths.tunings : '',
+    },
+    sequenceBanks: parseLibraryCommandEntries(payload.sequence_banks ?? payload.sequenceBanks),
+    tunings: parseLibraryCommandEntries(payload.tunings),
+    scales: parseLibraryScaleEntries(payload.scales),
+    commands: {
+      reloadScales: typeof commands?.reload_scales === 'string' ? commands.reload_scales : '',
+      reloadChords: typeof commands?.reload_chords === 'string' ? commands.reload_chords : '',
+      libraryDirectory:
+        typeof commands?.library_directory === 'string' ? commands.library_directory : '',
+    },
+    active: {
+      tuningName: typeof active?.tuning_name === 'string' ? active.tuning_name : '',
+      scaleName: typeof active?.scale_name === 'string' ? active.scale_name : null,
+    },
+  }
+}
+
+const quoteCommandArg = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
+
+const getHierarchyRows = (entries: LibraryCommandEntry[]): LibraryHierarchyRow[] => {
+  const directoryRows = new Set<string>()
+  const rows: LibraryHierarchyRow[] = []
+
+  const sortedEntries = [...entries].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  )
+
+  for (const entry of sortedEntries) {
+    const normalized = entry.name.replace(/\\/g, '/')
+    const parts = normalized.split('/').filter((part) => part.length > 0)
+    const fallbackLabel = entry.name || entry.stem
+    const leafLabel = parts[parts.length - 1] ?? fallbackLabel
+    const directories = parts.slice(0, -1)
+
+    let currentPath = ''
+    directories.forEach((directory, index) => {
+      currentPath = currentPath ? `${currentPath}/${directory}` : directory
+      if (directoryRows.has(currentPath)) {
+        return
+      }
+      directoryRows.add(currentPath)
+      rows.push({
+        kind: 'directory',
+        key: `dir:${currentPath}`,
+        label: directory,
+        depth: index,
+      })
+    })
+
+    rows.push({
+      kind: 'file',
+      key: `file:${normalized}:${entry.path || entry.name}`,
+      label: leafLabel,
+      depth: directories.length,
+      entry,
+    })
+  }
+
+  return rows
 }
 
 type ParsedKeyBinding = {
@@ -1098,74 +1359,35 @@ const collectNotePitches = (cell: Cell): number[] => {
 const getCellWeight = (weight: number): number => (weight > 0 ? weight : 1)
 
 type LeafCell = {
-  weight: number
   path: number[]
-  note:
-    | {
-        pitch: number
-        octave: number
-        velocity: number
-        delay: number
-        gate: number
-      }
-    | null
 }
 
-const flattenLeafCells = (cells: Cell[], tuningLength: number): LeafCell[] => {
+const collectLeafCells = (cells: Cell[]): LeafCell[] => {
   const result: LeafCell[] = []
 
-  const walk = (groupCells: Cell[], parentShare: number, parentPath: number[]): void => {
+  const walk = (groupCells: Cell[], parentPath: number[]): void => {
     if (groupCells.length === 0) {
       return
     }
 
-    const normalizedWeights = groupCells.map((cell) => getCellWeight(cell.weight))
-    const totalGroupWeight = normalizedWeights.reduce((sum, weight) => sum + weight, 0)
-    if (totalGroupWeight <= 0) {
-      return
-    }
-
     groupCells.forEach((cell, index) => {
-      const cellShare = parentShare * (normalizedWeights[index] / totalGroupWeight)
       const path = [...parentPath, index]
 
       if (cell.type === 'Sequence') {
         if (cell.cells.length === 0) {
-          result.push({ weight: cellShare, path, note: null })
+          result.push({ path })
           return
         }
 
-        walk(cell.cells, cellShare, path)
+        walk(cell.cells, path)
         return
       }
 
-      if (cell.type === 'Note') {
-        const normalizedVelocity = Math.min(Math.max(cell.velocity, 0), 1)
-        const normalizedDelay = Math.min(Math.max(cell.delay, 0), 1)
-        const normalizedGate = Math.min(Math.max(cell.gate, 0), 1)
-        const normalizedPitch =
-          tuningLength > 0 ? normalizePitch(cell.pitch, tuningLength) : Math.trunc(cell.pitch)
-        const octave = tuningLength > 0 ? Math.floor(cell.pitch / tuningLength) : 0
-
-        result.push({
-          weight: cellShare,
-          path,
-          note: {
-            pitch: normalizedPitch,
-            octave,
-            velocity: normalizedVelocity,
-            delay: normalizedDelay,
-            gate: normalizedGate,
-          },
-        })
-        return
-      }
-
-      result.push({ weight: cellShare, path, note: null })
+      result.push({ path })
     })
   }
 
-  walk(cells, 1, [])
+  walk(cells, [])
 
   return result
 }
@@ -1183,6 +1405,8 @@ const isPathPrefix = (prefix: number[], path: number[]): boolean => {
 
   return true
 }
+
+const pathToKey = (path: number[]): string => path.join('.')
 
 function App() {
   const [currentInputMode, setCurrentInputMode] = useState<InputMode>('pitch')
@@ -1216,6 +1440,33 @@ function App() {
   )
   const [activeModulatorTab, setActiveModulatorTab] = useState(0)
   const [activeReferenceTab, setActiveReferenceTab] = useState<'commands' | 'keybindings'>('commands')
+  const [activeLibraryTab, setActiveLibraryTab] = useState<'scales' | 'tunings' | 'sequences'>(
+    'scales'
+  )
+  const [sessionReference, setSessionReference] = useState<SessionReference>({
+    commands: [],
+    keybindings: [],
+  })
+  const [librarySnapshot, setLibrarySnapshot] = useState<LibrarySnapshot>({
+    paths: {
+      library: '',
+      sequences: '',
+      tunings: '',
+    },
+    sequenceBanks: [],
+    tunings: [],
+    scales: [],
+    commands: {
+      reloadScales: '',
+      reloadChords: '',
+      libraryDirectory: '',
+    },
+    active: {
+      tuningName: '',
+      scaleName: null,
+    },
+  })
+  const [libraryLoading, setLibraryLoading] = useState(false)
   const [waveAType, setWaveAType] = useState<WaveType>('sine')
   const [waveBType, setWaveBType] = useState<WaveType>('triangle')
   const [waveAPulseWidth, setWaveAPulseWidth] = useState(0.5)
@@ -1454,6 +1705,7 @@ function App() {
 
         if (isMounted) {
           setBridgeUnavailableMessage(null)
+          setSessionReference(getSessionReference(helloResponse.payload))
         }
 
         const stateResponse = await sendBridgeRequest('state.get', {})
@@ -1471,6 +1723,20 @@ function App() {
         }
         if (isMounted) {
           setSequenceViewKeymap(getSequenceViewKeymap(keymapResponse.payload))
+        }
+
+        if (isMounted) {
+          setLibraryLoading(true)
+        }
+        const libraryResponse = await sendBridgeRequest('library.get', {})
+        const libraryError = getPayloadError(libraryResponse.payload)
+        if (libraryError) {
+          throw new Error(libraryError)
+        }
+        if (isMounted) {
+          const parsedLibrary = getLibrarySnapshot(libraryResponse.payload)
+          setLibrarySnapshot(parsedLibrary)
+          setLibraryLoading(false)
         }
 
         const welcomeResponse = await sendBridgeRequest('command.execute', { command: 'welcome' })
@@ -1497,6 +1763,7 @@ function App() {
         }
       } catch (error) {
         if (isMounted) {
+          setLibraryLoading(false)
           const message = getErrorMessage(error)
           if (message.startsWith('JUCE bridge unavailable:')) {
             setBridgeUnavailableMessage(message)
@@ -1717,6 +1984,7 @@ function App() {
     sequenceCount,
     topLevelCellCount,
     leafTopLevelIndices,
+    rootCells,
     selectedMeasureIndex,
     selectedMeasureNumerator,
     selectedMeasureDenominator,
@@ -1743,6 +2011,7 @@ function App() {
         sequenceCount: TRANSPORT_SEQUENCE_COUNT,
         topLevelCellCount: 0,
         leafTopLevelIndices: [] as number[],
+        rootCells: [] as Cell[],
         selectedMeasureIndex: 0,
         selectedMeasureNumerator: 4,
         selectedMeasureDenominator: 4,
@@ -1816,10 +2085,10 @@ function App() {
       : '4/4'
     const selectedNumerator = selectedMeasure?.time_signature?.numerator ?? 4
     const selectedDenominator = selectedMeasure?.time_signature?.denominator ?? 4
-    const flattenedLeafCells = flattenLeafCells(directCells, derivedTuningLength)
-    const topLevelIndices = flattenedLeafCells.map((leafCell) => leafCell.path[0] ?? 0)
+    const directLeafCells = collectLeafCells(directCells)
+    const topLevelIndices = directLeafCells.map((leafCell) => leafCell.path[0] ?? 0)
     const selectionPath = snapshot.editor.selected.cell
-    const selectionFlags = flattenedLeafCells.map((leafCell) =>
+    const selectionFlags = directLeafCells.map((leafCell) =>
       isPathPrefix(selectionPath, leafCell.path)
     )
 
@@ -1828,6 +2097,7 @@ function App() {
       sequenceCount: snapshot.engine.sequence_bank.length,
       topLevelCellCount: directCells.length,
       leafTopLevelIndices: topLevelIndices,
+      rootCells: directCells,
       selectedMeasureIndex: selectedIndex,
       selectedMeasureNumerator: selectedNumerator,
       selectedMeasureDenominator: selectedDenominator,
@@ -1839,7 +2109,7 @@ function App() {
       keyDisplay: snapshot.engine.key,
       baseFrequency: snapshot.engine.base_frequency,
       staffLineBandByPitch: staffLineBands,
-      leafCells: flattenedLeafCells,
+      leafCells: directLeafCells,
       selectedLeafFlags: selectionFlags,
       rulerRatios: tuningRatios,
       highlightedPitches: mappedHighlights,
@@ -1908,6 +2178,24 @@ function App() {
     []
   )
 
+  const sequenceViewReferenceBindings = useMemo(
+    () =>
+      sessionReference.keybindings
+        .filter((group) => group.component === 'SequenceView')
+        .flatMap((group) => group.bindings),
+    [sessionReference.keybindings]
+  )
+
+  const tuningHierarchyRows = useMemo(
+    () => getHierarchyRows(librarySnapshot.tunings),
+    [librarySnapshot.tunings]
+  )
+
+  const sequenceHierarchyRows = useMemo(
+    () => getHierarchyRows(librarySnapshot.sequenceBanks),
+    [librarySnapshot.sequenceBanks]
+  )
+
   const displayedLeafFlags = useMemo(() => {
     if (!isCommandMode) {
       return selectedLeafFlags
@@ -1928,6 +2216,166 @@ function App() {
     selectedLeafFlags,
     topLevelCellCount,
   ])
+
+  const selectedLeafPathKeySet = useMemo(() => {
+    const selectedKeys = new Set<string>()
+    displayedLeafFlags.forEach((isSelected, index) => {
+      if (!isSelected) {
+        return
+      }
+
+      const leafPath = leafCells[index]?.path
+      if (!leafPath) {
+        return
+      }
+
+      selectedKeys.add(pathToKey(leafPath))
+    })
+    return selectedKeys
+  }, [displayedLeafFlags, leafCells])
+
+  const selectedLeafStartPathKeySet = useMemo(() => {
+    const selectedStartKeys = new Set<string>()
+    displayedLeafFlags.forEach((isSelected, index) => {
+      if (!isSelected || (displayedLeafFlags[index - 1] ?? false)) {
+        return
+      }
+
+      const leafPath = leafCells[index]?.path
+      if (!leafPath) {
+        return
+      }
+
+      selectedStartKeys.add(pathToKey(leafPath))
+    })
+    return selectedStartKeys
+  }, [displayedLeafFlags, leafCells])
+
+  const selectedLeafEndPathKeySet = useMemo(() => {
+    const selectedEndKeys = new Set<string>()
+    displayedLeafFlags.forEach((isSelected, index) => {
+      if (!isSelected || (displayedLeafFlags[index + 1] ?? false)) {
+        return
+      }
+
+      const leafPath = leafCells[index]?.path
+      if (!leafPath) {
+        return
+      }
+
+      selectedEndKeys.add(pathToKey(leafPath))
+    })
+    return selectedEndKeys
+  }, [displayedLeafFlags, leafCells])
+
+  const renderRollCells = useCallback(
+    (cells: Cell[], parentPath: number[], sequenceDepth: number) => {
+      if (cells.length === 0) {
+        return []
+      }
+
+      const siblings = cells
+
+      return siblings.map((cell, index) => {
+        const normalizedWeight = getCellWeight(cell.weight)
+        const cellPath = [...parentPath, index]
+        const cellKey = pathToKey(cellPath)
+        const previousSibling = index > 0 ? siblings[index - 1] : null
+        const hasSequenceBoundary =
+          index > 0 && (cell.type === 'Sequence' || previousSibling?.type === 'Sequence')
+
+        if (cell.type === 'Sequence' && cell.cells.length > 0) {
+          return (
+            <div
+              key={`roll-segment-${cellKey}`}
+              className={`rollSegment${hasSequenceBoundary ? ' rollSegment-sequenceBoundary' : ''}`}
+              style={
+                {
+                  flexGrow: normalizedWeight,
+                  flexBasis: 0,
+                  '--roll-sequence-boundary-depth': sequenceDepth,
+                } as CSSProperties
+              }
+            >
+              <div className="rollBranch">{renderRollCells(cell.cells, cellPath, sequenceDepth + 1)}</div>
+            </div>
+          )
+        }
+
+        const isSelected = selectedLeafPathKeySet.has(cellKey)
+        const isSelectedStart = selectedLeafStartPathKeySet.has(cellKey)
+        const isSelectedEnd = selectedLeafEndPathKeySet.has(cellKey)
+        const normalizedVelocity =
+          cell.type === 'Note' ? clampNumber(cell.velocity, 0, 1) : 0
+        const normalizedDelay = cell.type === 'Note' ? clampNumber(cell.delay, 0, 1) : 0
+        const normalizedGate = cell.type === 'Note' ? clampNumber(cell.gate, 0, 1) : 0
+        const normalizedPitch =
+          cell.type === 'Note' && tuningLength > 0
+            ? normalizePitch(cell.pitch, tuningLength)
+            : cell.type === 'Note'
+              ? Math.trunc(cell.pitch)
+              : 0
+        const noteOctave =
+          cell.type === 'Note' && tuningLength > 0 ? Math.floor(cell.pitch / tuningLength) : 0
+
+        return (
+          <div
+            key={`roll-segment-${cellKey}`}
+            className={`rollSegment${hasSequenceBoundary ? ' rollSegment-sequenceBoundary' : ''}`}
+            style={
+              {
+                flexGrow: normalizedWeight,
+                flexBasis: 0,
+                '--roll-sequence-boundary-depth': sequenceDepth,
+              } as CSSProperties
+            }
+          >
+            <div
+              className={`rollIsland${isSelected ? ' rollIsland-selected' : ''}${isSelectedStart ? ' rollIsland-selectedStart' : ''}${isSelectedEnd ? ' rollIsland-selectedEnd' : ''}`}
+            >
+              <div className="rollIslandGrid">
+                {pitchRows.map((pitch) => (
+                  <div
+                    key={`roll-island-${cellKey}-row-${pitch}`}
+                    className={`rollRow ${(staffLineBandByPitch[pitch] ?? 0) === 0 ? 'rollRow-bandEven' : 'rollRow-bandOdd'}`}
+                  >
+                    <div className="rollRowLine" aria-hidden="true" />
+                    {cell.type === 'Note' && normalizedPitch === pitch ? (
+                      <div
+                        className={`rollNote${normalizedDelay > 0 ? ' rollNote-hasDelay' : ''}${normalizedGate < 1 ? ' rollNote-shortGate' : ''}`}
+                        style={
+                          {
+                            left: `${normalizedDelay * 100}%`,
+                            width: `max(${(1 - normalizedDelay) * normalizedGate * 100}%, 4px)`,
+                            background: `rgb(241 245 249 / ${0.18 + normalizedVelocity * 0.72})`,
+                          } as CSSProperties
+                        }
+                        aria-hidden="true"
+                      >
+                        {noteOctave !== 0 ? (
+                          <span className="rollNoteOctave mono">
+                            {noteOctave > 0 ? `+${noteOctave}` : noteOctave}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      })
+    },
+    [
+      pitchRows,
+      selectedLeafEndPathKeySet,
+      selectedLeafPathKeySet,
+      selectedLeafStartPathKeySet,
+      staffLineBandByPitch,
+      tuningLength,
+    ]
+  )
 
   const { waveAPreviewPath, waveBPreviewPath, morphedWavePreviewPath } = useMemo(() => {
     const width = 420
@@ -2358,6 +2806,65 @@ function App() {
     setOpenWaveMenu(null)
   }, [])
 
+  const refreshLibraryView = useCallback(async (): Promise<void> => {
+    if (bridgeUnavailableMessage !== null) {
+      return
+    }
+
+    setLibraryLoading(true)
+    try {
+      const libraryResponse = await sendBridgeRequest('library.get', {})
+      const libraryError = getPayloadError(libraryResponse.payload)
+      if (libraryError) {
+        throw new Error(libraryError)
+      }
+      const parsedLibrary = getLibrarySnapshot(libraryResponse.payload)
+      setLibrarySnapshot(parsedLibrary)
+    } catch (error) {
+      setStatusMessage(`Library refresh failed: ${getErrorMessage(error)}`)
+      setStatusLevel('error')
+    } finally {
+      setLibraryLoading(false)
+    }
+  }, [bridgeUnavailableMessage, sendBridgeRequest])
+
+  const runLibraryCommand = useCallback(
+    async (command: string): Promise<void> => {
+      if (!command || bridgeUnavailableMessage !== null) {
+        return
+      }
+
+      try {
+        await executeBackendCommand(command)
+      } catch (error) {
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+      }
+    },
+    [bridgeUnavailableMessage, executeBackendCommand]
+  )
+
+  useEffect(() => {
+    if (libraryLoading) {
+      return
+    }
+
+    if (activeLibraryTab === 'tunings' && librarySnapshot.tunings.length === 0) {
+      void refreshLibraryView()
+      return
+    }
+
+    if (activeLibraryTab === 'sequences' && librarySnapshot.sequenceBanks.length === 0) {
+      void refreshLibraryView()
+    }
+  }, [
+    activeLibraryTab,
+    libraryLoading,
+    librarySnapshot.sequenceBanks.length,
+    librarySnapshot.tunings.length,
+    refreshLibraryView,
+  ])
+
   return (
     <div className="app">
       <header className="header">
@@ -2427,57 +2934,10 @@ function App() {
 
             <div className="pianoRoll" role="img" aria-label="Single octave piano roll">
               <div className="rollIslands" aria-hidden="true">
-                {(leafCells.length > 0 ? leafCells : [{ weight: 1, path: [0], note: null }]).map(
-                  (leafCell, index) => {
-                    const isSelected = displayedLeafFlags[index] ?? false
-                    const isSelectedStart = isSelected && !(displayedLeafFlags[index - 1] ?? false)
-                    const isSelectedEnd = isSelected && !(displayedLeafFlags[index + 1] ?? false)
-
-                    return (
-                      <div
-                        key={`roll-island-${index}`}
-                        className={`rollIsland${isSelected ? ' rollIsland-selected' : ''}${isSelectedStart ? ' rollIsland-selectedStart' : ''}${isSelectedEnd ? ' rollIsland-selectedEnd' : ''}`}
-                        style={
-                          {
-                            flexGrow: leafCell.weight,
-                            flexBasis: 0,
-                          } as CSSProperties
-                        }
-                      >
-                        <div className="rollIslandGrid">
-                          {pitchRows.map((pitch) => (
-                            <div
-                              key={`roll-island-${index}-row-${pitch}`}
-                              className={`rollRow ${(staffLineBandByPitch[pitch] ?? 0) === 0 ? 'rollRow-bandEven' : 'rollRow-bandOdd'}`}
-                            >
-                              <div className="rollRowLine" aria-hidden="true" />
-                              {leafCell.note?.pitch === pitch ? (
-                                <div
-                                  className={`rollNote${leafCell.note.delay > 0 ? ' rollNote-hasDelay' : ''}${leafCell.note.gate < 1 ? ' rollNote-shortGate' : ''}`}
-                                  style={
-                                    {
-                                      left: `${leafCell.note.delay * 100}%`,
-                                      width: `max(${(1 - leafCell.note.delay) * leafCell.note.gate * 100}%, 4px)`,
-                                      background: `rgb(241 245 249 / ${0.18 + leafCell.note.velocity * 0.72})`,
-                                    } as CSSProperties
-                                  }
-                                  aria-hidden="true"
-                                >
-                                  {leafCell.note.octave !== 0 ? (
-                                    <span className="rollNoteOctave mono">
-                                      {leafCell.note.octave > 0
-                                        ? `+${leafCell.note.octave}`
-                                        : leafCell.note.octave}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  }
+                {renderRollCells(
+                  rootCells.length > 0 ? rootCells : [{ type: 'Rest', weight: 1 }],
+                  [],
+                  0
                 )}
               </div>
               {playheadPhase !== null ? (
@@ -2613,7 +3073,7 @@ function App() {
       </footer>
       <section className="bottomModules" aria-label="Temporary module area">
         <div className="bottomModuleRow">
-          <article className="bottomModule bottomModule-square">
+          <article className="bottomModule bottomModule-rowItem">
             <p className="bottomModuleLabel">Sequence Bank</p>
             <div className="sequenceBankGrid" role="grid" aria-label="Sequence bank">
               {sequenceBankCells.map(({ index, row, column }) => {
@@ -2636,7 +3096,7 @@ function App() {
               })}
             </div>
           </article>
-          <article className="bottomModule bottomModule-square bottomModule-modulators">
+          <article className="bottomModule bottomModule-rowItem bottomModule-modulators">
             <div className="bottomModuleHeader">
               <p className="bottomModuleLabel">Modulators</p>
               <div className="modTabs" role="tablist" aria-label="Modulator instances">
@@ -3049,7 +3509,7 @@ function App() {
 
             </div>
           </article>
-          <article className="bottomModule bottomModule-reference">
+          <article className="bottomModule bottomModule-rowItem bottomModule-reference">
             <div className="bottomModuleHeader">
               <p className="bottomModuleLabel">Reference</p>
               <div className="referenceTabs" role="tablist" aria-label="Reference tabs">
@@ -3075,16 +3535,223 @@ function App() {
             </div>
             <div className="referenceBody">
               {activeReferenceTab === 'commands' ? (
-                <p className="referencePlaceholder">Command reference placeholder</p>
+                sessionReference.commands.length > 0 ? (
+                  <div className="referenceCommands">
+                    {sessionReference.commands.map((command) => (
+                      <div key={`reference-command-${command.id}`} className="referenceCommandRow">
+                        <p className="referenceCommandId mono">{command.id}</p>
+                        <p className="referenceCommandSignature mono">{command.signature}</p>
+                        <p className="referenceCommandDescription">{command.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="referencePlaceholder">No command reference data received.</p>
+                )
               ) : (
-                <p className="referencePlaceholder">Keybindings reference placeholder</p>
+                sequenceViewReferenceBindings.length > 0 ? (
+                  <div className="referenceKeybindings">
+                    <div className="referenceModeLegend">
+                      <span className="referenceModeBadge mono">[p] Pitch</span>
+                      <span className="referenceModeBadge mono">[v] Velocity</span>
+                      <span className="referenceModeBadge mono">[d] Delay</span>
+                      <span className="referenceModeBadge mono">[g] Gate</span>
+                      <span className="referenceModeBadge mono">[c] Scale</span>
+                    </div>
+                    <div className="referenceKeybindingGroup">
+                      <table className="referenceKeybindingTable">
+                        <thead>
+                          <tr>
+                            <th className="mono">Key Chord</th>
+                            <th className="mono">Command</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sequenceViewReferenceBindings.map((binding, index) => (
+                            <tr key={`reference-keybinding-sequence-view-${index}`}>
+                              <td className="referenceKeybindingKey mono">{binding.key}</td>
+                              <td className="referenceKeybindingCommand mono">{binding.command}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="referencePlaceholder">No SequenceView keybindings received.</p>
+                )
               )}
             </div>
           </article>
+          <article className="bottomModule bottomModule-rowItem bottomModule-library">
+          <div className="bottomModuleHeader">
+            <p className="bottomModuleLabel">Library View</p>
+            <div className="libraryActions">
+              <button
+                type="button"
+                className="libraryActionButton mono"
+                onClick={() => {
+                  void refreshLibraryView()
+                }}
+                disabled={libraryLoading}
+              >
+                {libraryLoading ? 'Loading…' : 'Refresh'}
+              </button>
+            </div>
+          </div>
+          <div className="libraryTabs" role="tablist" aria-label="Library tabs">
+            <button
+              type="button"
+              className={`libraryTab${activeLibraryTab === 'scales' ? ' libraryTab-active' : ''}`}
+              role="tab"
+              aria-selected={activeLibraryTab === 'scales'}
+              onClick={() => setActiveLibraryTab('scales')}
+            >
+              Scales
+            </button>
+            <button
+              type="button"
+              className={`libraryTab${activeLibraryTab === 'tunings' ? ' libraryTab-active' : ''}`}
+              role="tab"
+              aria-selected={activeLibraryTab === 'tunings'}
+              onClick={() => setActiveLibraryTab('tunings')}
+            >
+              Tunings
+            </button>
+            <button
+              type="button"
+              className={`libraryTab${activeLibraryTab === 'sequences' ? ' libraryTab-active' : ''}`}
+              role="tab"
+              aria-selected={activeLibraryTab === 'sequences'}
+              onClick={() => setActiveLibraryTab('sequences')}
+            >
+              Sequences Saved
+            </button>
+          </div>
+          <div className="libraryList" role="list">
+            {activeLibraryTab === 'scales' ? (
+              librarySnapshot.scales.length > 0 ? (
+                librarySnapshot.scales.map((scale, index) => {
+                  const isActive =
+                    librarySnapshot.active.scaleName !== null &&
+                    scale.name.toLowerCase() === librarySnapshot.active.scaleName.toLowerCase()
+
+                  return (
+                    <button
+                      key={`library-scale-${index}-${scale.name}`}
+                      type="button"
+                      className={`libraryItem${isActive ? ' libraryItem-active' : ''}`}
+                      onClick={() => {
+                        void runLibraryCommand(
+                          scale.command || `set scale ${quoteCommandArg(scale.name)}`
+                        )
+                      }}
+                    >
+                      <span className="libraryItemName mono">{scale.name}</span>
+                      <span className="libraryItemMeta mono">{scale.command}</span>
+                    </button>
+                  )
+                })
+              ) : (
+                <p className="libraryPlaceholder">No scales loaded.</p>
+              )
+            ) : null}
+
+            {activeLibraryTab === 'tunings' ? (
+              tuningHierarchyRows.length > 0 ? (
+                tuningHierarchyRows.map((row) => {
+                  if (row.kind === 'directory') {
+                    return (
+                      <div
+                        key={row.key}
+                        className="libraryDirectoryRow mono"
+                        style={{ paddingLeft: `${row.depth * 0.9 + 0.4}rem` }}
+                      >
+                        <span className="libraryDirectoryCaret" aria-hidden="true">
+                          ▸
+                        </span>
+                        <span className="libraryDirectoryName">{row.label}</span>
+                      </div>
+                    )
+                  }
+
+                  const tuning = row.entry
+                  if (!tuning) {
+                    return null
+                  }
+                  const isActive =
+                    tuning.name.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase() ||
+                    tuning.stem.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase()
+
+                  return (
+                    <button
+                      key={row.key}
+                      type="button"
+                      className={`libraryItem${isActive ? ' libraryItem-active' : ''}`}
+                      style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
+                      onClick={() => {
+                        void runLibraryCommand(
+                          tuning.command || `load tuning ${quoteCommandArg(tuning.name)}`
+                        )
+                      }}
+                    >
+                      <span className="libraryItemName mono">{row.label}</span>
+                      <span className="libraryItemMeta mono">{tuning.path}</span>
+                    </button>
+                  )
+                })
+              ) : (
+                <p className="libraryPlaceholder">No tuning files found.</p>
+              )
+            ) : null}
+
+            {activeLibraryTab === 'sequences' ? (
+              sequenceHierarchyRows.length > 0 ? (
+                sequenceHierarchyRows.map((row) => {
+                  if (row.kind === 'directory') {
+                    return (
+                      <div
+                        key={row.key}
+                        className="libraryDirectoryRow mono"
+                        style={{ paddingLeft: `${row.depth * 0.9 + 0.4}rem` }}
+                      >
+                        <span className="libraryDirectoryCaret" aria-hidden="true">
+                          ▸
+                        </span>
+                        <span className="libraryDirectoryName">{row.label}</span>
+                      </div>
+                    )
+                  }
+
+                  const sequenceBank = row.entry
+                  if (!sequenceBank) {
+                    return null
+                  }
+                  return (
+                    <button
+                      key={row.key}
+                      type="button"
+                      className="libraryItem"
+                      style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
+                      onClick={() => {
+                        void runLibraryCommand(
+                          sequenceBank.command ||
+                            `load sequenceBank ${quoteCommandArg(sequenceBank.name)}`
+                        )
+                      }}
+                    >
+                      <span className="libraryItemName mono">{row.label}</span>
+                      <span className="libraryItemMeta mono">{sequenceBank.path}</span>
+                    </button>
+                  )
+                })
+              ) : (
+                <p className="libraryPlaceholder">No saved sequences found.</p>
+              )
+            ) : null}
+          </div>
+          </article>
         </div>
-        <article className="bottomModule bottomModule-library">
-          <p className="bottomModuleLabel">Library View</p>
-        </article>
       </section>
     </div>
   )
