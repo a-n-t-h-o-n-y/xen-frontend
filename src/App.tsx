@@ -21,6 +21,24 @@ const MAX_COMMAND_HISTORY = 100
 const DEFAULT_TUNING_LENGTH = 12
 const TRANSPORT_SEQUENCE_COUNT = 16
 const DEFAULT_TRANSPORT_BPM = 120
+const BG_SEQUENCE_COLORS = [
+  '245 158 11',
+  '14 165 233',
+  '244 63 94',
+  '34 197 94',
+  '168 85 247',
+  '249 115 22',
+  '236 72 153',
+  '45 212 191',
+  '251 191 36',
+  '96 165 250',
+  '251 113 133',
+  '74 222 128',
+  '196 181 253',
+  '251 146 60',
+  '244 114 182',
+  '94 234 212',
+]
 
 const isApplePlatform = (): boolean => {
   if (typeof navigator === 'undefined') {
@@ -165,6 +183,20 @@ type Measure = {
   }
 }
 
+type NoteSpanIR = {
+  sequenceIndex: number
+  pitch: number
+  x: number
+  width: number
+  velocity: number
+}
+
+type BgOverlayState = {
+  sequenceIndex: number
+  notes: NoteSpanIR[]
+  triggerPhase: number | null
+}
+
 type Scale = {
   name: string
   tuning_length: number
@@ -200,6 +232,11 @@ type TransportState = {
   active: boolean[]
   phase: number[]
   bpm: number
+}
+
+type SyncedTransportPhases = {
+  wrapped: number[]
+  unwrapped: number[]
 }
 
 type ModTarget = 'pitch' | 'velocity' | 'delay' | 'gate' | 'weights'
@@ -358,11 +395,29 @@ const LFO_PHASE_OFFSET_MAX = 0.5
 const clampNumber = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 
+const normalizePhase = (value: number): number => ((value % 1) + 1) % 1
+
 const roundByStep = (value: number, step: number): number =>
   step <= 0 ? value : Math.round(value / step) * step
 
-const toNormalizedPhase = (phaseOffset: number): number =>
-  ((phaseOffset % 1) + 1) % 1
+const toNormalizedPhase = (phaseOffset: number): number => normalizePhase(phaseOffset)
+
+const getMeasureLoopQuarterNotes = (measure: Measure | null): number => {
+  if (!measure) {
+    return 0
+  }
+
+  const numerator = measure.time_signature.numerator
+  const denominator = measure.time_signature.denominator
+  if (numerator <= 0 || denominator <= 0) {
+    return 0
+  }
+
+  return numerator * (4 / denominator)
+}
+
+const getSequenceOverlayColor = (sequenceIndex: number, alpha: number): string =>
+  `rgb(${BG_SEQUENCE_COLORS[sequenceIndex % BG_SEQUENCE_COLORS.length]} / ${clampNumber(alpha, 0, 1)})`
 
 const frequencyToRatio = (frequency: number): number => {
   const clamped = clampNumber(frequency, LFO_FREQUENCY_MIN, LFO_FREQUENCY_MAX)
@@ -1458,6 +1513,139 @@ const collectNotePitches = (cell: Cell): number[] => {
 
 const getCellWeight = (weight: number): number => (weight > 0 ? weight : 1)
 
+const flattenMeasureToNoteIR = (measure: Measure, sequenceIndex: number): NoteSpanIR[] => {
+  const noteSpans: NoteSpanIR[] = []
+
+  const walkCell = (cell: Cell, segmentStart: number, segmentWidth: number): void => {
+    if (segmentWidth <= 0) {
+      return
+    }
+
+    if (cell.type === 'Rest') {
+      return
+    }
+
+    if (cell.type === 'Note') {
+      const noteDelay = clampNumber(cell.delay, 0, 1)
+      const noteGate = clampNumber(cell.gate, 0, 1)
+      const noteStart = segmentStart + noteDelay * segmentWidth
+      const noteEnd = noteStart + Math.max(0, (1 - noteDelay) * noteGate * segmentWidth)
+      const clampedStart = clampNumber(noteStart, 0, 1)
+      const clampedEnd = clampNumber(noteEnd, 0, 1)
+      const clampedWidth = clampedEnd - clampedStart
+      if (clampedWidth <= 0) {
+        return
+      }
+
+      noteSpans.push({
+        sequenceIndex,
+        pitch: cell.pitch,
+        x: clampedStart,
+        width: clampedWidth,
+        velocity: clampNumber(cell.velocity, 0, 1),
+      })
+      return
+    }
+
+    if (cell.cells.length === 0) {
+      return
+    }
+
+    const totalWeight = cell.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
+    if (totalWeight <= 0) {
+      return
+    }
+
+    let cursor = segmentStart
+    for (const child of cell.cells) {
+      const childWidth = (segmentWidth * getCellWeight(child.weight)) / totalWeight
+      walkCell(child, cursor, childWidth)
+      cursor += childWidth
+    }
+  }
+
+  walkCell(measure.cell, 0, 1)
+  return noteSpans
+}
+
+const windowBackgroundNotes = (
+  bgIr: NoteSpanIR[],
+  ratioFgToBg: number,
+  selectedPhase: number,
+  bgPhase: number
+): NoteSpanIR[] => {
+  if (!Number.isFinite(ratioFgToBg) || ratioFgToBg <= 0) {
+    return []
+  }
+
+  const bgPhaseAtSelectedStart = bgPhase - selectedPhase * ratioFgToBg
+  const bgWindowStart = bgPhaseAtSelectedStart
+  const bgWindowEnd = bgPhaseAtSelectedStart + ratioFgToBg
+  const projectedNotes: NoteSpanIR[] = []
+
+  for (const note of bgIr) {
+    const noteStart = clampNumber(note.x, 0, 1)
+    const noteEnd = clampNumber(note.x + note.width, 0, 1)
+    if (noteEnd <= noteStart) {
+      continue
+    }
+
+    const firstLoop = Math.floor(bgWindowStart - noteEnd) + 1
+    const lastLoop = Math.ceil(bgWindowEnd - noteStart) - 1
+
+    for (let loopIndex = firstLoop; loopIndex <= lastLoop; loopIndex += 1) {
+      const loopStart = loopIndex + noteStart
+      const loopEnd = loopIndex + noteEnd
+      const overlapStart = Math.max(loopStart, bgWindowStart)
+      const overlapEnd = Math.min(loopEnd, bgWindowEnd)
+      if (overlapEnd <= overlapStart) {
+        continue
+      }
+
+      const projectedStart = clampNumber(
+        (overlapStart - bgPhaseAtSelectedStart) / ratioFgToBg,
+        0,
+        1
+      )
+      const projectedEnd = clampNumber((overlapEnd - bgPhaseAtSelectedStart) / ratioFgToBg, 0, 1)
+      const projectedWidth = projectedEnd - projectedStart
+      if (projectedWidth <= 0) {
+        continue
+      }
+
+      projectedNotes.push({
+        sequenceIndex: note.sequenceIndex,
+        pitch: note.pitch,
+        x: projectedStart,
+        width: projectedWidth,
+        velocity: note.velocity,
+      })
+    }
+  }
+
+  return projectedNotes
+}
+
+const getProjectedBgTriggerPhase = (
+  ratioFgToBg: number,
+  selectedPhase: number,
+  bgPhase: number
+): number | null => {
+  if (!Number.isFinite(ratioFgToBg) || ratioFgToBg <= 0) {
+    return null
+  }
+
+  const bgPhaseAtSelectedStart = bgPhase - selectedPhase * ratioFgToBg
+  const eps = 1e-9
+  const triggerOrdinal = Math.ceil(bgPhaseAtSelectedStart - eps)
+  const projected = (triggerOrdinal - bgPhaseAtSelectedStart) / ratioFgToBg
+  if (!Number.isFinite(projected) || projected < 0 || projected >= 1) {
+    return null
+  }
+
+  return projected
+}
+
 type LeafCell = {
   path: number[]
 }
@@ -1669,6 +1857,10 @@ function App() {
   const animationFrameRef = useRef<number | null>(null)
   const lastAnimationFrameMsRef = useRef<number | null>(null)
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
+  const [syncedTransportPhases, setSyncedTransportPhases] = useState<SyncedTransportPhases>({
+    wrapped: Array(TRANSPORT_SEQUENCE_COUNT).fill(0),
+    unwrapped: Array(TRANSPORT_SEQUENCE_COUNT).fill(0),
+  })
   const [activeSequenceFlags, setActiveSequenceFlags] = useState<boolean[]>(
     Array(TRANSPORT_SEQUENCE_COUNT).fill(false)
   )
@@ -1886,6 +2078,22 @@ function App() {
                 return next
               })
               transportRef.current.phase[sequenceIndex] = 0
+              setSyncedTransportPhases((previous) => {
+                if (
+                  (previous.wrapped[sequenceIndex] ?? 0) === 0 &&
+                  (previous.unwrapped[sequenceIndex] ?? 0) === 0
+                ) {
+                  return previous
+                }
+                const nextWrapped = [...previous.wrapped]
+                const nextUnwrapped = [...previous.unwrapped]
+                nextWrapped[sequenceIndex] = 0
+                nextUnwrapped[sequenceIndex] = 0
+                return {
+                  wrapped: nextWrapped,
+                  unwrapped: nextUnwrapped,
+                }
+              })
               if (sequenceIndex === selectedMeasureIndexRef.current) {
                 setPlayheadPhase(null)
               }
@@ -1898,6 +2106,55 @@ function App() {
               }
 
               const phases = Array.isArray(payload.phases) ? payload.phases : []
+              setSyncedTransportPhases((previous) => {
+                const nextWrapped = [...previous.wrapped]
+                const nextUnwrapped = [...previous.unwrapped]
+                let changed = false
+                for (const rawPhaseEntry of phases) {
+                  const phaseEntry = asRecord(rawPhaseEntry)
+                  if (!phaseEntry) {
+                    continue
+                  }
+
+                  const sequenceIndex = toSequenceIndex(phaseEntry.sequence_index)
+                  if (sequenceIndex === null) {
+                    continue
+                  }
+
+                  const phase = phaseEntry.phase
+                  if (typeof phase !== 'number' || !Number.isFinite(phase)) {
+                    continue
+                  }
+
+                  const normalizedPhase = normalizePhase(phase)
+                  const previousWrapped = previous.wrapped[sequenceIndex] ?? 0
+                  const previousUnwrapped = previous.unwrapped[sequenceIndex] ?? 0
+                  let delta = normalizedPhase - previousWrapped
+                  if (delta > 0.5) {
+                    delta -= 1
+                  } else if (delta < -0.5) {
+                    delta += 1
+                  }
+                  const nextUnwrappedPhase = previousUnwrapped + delta
+
+                  if (
+                    nextWrapped[sequenceIndex] === normalizedPhase &&
+                    nextUnwrapped[sequenceIndex] === nextUnwrappedPhase
+                  ) {
+                    continue
+                  }
+                  nextWrapped[sequenceIndex] = normalizedPhase
+                  nextUnwrapped[sequenceIndex] = nextUnwrappedPhase
+                  changed = true
+                }
+
+                return changed
+                  ? {
+                      wrapped: nextWrapped,
+                      unwrapped: nextUnwrapped,
+                    }
+                  : previous
+              })
               for (const rawPhaseEntry of phases) {
                 const phaseEntry = asRecord(rawPhaseEntry)
                 if (!phaseEntry) {
@@ -1914,7 +2171,7 @@ function App() {
                   continue
                 }
 
-                const normalizedPhase = ((phase % 1) + 1) % 1
+                const normalizedPhase = normalizePhase(phase)
                 transportRef.current.phase[sequenceIndex] = normalizedPhase
               }
 
@@ -2269,6 +2526,9 @@ function App() {
 
   const {
     tuningLength,
+    sequenceBank,
+    selectedMeasure,
+    selectedLoopQuarterNotes,
     sequenceCount,
     patternScopeCellCount,
     leafPatternScopeIndices,
@@ -2299,6 +2559,9 @@ function App() {
       )
       return {
         tuningLength: DEFAULT_TUNING_LENGTH,
+        sequenceBank: [] as Measure[],
+        selectedMeasure: null as Measure | null,
+        selectedLoopQuarterNotes: 4,
         sequenceCount: TRANSPORT_SEQUENCE_COUNT,
         patternScopeCellCount: 0,
         leafPatternScopeIndices: [] as number[],
@@ -2409,6 +2672,9 @@ function App() {
 
     return {
       tuningLength: derivedTuningLength,
+      sequenceBank: snapshot.engine.sequence_bank,
+      selectedMeasure,
+      selectedLoopQuarterNotes: getMeasureLoopQuarterNotes(selectedMeasure),
       sequenceCount: snapshot.engine.sequence_bank.length,
       patternScopeCellCount: patternScopeCells.length,
       leafPatternScopeIndices: scopeIndices,
@@ -2448,6 +2714,78 @@ function App() {
 
     setPlayheadPhase(null)
   }, [selectedMeasureDenominator, selectedMeasureIndex, selectedMeasureNumerator])
+
+  const flattenedNoteIrBySequence = useMemo(() => {
+    const flattened = Array.from({ length: TRANSPORT_SEQUENCE_COUNT }, () => [] as NoteSpanIR[])
+    const boundedLength = Math.min(sequenceBank.length, TRANSPORT_SEQUENCE_COUNT)
+    for (let index = 0; index < boundedLength; index += 1) {
+      const measure = sequenceBank[index]
+      if (!measure) {
+        continue
+      }
+      flattened[index] = flattenMeasureToNoteIR(measure, index)
+    }
+    return flattened
+  }, [sequenceBank])
+
+  const backgroundOverlayStates = useMemo((): BgOverlayState[] => {
+    if (!snapshot || !selectedMeasure || selectedLoopQuarterNotes <= 0) {
+      return []
+    }
+
+    if (!activeSequenceFlags[selectedMeasureIndex]) {
+      return []
+    }
+
+    const selectedPhase = syncedTransportPhases.unwrapped[selectedMeasureIndex] ?? 0
+    const overlays: BgOverlayState[] = []
+
+    for (let sequenceIndex = 0; sequenceIndex < TRANSPORT_SEQUENCE_COUNT; sequenceIndex += 1) {
+      if (sequenceIndex === selectedMeasureIndex || !activeSequenceFlags[sequenceIndex]) {
+        continue
+      }
+
+      const bgMeasure = sequenceBank[sequenceIndex]
+      if (!bgMeasure) {
+        continue
+      }
+
+      const bgLoopQuarterNotes = getMeasureLoopQuarterNotes(bgMeasure)
+      if (bgLoopQuarterNotes <= 0) {
+        continue
+      }
+
+      const ratioFgToBg = selectedLoopQuarterNotes / bgLoopQuarterNotes
+      const bgPhase = syncedTransportPhases.unwrapped[sequenceIndex] ?? 0
+      const projectedNotes = windowBackgroundNotes(
+        flattenedNoteIrBySequence[sequenceIndex] ?? [],
+        ratioFgToBg,
+        selectedPhase,
+        bgPhase
+      )
+      const triggerPhase = getProjectedBgTriggerPhase(ratioFgToBg, selectedPhase, bgPhase)
+      if (projectedNotes.length === 0 && triggerPhase === null) {
+        continue
+      }
+
+      overlays.push({
+        sequenceIndex,
+        notes: projectedNotes,
+        triggerPhase,
+      })
+    }
+
+    return overlays
+  }, [
+    activeSequenceFlags,
+    flattenedNoteIrBySequence,
+    syncedTransportPhases,
+    selectedLoopQuarterNotes,
+    selectedMeasure,
+    selectedMeasureIndex,
+    sequenceBank,
+    snapshot,
+  ])
 
   const pitchRows = useMemo(
     () => Array.from({ length: tuningLength }, (_, index) => tuningLength - 1 - index),
@@ -2704,7 +3042,9 @@ function App() {
                 } as CSSProperties
               }
             >
-              <div className="rollBranch">{renderRollCells(cell.cells, cellPath, sequenceDepth + 1)}</div>
+              <div className="rollBranch">
+                {renderRollCells(cell.cells, cellPath, sequenceDepth + 1)}
+              </div>
             </div>
           )
         }
@@ -3963,13 +4303,60 @@ function App() {
             </aside>
 
             <div className="pianoRoll" role="img" aria-label="Single octave piano roll">
+              <div className="rollBackgroundOverlay" aria-hidden="true">
+                {backgroundOverlayStates.map((overlay) => (
+                  <div
+                    key={`roll-bg-overlay-${overlay.sequenceIndex}`}
+                    className="rollBackgroundLayer"
+                    aria-hidden="true"
+                  >
+                    {overlay.notes.map((note, noteIndex) => {
+                      const normalizedPitch = normalizePitch(note.pitch, tuningLength)
+                      const rowFromTop = tuningLength - 1 - normalizedPitch
+                      const rowHeightPercent = 100 / Math.max(tuningLength, 1)
+                      const rowTopPercent = rowFromTop * rowHeightPercent
+                      const bgNoteHeightPercent = rowHeightPercent * 0.76
+                      const bgNoteTopPercent = rowTopPercent + (rowHeightPercent - bgNoteHeightPercent) / 2
+                      const noteAlpha = 0.06 + note.velocity * 0.14
+
+                      return (
+                        <div
+                          key={`roll-bg-note-${overlay.sequenceIndex}-${noteIndex}`}
+                          className="rollBgNote"
+                          style={
+                              {
+                              left: `calc(${note.x * 100}% + 4px)`,
+                              width: `max(calc(${note.width * 100}% - 9px), 1px)`,
+                              top: `${bgNoteTopPercent}%`,
+                              height: `${bgNoteHeightPercent}%`,
+                              background: getSequenceOverlayColor(overlay.sequenceIndex, noteAlpha),
+                              borderColor: getSequenceOverlayColor(overlay.sequenceIndex, 0.24),
+                            } as CSSProperties
+                          }
+                        />
+                      )
+                    })}
+                    {overlay.triggerPhase !== null ? (
+                      <div
+                        className="rollBgTrigger"
+                        style={
+                          {
+                            left: `${overlay.triggerPhase * 100}%`,
+                            background: getSequenceOverlayColor(overlay.sequenceIndex, 0.64),
+                          } as CSSProperties
+                        }
+                      />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
               <div className="rollIslands" aria-hidden="true">
                 {renderRollCells(
                   rootCells.length > 0 ? rootCells : [{ type: 'Rest', weight: 1 }],
                   [],
                   0
                 )}
-              </div>
+                </div>
               {playheadPhase !== null ? (
                 <div
                   className="rollPlayhead"
