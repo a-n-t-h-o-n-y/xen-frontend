@@ -1,1842 +1,92 @@
-import {
-  type CSSProperties,
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { HeaderSection } from './app/sections/HeaderSection'
+import { BottomModulesSection } from './app/sections/BottomModulesSection'
+import { useBridgeSession } from './app/hooks/useBridgeSession'
+import { useCommandState } from './app/hooks/useCommandState'
+import { useHeaderEditing } from './app/hooks/useHeaderEditing'
+import { useLibraryPanelState } from './app/hooks/useLibraryPanelState'
+import { useModulatorPanelState } from './app/hooks/useModulatorPanelState'
+import { useSequencerRollState } from './app/hooks/useSequencerRollState'
+import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
+import { SequencerSection } from './app/sections/SequencerSection'
+import { StatusSection } from './app/sections/StatusSection'
 import {
-  addXenBridgeListener,
-  getXenBridgeRequest,
-  removeXenBridgeListener,
-} from './bridge/juceBridge'
-
-const BRIDGE_PROTOCOL = 'xen.bridge.v1'
-const FRONTEND_APP = 'xen-frontend-skeleton'
-const FRONTEND_VERSION = '0.2.0'
-const MAX_COMMAND_HISTORY = 100
-const DEFAULT_TUNING_LENGTH = 12
-const TRANSPORT_SEQUENCE_COUNT = 16
-const DEFAULT_TRANSPORT_BPM = 120
-const BG_SEQUENCE_COLORS = [
-  '245 158 11',
-  '14 165 233',
-  '244 63 94',
-  '34 197 94',
-  '168 85 247',
-  '249 115 22',
-  '236 72 153',
-  '45 212 191',
-  '251 191 36',
-  '96 165 250',
-  '251 113 133',
-  '74 222 128',
-  '196 181 253',
-  '251 146 60',
-  '244 114 182',
-  '94 234 212',
-]
-
-const isApplePlatform = (): boolean => {
-  if (typeof navigator === 'undefined') {
-    return false
-  }
-
-  const userAgentData = (navigator as Navigator & { userAgentData?: { platform?: string } })
-    .userAgentData
-  const platform = userAgentData?.platform ?? navigator.platform ?? ''
-  if (/mac|iphone|ipad|ipod/i.test(platform)) {
-    return true
-  }
-
-  const userAgent = navigator.userAgent ?? ''
-  return /macintosh|iphone|ipad|ipod/i.test(userAgent)
-}
-
-const usesMetaForCommand = isApplePlatform()
-
-type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
-type TranslateDirection = 'up' | 'down'
-type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
-
-type EnvelopePayload = Record<string, unknown>
-type SequenceViewKeymap = Record<string, string>
-type PatternPrefix = {
-  offset: number
-  intervals: number[]
-}
-
-type CommandReferenceEntry = {
-  id: string
-  signature: string
-  description: string
-}
-
-type KeybindingReferenceEntry = {
-  key: string
-  command: string
-}
-
-type KeybindingReferenceGroup = {
-  component: string
-  bindings: KeybindingReferenceEntry[]
-}
-
-type SessionReference = {
-  commands: CommandReferenceEntry[]
-  keybindings: KeybindingReferenceGroup[]
-}
-
-type LibraryCommandEntry = {
-  name: string
-  stem: string
-  path: string
-  command: string
-  relativePath: string
-  description: string
-  intervals: number[]
-  octave: number | null
-  noteCount: number | null
-}
-
-type LibraryScaleEntry = {
-  name: string
-  command: string
-  intervals: number[]
-}
-
-type LibraryChordEntry = {
-  name: string
-  command: string
-  intervals: number[]
-}
-
-type LibraryHierarchyRow = {
-  kind: 'directory' | 'file'
-  key: string
-  label: string
-  depth: number
-  entry?: LibraryCommandEntry
-}
-
-type LibrarySnapshot = {
-  paths: {
-    library: string
-    sequences: string
-    tunings: string
-  }
-  sequenceBanks: LibraryCommandEntry[]
-  tunings: LibraryCommandEntry[]
-  scales: LibraryScaleEntry[]
-  chords: LibraryChordEntry[]
-  commands: {
-    reloadScales: string
-    reloadChords: string
-    libraryDirectory: string
-  }
-  active: {
-    tuningName: string
-    scaleName: string | null
-  }
-}
-
-type TuningSortMode = 'name' | 'noteCount' | 'octave'
-
-type Envelope = {
-  protocol: string
-  type: 'request' | 'response' | 'event'
-  name: string
-  request_id?: string
-  payload: EnvelopePayload
-}
-
-type NoteCell = {
-  type: 'Note'
-  weight: number
-  pitch: number
-  velocity: number
-  delay: number
-  gate: number
-}
-
-type RestCell = {
-  type: 'Rest'
-  weight: number
-}
-
-type SequenceCell = {
-  type: 'Sequence'
-  weight: number
-  cells: Cell[]
-}
-
-type Cell = NoteCell | RestCell | SequenceCell
-
-type Measure = {
-  cell: Cell
-  time_signature: {
-    numerator: number
-    denominator: number
-  }
-}
-
-type NoteSpanIR = {
-  sequenceIndex: number
-  pitch: number
-  x: number
-  width: number
-  velocity: number
-}
-
-type BgOverlayState = {
-  sequenceIndex: number
-  notes: NoteSpanIR[]
-  triggerPhase: number | null
-}
-
-type Scale = {
-  name: string
-  tuning_length: number
-  intervals: number[]
-  mode: number
-}
-
-type UiStateSnapshot = {
-  snapshot_version: number
-  engine: {
-    sequence_bank: Measure[]
-    sequence_names: string[]
-    tuning: {
-      intervals: number[]
-      octave: number
-    }
-    tuning_name: string
-    scale: Scale | null
-    key: number
-    scale_translate_direction: TranslateDirection
-    base_frequency: number
-  }
-  editor: {
-    selected: {
-      measure: number
-      cell: number[]
-    }
-    input_mode: InputMode
-  }
-}
-
-type TransportState = {
-  active: boolean[]
-  phase: number[]
-  bpm: number
-}
-
-type SyncedTransportPhases = {
-  wrapped: number[]
-  unwrapped: number[]
-}
-
-type ModTarget = 'pitch' | 'velocity' | 'delay' | 'gate' | 'weights'
-type WaveType = 'sine' | 'triangle' | 'sawtooth_up' | 'sawtooth_down' | 'square'
-
-type ConstantModulator = {
-  type: 'constant'
-  value: number
-}
-
-type OscillatorModulator = {
-  type: 'sine' | 'triangle' | 'sawtooth_up' | 'sawtooth_down'
-  frequency: number
-  amplitude: number
-  phase: number
-}
-
-type SquareModulator = {
-  type: 'square'
-  frequency: number
-  amplitude: number
-  phase: number
-  pulse_width: number
-}
-
-type ScaleModulator = {
-  type: 'scale'
-  factor: number
-}
-
-type BiasModulator = {
-  type: 'bias'
-  amount: number
-}
-
-type ClampModulator = {
-  type: 'clamp'
-  min: number
-  max: number
-}
-
-type ChainModulator = {
-  type: 'chain'
-  children: Modulator[]
-}
-
-type BlendModulator = {
-  type: 'blend'
-  children: Modulator[]
-}
-
-type Modulator =
-  | ConstantModulator
-  | OscillatorModulator
-  | SquareModulator
-  | ScaleModulator
-  | BiasModulator
-  | ClampModulator
-  | ChainModulator
-  | BlendModulator
-
-type ModTargetSpec = {
-  label: string
-  min: number
-  max: number
-  defaultCenter: number
-  defaultScalar: number
-  step: number
-  integer: boolean
-}
-
-type TargetControl = {
-  enabled: boolean
-  useScalar: boolean
-  center: number
-  amount: number
-  scalar: number
-}
-
-type ModulatorPanelState = {
-  waveAType: WaveType
-  waveBType: WaveType
-  waveAPulseWidth: number
-  waveBPulseWidth: number
-  waveLerp: number
-  lfoAFrequency: number
-  lfoAPhaseOffset: number
-  lfoBFrequency: number
-  lfoBPhaseOffset: number
-  targetControls: Record<ModTarget, TargetControl>
-}
-
-const MOD_TARGET_SPECS: Record<ModTarget, ModTargetSpec> = {
-  pitch: {
-    label: 'Pitch',
-    min: -24,
-    max: 24,
-    defaultCenter: 0,
-    defaultScalar: 0,
-    step: 1,
-    integer: true,
-  },
-  velocity: {
-    label: 'Velocity',
-    min: 0,
-    max: 1,
-    defaultCenter: 0.5,
-    defaultScalar: 0.787402,
-    step: 0.01,
-    integer: false,
-  },
-  delay: {
-    label: 'Delay',
-    min: 0,
-    max: 1,
-    defaultCenter: 0.5,
-    defaultScalar: 0,
-    step: 0.01,
-    integer: false,
-  },
-  gate: {
-    label: 'Gate',
-    min: 0,
-    max: 1,
-    defaultCenter: 0.5,
-    defaultScalar: 1,
-    step: 0.01,
-    integer: false,
-  },
-  weights: {
-    label: 'Weights',
-    min: 0,
-    max: 1,
-    defaultCenter: 0.5,
-    defaultScalar: 0.5,
-    step: 0.01,
-    integer: false,
-  },
-}
-
-const MOD_TARGET_ORDER: ModTarget[] = ['pitch', 'velocity', 'delay', 'gate', 'weights']
-const WAVE_OPTIONS: WaveType[] = ['sine', 'triangle', 'sawtooth_up', 'sawtooth_down', 'square']
-const WAVE_OPTION_LABELS: Record<WaveType, string> = {
-  sine: 'Sine',
-  triangle: 'Triangle',
-  sawtooth_up: 'Saw Up',
-  sawtooth_down: 'Saw Down',
-  square: 'Square',
-}
-const LFO_FREQUENCY_RANGE_RATIO = 1000
-const LFO_FREQUENCY_MIN = 1 / Math.sqrt(LFO_FREQUENCY_RANGE_RATIO)
-const LFO_FREQUENCY_MAX = Math.sqrt(LFO_FREQUENCY_RANGE_RATIO)
-const LFO_PHASE_OFFSET_MIN = -0.5
-const LFO_PHASE_OFFSET_MAX = 0.5
-
-const clampNumber = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value))
-
-const normalizePhase = (value: number): number => ((value % 1) + 1) % 1
-
-const roundByStep = (value: number, step: number): number =>
-  step <= 0 ? value : Math.round(value / step) * step
-
-const toNormalizedPhase = (phaseOffset: number): number => normalizePhase(phaseOffset)
-
-const getMeasureLoopQuarterNotes = (measure: Measure | null): number => {
-  if (!measure) {
-    return 0
-  }
-
-  const numerator = measure.time_signature.numerator
-  const denominator = measure.time_signature.denominator
-  if (numerator <= 0 || denominator <= 0) {
-    return 0
-  }
-
-  return numerator * (4 / denominator)
-}
-
-const getSequenceOverlayColor = (sequenceIndex: number, alpha: number): string =>
-  `rgb(${BG_SEQUENCE_COLORS[sequenceIndex % BG_SEQUENCE_COLORS.length]} / ${clampNumber(alpha, 0, 1)})`
-
-const frequencyToRatio = (frequency: number): number => {
-  const clamped = clampNumber(frequency, LFO_FREQUENCY_MIN, LFO_FREQUENCY_MAX)
-  const span = Math.log(LFO_FREQUENCY_MAX / LFO_FREQUENCY_MIN)
-  if (span <= 0) {
-    return 0
-  }
-  return clampNumber(Math.log(clamped / LFO_FREQUENCY_MIN) / span, 0, 1)
-}
-
-const ratioToFrequency = (ratio: number): number => {
-  const clampedRatio = clampNumber(ratio, 0, 1)
-  const base = LFO_FREQUENCY_MAX / LFO_FREQUENCY_MIN
-  if (base <= 0) {
-    return LFO_FREQUENCY_MIN
-  }
-  return LFO_FREQUENCY_MIN * Math.pow(base, clampedRatio)
-}
-
-const createInitialTargetControls = (): Record<ModTarget, TargetControl> => ({
-  pitch: {
-    enabled: false,
-    useScalar: false,
-    center: MOD_TARGET_SPECS.pitch.defaultCenter,
-    amount: 0,
-    scalar: MOD_TARGET_SPECS.pitch.defaultScalar,
-  },
-  velocity: {
-    enabled: false,
-    useScalar: false,
-    center: MOD_TARGET_SPECS.velocity.defaultCenter,
-    amount: 0,
-    scalar: MOD_TARGET_SPECS.velocity.defaultScalar,
-  },
-  delay: {
-    enabled: false,
-    useScalar: false,
-    center: MOD_TARGET_SPECS.delay.defaultCenter,
-    amount: 0,
-    scalar: MOD_TARGET_SPECS.delay.defaultScalar,
-  },
-  gate: {
-    enabled: false,
-    useScalar: false,
-    center: MOD_TARGET_SPECS.gate.defaultCenter,
-    amount: 0,
-    scalar: MOD_TARGET_SPECS.gate.defaultScalar,
-  },
-  weights: {
-    enabled: false,
-    useScalar: false,
-    center: MOD_TARGET_SPECS.weights.defaultCenter,
-    amount: 0,
-    scalar: MOD_TARGET_SPECS.weights.defaultScalar,
-  },
-})
-
-const createInitialModulatorPanelState = (): ModulatorPanelState => ({
-  waveAType: 'sine',
-  waveBType: 'triangle',
-  waveAPulseWidth: 0.5,
-  waveBPulseWidth: 0.5,
-  waveLerp: 0,
-  lfoAFrequency: 1,
-  lfoAPhaseOffset: 0,
-  lfoBFrequency: 1,
-  lfoBPhaseOffset: 0,
-  targetControls: createInitialTargetControls(),
-})
-
-const REFERENCE_RATIOS = [
-  Math.log2(1 / 1),
-  Math.log2(3 / 2),
-  Math.log2(4 / 3),
-  Math.log2(5 / 4),
-  Math.log2(6 / 5),
-  Math.log2(5 / 3),
-  Math.log2(8 / 5),
-  Math.log2(9 / 8),
-  Math.log2(16 / 9),
-  Math.log2(15 / 8),
-  Math.log2(16 / 15),
-  Math.log2(45 / 32),
-].sort((a, b) => a - b)
-
-const createRequestId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-
-  return `req-${Date.now()}`
-}
-
-const createTransportState = (): TransportState => ({
-  active: Array(TRANSPORT_SEQUENCE_COUNT).fill(false),
-  phase: Array(TRANSPORT_SEQUENCE_COUNT).fill(0),
-  bpm: DEFAULT_TRANSPORT_BPM,
-})
-
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return String(error)
-}
-
-const parseWireEnvelope = (rawValue: unknown): Envelope => {
-  if (typeof rawValue === 'string') {
-    throw new Error('Bridge contract mismatch: expected object envelope, received string')
-  }
-
-  if (typeof rawValue !== 'object' || rawValue === null || Array.isArray(rawValue)) {
-    throw new Error('Envelope is not an object')
-  }
-
-  const candidate = rawValue as Record<string, unknown>
-  if (candidate.protocol !== BRIDGE_PROTOCOL) {
-    throw new Error('Unexpected bridge protocol')
-  }
-
-  if (candidate.type !== 'request' && candidate.type !== 'response' && candidate.type !== 'event') {
-    throw new Error('Unexpected envelope type')
-  }
-
-  if (typeof candidate.name !== 'string') {
-    throw new Error('Envelope name must be a string')
-  }
-
-  if (
-    typeof candidate.payload !== 'object' ||
-    candidate.payload === null ||
-    Array.isArray(candidate.payload)
-  ) {
-    throw new Error('Envelope payload must be an object')
-  }
-
-  return {
-    protocol: BRIDGE_PROTOCOL,
-    type: candidate.type,
-    name: candidate.name,
-    request_id: typeof candidate.request_id === 'string' ? candidate.request_id : undefined,
-    payload: candidate.payload as EnvelopePayload,
-  }
-}
-
-const getPayloadError = (payload: EnvelopePayload): string | null => {
-  const rawError = payload.error
-  if (typeof rawError !== 'object' || rawError === null || Array.isArray(rawError)) {
-    return null
-  }
-
-  const message = (rawError as Record<string, unknown>).message
-  return typeof message === 'string' ? message : null
-}
-
-const getCommandSnapshot = (payload: EnvelopePayload): unknown =>
-  'snapshot' in payload ? payload.snapshot : null
-
-const isMessageLevel = (value: unknown): value is MessageLevel =>
-  value === 'debug' || value === 'info' || value === 'warning' || value === 'error'
-
-const getCommandStatus = (
-  payload: EnvelopePayload
-): { level: MessageLevel; message: string } | null => {
-  const rawStatus = payload.status
-  if (typeof rawStatus !== 'object' || rawStatus === null || Array.isArray(rawStatus)) {
-    return null
-  }
-
-  const statusLevel = (rawStatus as Record<string, unknown>).level
-  const statusMessage = (rawStatus as Record<string, unknown>).message
-  if (!isMessageLevel(statusLevel) || typeof statusMessage !== 'string') {
-    return null
-  }
-
-  return {
-    level: statusLevel,
-    message: statusMessage,
-  }
-}
-
-const getCommandSuffix = (payload: EnvelopePayload): string | null => {
-  const suffix = payload.suffix
-  return typeof suffix === 'string' ? suffix : null
-}
-
-const getSequenceViewKeymap = (payload: EnvelopePayload): SequenceViewKeymap => {
-  const keymapRoot = asRecord(payload.keymap)
-  if (!keymapRoot) {
-    return {}
-  }
-
-  const sequenceView = asRecord(keymapRoot.SequenceView)
-  if (!sequenceView) {
-    return {}
-  }
-
-  const entries = Object.entries(sequenceView).filter(
-    (entry): entry is [string, string] => typeof entry[1] === 'string'
-  )
-  return Object.fromEntries(entries)
-}
-
-const getSessionReference = (payload: EnvelopePayload): SessionReference => {
-  const root = asRecord(payload.reference)
-  if (!root) {
-    return { commands: [], keybindings: [] }
-  }
-
-  const rawCommands = Array.isArray(root.commands) ? root.commands : []
-  const commands = rawCommands
-    .map((value) => {
-      const record = asRecord(value)
-      if (!record) {
-        return null
-      }
-      if (
-        typeof record.id !== 'string' ||
-        typeof record.signature !== 'string' ||
-        typeof record.description !== 'string'
-      ) {
-        return null
-      }
-      return {
-        id: record.id,
-        signature: record.signature,
-        description: record.description,
-      } satisfies CommandReferenceEntry
-    })
-    .filter((entry): entry is CommandReferenceEntry => entry !== null)
-
-  const rawKeybindingGroups = Array.isArray(root.keybindings) ? root.keybindings : []
-  const keybindings = rawKeybindingGroups
-    .map((groupValue) => {
-      const group = asRecord(groupValue)
-      if (!group || typeof group.component !== 'string') {
-        return null
-      }
-
-      const rawBindings = Array.isArray(group.bindings) ? group.bindings : []
-      const bindings = rawBindings
-        .map((bindingValue) => {
-          const binding = asRecord(bindingValue)
-          if (!binding || typeof binding.key !== 'string' || typeof binding.command !== 'string') {
-            return null
-          }
-          return {
-            key: binding.key,
-            command: binding.command,
-          } satisfies KeybindingReferenceEntry
-        })
-        .filter((binding): binding is KeybindingReferenceEntry => binding !== null)
-
-      return {
-        component: group.component,
-        bindings,
-      } satisfies KeybindingReferenceGroup
-    })
-    .filter((group): group is KeybindingReferenceGroup => group !== null)
-
-  return { commands, keybindings }
-}
-
-const parseLibraryCommandEntries = (value: unknown): LibraryCommandEntry[] => {
-  const rows = Array.isArray(value) ? value : []
-  return rows
-    .map((row) => {
-      if (typeof row === 'string') {
-        const name = row
-        const stem = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : name
-        return {
-          name,
-          stem,
-          path: '',
-          command: '',
-          relativePath: '',
-          description: '',
-          intervals: [],
-          octave: null,
-          noteCount: null,
-        } satisfies LibraryCommandEntry
-      }
-
-      const record = asRecord(row)
-      if (!record) {
-        return null
-      }
-      const name =
-        typeof record.name === 'string'
-          ? record.name
-          : typeof record.filename === 'string'
-            ? record.filename
-            : typeof record.file === 'string'
-              ? record.file
-              : null
-      if (!name) {
-        return null
-      }
-      const stem =
-        typeof record.stem === 'string'
-          ? record.stem
-          : name.includes('.')
-            ? name.slice(0, name.lastIndexOf('.'))
-            : name
-      const path =
-        typeof record.path === 'string'
-          ? record.path
-          : typeof record.full_path === 'string'
-            ? record.full_path
-            : ''
-      const command = typeof record.command === 'string' ? record.command : ''
-      const relativePath =
-        typeof record.relative_path === 'string'
-          ? record.relative_path
-          : typeof record.relativePath === 'string'
-            ? record.relativePath
-            : ''
-      const description = typeof record.description === 'string' ? record.description : ''
-      const intervals = Array.isArray(record.intervals)
-        ? record.intervals.filter((value): value is number => typeof value === 'number')
-        : []
-      const octave =
-        typeof record.octave === 'number' && Number.isFinite(record.octave) ? record.octave : null
-      const noteCount =
-        typeof record.note_count === 'number' && Number.isFinite(record.note_count)
-          ? record.note_count
-          : typeof record.noteCount === 'number' && Number.isFinite(record.noteCount)
-            ? record.noteCount
-            : null
-      return {
-        name,
-        stem,
-        path,
-        command,
-        relativePath,
-        description,
-        intervals,
-        octave,
-        noteCount,
-      } satisfies LibraryCommandEntry
-    })
-    .filter((entry): entry is LibraryCommandEntry => entry !== null)
-}
-
-const parseLibraryScaleEntries = (value: unknown): LibraryScaleEntry[] => {
-  const rows = Array.isArray(value) ? value : []
-  return rows
-    .map((row) => {
-      const record = asRecord(row)
-      if (!record || typeof record.name !== 'string' || typeof record.command !== 'string') {
-        return null
-      }
-      const intervals = Array.isArray(record.intervals)
-        ? record.intervals.filter((value): value is number => typeof value === 'number')
-        : []
-      return {
-        name: record.name,
-        command: record.command,
-        intervals,
-      } satisfies LibraryScaleEntry
-    })
-    .filter((entry): entry is LibraryScaleEntry => entry !== null)
-}
-
-const parseLibraryChordEntries = (value: unknown): LibraryChordEntry[] => {
-  const rows = Array.isArray(value) ? value : []
-  return rows
-    .map((row) => {
-      const record = asRecord(row)
-      if (!record || typeof record.name !== 'string' || typeof record.command !== 'string') {
-        return null
-      }
-      const intervals = Array.isArray(record.intervals)
-        ? record.intervals.filter((value): value is number => typeof value === 'number')
-        : []
-      return {
-        name: record.name,
-        command: record.command,
-        intervals,
-      } satisfies LibraryChordEntry
-    })
-    .filter((entry): entry is LibraryChordEntry => entry !== null)
-}
-
-const getLibrarySnapshot = (payload: EnvelopePayload): LibrarySnapshot => {
-  const paths = asRecord(payload.paths)
-  const commands = asRecord(payload.commands)
-  const active = asRecord(payload.active)
-
-  return {
-    paths: {
-      library: typeof paths?.library === 'string' ? paths.library : '',
-      sequences: typeof paths?.sequences === 'string' ? paths.sequences : '',
-      tunings: typeof paths?.tunings === 'string' ? paths.tunings : '',
-    },
-    sequenceBanks: parseLibraryCommandEntries(payload.sequence_banks ?? payload.sequenceBanks),
-    tunings: parseLibraryCommandEntries(payload.tunings),
-    scales: parseLibraryScaleEntries(payload.scales),
-    chords: parseLibraryChordEntries(payload.chords),
-    commands: {
-      reloadScales: typeof commands?.reload_scales === 'string' ? commands.reload_scales : '',
-      reloadChords: typeof commands?.reload_chords === 'string' ? commands.reload_chords : '',
-      libraryDirectory:
-        typeof commands?.library_directory === 'string' ? commands.library_directory : '',
-    },
-    active: {
-      tuningName: typeof active?.tuning_name === 'string' ? active.tuning_name : '',
-      scaleName: typeof active?.scale_name === 'string' ? active.scale_name : null,
-    },
-  }
-}
-
-const quoteCommandArg = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
-
-const formatOctaveForDisplay = (value: number): string => {
-  const rounded = value.toFixed(2)
-  return rounded.endsWith('.00') ? rounded.slice(0, -3) : rounded
-}
-
-const getHierarchyRows = (
-  entries: LibraryCommandEntry[],
-  options?: { sortByName?: boolean }
-): LibraryHierarchyRow[] => {
-  const directoryRows = new Set<string>()
-  const rows: LibraryHierarchyRow[] = []
-
-  const sortedEntries = options?.sortByName === false
-    ? [...entries]
-    : [...entries].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-
-  for (const entry of sortedEntries) {
-    const normalized = entry.name.replace(/\\/g, '/')
-    const parts = normalized.split('/').filter((part) => part.length > 0)
-    const fallbackLabel = entry.name || entry.stem
-    const leafLabel = parts[parts.length - 1] ?? fallbackLabel
-    const directories = parts.slice(0, -1)
-
-    let currentPath = ''
-    directories.forEach((directory, index) => {
-      currentPath = currentPath ? `${currentPath}/${directory}` : directory
-      if (directoryRows.has(currentPath)) {
-        return
-      }
-      directoryRows.add(currentPath)
-      rows.push({
-        kind: 'directory',
-        key: `dir:${currentPath}`,
-        label: directory,
-        depth: index,
-      })
-    })
-
-    rows.push({
-      kind: 'file',
-      key: `file:${normalized}:${entry.path || entry.name}`,
-      label: leafLabel,
-      depth: directories.length,
-      entry,
-    })
-  }
-
-  return rows
-}
-
-type ParsedKeyBinding = {
-  requiredMode: InputMode | null
-  requiresShift: boolean
-  requiresCmd: boolean
-  requiresAlt: boolean
-  key: string
-}
-
-const parseModeToken = (token: string): InputMode | null => {
-  const normalizedToken = token.trim().toLowerCase()
-  if (normalizedToken === '[p]') return 'pitch'
-  if (normalizedToken === '[v]') return 'velocity'
-  if (normalizedToken === '[d]') return 'delay'
-  if (normalizedToken === '[g]') return 'gate'
-  if (normalizedToken === '[c]') return 'scale'
-  return null
-}
-
-const normalizeKeyToken = (token: string): string => {
-  const trimmed = token.trim()
-  if (trimmed.toLowerCase() === 'plus') {
-    return '+'
-  }
-  return trimmed.toLowerCase()
-}
-
-const parseKeyBinding = (binding: string): ParsedKeyBinding | null => {
-  const tokens = binding
-    .split('+')
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0)
-
-  if (tokens.length === 0) {
-    return null
-  }
-
-  let requiredMode: InputMode | null = null
-  let requiresShift = false
-  let requiresCmd = false
-  let requiresAlt = false
-  let key = ''
-
-  for (const token of tokens) {
-    const lowerToken = token.toLowerCase()
-    const mode = parseModeToken(token)
-    if (mode) {
-      requiredMode = mode
-      continue
-    }
-
-    if (lowerToken === 'shift') {
-      requiresShift = true
-      continue
-    }
-
-    if (lowerToken === 'cmd') {
-      requiresCmd = true
-      continue
-    }
-
-    if (lowerToken === 'alt') {
-      requiresAlt = true
-      continue
-    }
-
-    key = normalizeKeyToken(token)
-  }
-
-  if (!key) {
-    return null
-  }
-
-  return {
-    requiredMode,
-    requiresShift,
-    requiresCmd,
-    requiresAlt,
-    key,
-  }
-}
-
-const getEventKeyAliases = (event: KeyboardEvent): Set<string> => {
-  const aliases = new Set<string>()
-  const key = event.key
-  const lower = key.toLowerCase()
-  aliases.add(lower)
-
-  if (key === '+') {
-    aliases.add('+')
-  }
-  if (key === '=' && event.shiftKey) {
-    aliases.add('+')
-  }
-
-  if (lower === 'escape') aliases.add('escape')
-  if (lower === 'arrowleft') aliases.add('arrowleft')
-  if (lower === 'arrowright') aliases.add('arrowright')
-  if (lower === 'arrowup') aliases.add('arrowup')
-  if (lower === 'arrowdown') aliases.add('arrowdown')
-  if (lower === 'delete') aliases.add('delete')
-  if (lower === 'pagedown') aliases.add('pagedown')
-  if (lower === 'pageup') aliases.add('pageup')
-  if (lower === 'tab') aliases.add('tab')
-
-  return aliases
-}
-
-const matchesBinding = (
-  parsedBinding: ParsedKeyBinding,
-  event: KeyboardEvent,
-  inputMode: InputMode
-): boolean => {
-  if (parsedBinding.requiredMode && parsedBinding.requiredMode !== inputMode) {
-    return false
-  }
-
-  const commandModifier = usesMetaForCommand ? event.metaKey : event.ctrlKey
-  if (parsedBinding.requiresCmd !== commandModifier) {
-    return false
-  }
-
-  if (parsedBinding.requiresShift !== event.shiftKey) {
-    return false
-  }
-
-  if (parsedBinding.requiresAlt !== event.altKey) {
-    return false
-  }
-
-  const aliases = getEventKeyAliases(event)
-  return aliases.has(parsedBinding.key)
-}
-
-const applyNumberParameter = (command: string, pendingDigits: string): string => {
-  const hasPendingNumber = pendingDigits.length > 0
-  return command.replace(/:N=(\d+):/g, (_, defaultValue: string) =>
-    hasPendingNumber ? pendingDigits : defaultValue
-  )
-}
-
-const parsePatternPrefix = (value: string): PatternPrefix | null => {
-  const tokens = value
-    .trimStart()
-    .split(/\s+/)
-    .filter((token) => token.length > 0)
-
-  if (tokens.length === 0) {
-    return null
-  }
-
-  let cursor = 0
-  let offset = 0
-  let hasOffsetToken = false
-  if (/^\+\d+$/.test(tokens[0])) {
-    offset = Math.max(0, Math.trunc(Number(tokens[0].slice(1))))
-    hasOffsetToken = true
-    cursor += 1
-  }
-
-  const intervals: number[] = []
-  while (cursor < tokens.length) {
-    const token = tokens[cursor]
-    if (!/^\d+$/.test(token)) {
-      break
-    }
-
-    const interval = Math.trunc(Number(token))
-    if (interval > 0) {
-      intervals.push(interval)
-    }
-    cursor += 1
-  }
-
-  if (intervals.length === 0 && hasOffsetToken) {
-    return { offset, intervals: [1] }
-  }
-
-  if (intervals.length === 0) {
-    return null
-  }
-
-  return { offset, intervals }
-}
-
-const getPatternIndices = (sequenceLength: number, pattern: PatternPrefix): Set<number> => {
-  const matches = new Set<number>()
-  if (sequenceLength <= 0) {
-    return matches
-  }
-
-  let position = pattern.offset
-  let intervalIndex = 0
-  while (position < sequenceLength) {
-    if (position >= 0) {
-      matches.add(position)
-    }
-
-    position += pattern.intervals[intervalIndex] ?? 1
-    intervalIndex = (intervalIndex + 1) % pattern.intervals.length
-  }
-
-  return matches
-}
-
-const sampleWaveShape = (type: WaveType, phase: number, pulseWidth: number): number => {
-  const wrappedPhase = ((phase % 1) + 1) % 1
-  const clampedPulseWidth = clampNumber(pulseWidth, 0.01, 0.99)
-
-  if (type === 'sine') {
-    return Math.sin(wrappedPhase * Math.PI * 2)
-  }
-
-  if (type === 'triangle') {
-    return 1 - 4 * Math.abs(wrappedPhase - 0.5)
-  }
-
-  if (type === 'sawtooth_up') {
-    return wrappedPhase * 2 - 1
-  }
-
-  if (type === 'sawtooth_down') {
-    return 1 - wrappedPhase * 2
-  }
-
-  return wrappedPhase < clampedPulseWidth ? 1 : -1
-}
-
-const createWaveModulator = (
-  waveType: WaveType,
-  frequency: number,
-  phase: number,
-  pulseWidth: number
-): Modulator => {
-  if (waveType === 'square') {
-    return {
-      type: 'square',
-      frequency,
-      amplitude: 1,
-      phase,
-      pulse_width: clampNumber(pulseWidth, 0.01, 0.99),
-    }
-  }
-
-  return {
-    type: waveType,
-    frequency,
-    amplitude: 1,
-    phase,
-  }
-}
-
-const createMorphModulator = (
-  waveAType: WaveType,
-  waveBType: WaveType,
-  waveAPulseWidth: number,
-  waveBPulseWidth: number,
-  waveAFrequency: number,
-  waveAPhase: number,
-  waveBFrequency: number,
-  waveBPhase: number,
-  lerp: number
-): Modulator => {
-  const clampedLerp = clampNumber(lerp, 0, 1)
-  const waveA = createWaveModulator(waveAType, waveAFrequency, waveAPhase, waveAPulseWidth)
-  const waveB = createWaveModulator(waveBType, waveBFrequency, waveBPhase, waveBPulseWidth)
-
-  if (clampedLerp <= 0) {
-    return waveA
-  }
-  if (clampedLerp >= 1) {
-    return waveB
-  }
-
-  return {
-    type: 'blend',
-    children: [
-      {
-        type: 'chain',
-        children: [waveA, { type: 'scale', factor: 1 - clampedLerp }],
-      },
-      {
-        type: 'chain',
-        children: [waveB, { type: 'scale', factor: clampedLerp }],
-      },
-    ],
-  }
-}
-
-const createTargetModulator = (
-  base: Modulator,
-  spec: ModTargetSpec,
-  center: number,
-  amount: number
-): Modulator => {
-  const clampedCenter = clampNumber(center, spec.min, spec.max)
-  const boundedAmount = clampNumber(amount, -1, 1)
-  const maxPositiveSpan = spec.max - clampedCenter
-  const maxNegativeSpan = clampedCenter - spec.min
-  const spanMagnitude = Math.min(maxPositiveSpan, maxNegativeSpan)
-  const signedSpan = spanMagnitude * boundedAmount
-
-  return {
-    type: 'chain',
-    children: [
-      base,
-      { type: 'scale', factor: signedSpan },
-      { type: 'bias', amount: clampedCenter },
-      { type: 'clamp', min: spec.min, max: spec.max },
-    ],
-  }
-}
-
-const buildCommandForTarget = (
-  target: ModTarget,
-  control: TargetControl,
-  baseModulator: Modulator
-): string => {
-  const spec = MOD_TARGET_SPECS[target]
-  const modulator = createTargetModulator(baseModulator, spec, control.center, control.amount)
-  return `set ${target} ${JSON.stringify(modulator)}`
-}
-
-const buildCommandLines = (
-  controls: Record<ModTarget, TargetControl>,
-  baseModulator: Modulator,
-  onlyTargets?: ModTarget[]
-): string[] => {
-  const filterSet = onlyTargets ? new Set(onlyTargets) : null
-  return MOD_TARGET_ORDER.filter((target) => controls[target].enabled)
-    .filter((target) => (filterSet ? filterSet.has(target) : true))
-    .map((target) => buildCommandForTarget(target, controls[target], baseModulator))
-}
-
-const isEditableTarget = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-
-  const tagName = target.tagName
-  return (
-    target.isContentEditable ||
-    tagName === 'INPUT' ||
-    tagName === 'TEXTAREA' ||
-    tagName === 'SELECT'
-  )
-}
-
-const asRecord = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return null
-  }
-
-  return value as Record<string, unknown>
-}
-
-const toSequenceIndex = (value: unknown): number | null => {
-  if (typeof value !== 'number' || !Number.isInteger(value)) {
-    return null
-  }
-  if (value < 0 || value >= TRANSPORT_SEQUENCE_COUNT) {
-    return null
-  }
-  return value
-}
-
-const toNumberArray = (value: unknown): number[] => {
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  return value.filter((item): item is number => typeof item === 'number')
-}
-
-const normalizePitch = (pitch: number, tuningLength: number): number => {
-  const modulo = pitch % tuningLength
-  return modulo >= 0 ? modulo : modulo + tuningLength
-}
-
-const parseCell = (value: unknown): Cell | null => {
-  const cell = asRecord(value)
-  if (!cell || typeof cell.type !== 'string' || typeof cell.weight !== 'number') {
-    return null
-  }
-
-  if (
-    cell.type === 'Note' &&
-    typeof cell.pitch === 'number' &&
-    typeof cell.velocity === 'number' &&
-    typeof cell.delay === 'number' &&
-    typeof cell.gate === 'number'
-  ) {
-    return {
-      type: 'Note',
-      weight: cell.weight,
-      pitch: cell.pitch,
-      velocity: cell.velocity,
-      delay: cell.delay,
-      gate: cell.gate,
-    }
-  }
-
-  if (cell.type === 'Rest') {
-    return {
-      type: 'Rest',
-      weight: cell.weight,
-    }
-  }
-
-  if (cell.type === 'Sequence' && Array.isArray(cell.cells)) {
-    return {
-      type: 'Sequence',
-      weight: cell.weight,
-      cells: cell.cells.map(parseCell).filter((item): item is Cell => item !== null),
-    }
-  }
-
-  return null
-}
-
-const parseMeasure = (value: unknown): Measure | null => {
-  const measure = asRecord(value)
-  if (!measure) {
-    return null
-  }
-
-  const cell = parseCell(measure.cell)
-  const timeSignature = asRecord(measure.time_signature)
-  if (
-    !cell ||
-    !timeSignature ||
-    typeof timeSignature.numerator !== 'number' ||
-    typeof timeSignature.denominator !== 'number'
-  ) {
-    return null
-  }
-
-  return {
-    cell,
-    time_signature: {
-      numerator: timeSignature.numerator,
-      denominator: timeSignature.denominator,
-    },
-  }
-}
-
-const parseScale = (value: unknown): Scale | null => {
-  if (value === null) {
-    return null
-  }
-
-  const scale = asRecord(value)
-  if (
-    !scale ||
-    typeof scale.name !== 'string' ||
-    typeof scale.tuning_length !== 'number' ||
-    typeof scale.mode !== 'number'
-  ) {
-    return null
-  }
-
-  return {
-    name: scale.name,
-    tuning_length: scale.tuning_length,
-    intervals: toNumberArray(scale.intervals),
-    mode: scale.mode,
-  }
-}
-
-const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => {
-  const snapshot = asRecord(value)
-  if (!snapshot || typeof snapshot.snapshot_version !== 'number') {
-    return null
-  }
-
-  const engine = asRecord(snapshot.engine)
-  const editor = asRecord(snapshot.editor)
-  if (!engine || !editor) {
-    return null
-  }
-
-  const tuning = asRecord(engine.tuning)
-  const selected = asRecord(editor.selected)
-  if (
-    !tuning ||
-    !selected ||
-    typeof tuning.octave !== 'number' ||
-    typeof engine.tuning_name !== 'string' ||
-    typeof engine.key !== 'number' ||
-    typeof engine.base_frequency !== 'number' ||
-    (engine.scale_translate_direction !== 'up' && engine.scale_translate_direction !== 'down') ||
-    typeof editor.input_mode !== 'string' ||
-    typeof selected.measure !== 'number'
-  ) {
-    return null
-  }
-
-  const inputMode = editor.input_mode
-  if (
-    inputMode !== 'pitch' &&
-    inputMode !== 'velocity' &&
-    inputMode !== 'delay' &&
-    inputMode !== 'gate' &&
-    inputMode !== 'scale'
-  ) {
-    return null
-  }
-
-  const sequenceBank = Array.isArray(engine.sequence_bank)
-    ? engine.sequence_bank.map(parseMeasure).filter((item): item is Measure => item !== null)
-    : []
-
-  const sequenceNames = Array.isArray(engine.sequence_names)
-    ? engine.sequence_names.filter((item): item is string => typeof item === 'string')
-    : []
-
-  const scale = parseScale(engine.scale)
-  const selectedCellPath = Array.isArray(selected.cell)
-    ? selected.cell.filter((item): item is number => typeof item === 'number')
-    : []
-
-  return {
-    snapshot_version: snapshot.snapshot_version,
-    engine: {
-      sequence_bank: sequenceBank,
-      sequence_names: sequenceNames,
-      tuning: {
-        intervals: toNumberArray(tuning.intervals),
-        octave: tuning.octave,
-      },
-      tuning_name: engine.tuning_name,
-      scale,
-      key: engine.key,
-      scale_translate_direction: engine.scale_translate_direction,
-      base_frequency: engine.base_frequency,
-    },
-    editor: {
-      selected: {
-        measure: selected.measure,
-        cell: selectedCellPath,
-      },
-      input_mode: inputMode,
-    },
-  }
-}
-
-const getTuningRatios = (intervals: number[]): number[] =>
-  Array.from(new Set(intervals.map((cents) => cents / 1200))).sort((a, b) => a - b)
-
-const getLargestElement = (values: number[]): number => {
-  if (values.length === 0) {
-    return 0
-  }
-
-  return values[values.length - 1]
-}
-
-const euclidMod = (value: number, modulo: number): number => {
-  if (modulo === 0) {
-    return 0
-  }
-  return ((value % modulo) + modulo) % modulo
-}
-
-const generateValidPitches = (scale: Scale, tuningLength: number): number[] => {
-  if (scale.intervals.length === 0) {
-    return [0]
-  }
-
-  const modeOffset = euclidMod(Math.trunc(scale.mode) - 1, scale.intervals.length)
-  const rotatedIntervals = scale.intervals.map((_, index) => {
-    const intervalIndex = euclidMod(index + modeOffset, scale.intervals.length)
-    return Math.trunc(scale.intervals[intervalIndex] ?? 0)
-  })
-
-  const validPitches = [0]
-  for (const interval of rotatedIntervals) {
-    const nextPitch = validPitches[validPitches.length - 1] + interval
-    if (nextPitch < tuningLength) {
-      validPitches.push(nextPitch)
-    }
-  }
-
-  return Array.from(new Set(validPitches)).sort((a, b) => a - b)
-}
-
-const mapPitchToScale = (
-  pitch: number,
-  validPitches: number[],
-  tuningLength: number,
-  direction: TranslateDirection
-): number => {
-  if (validPitches.length === 0 || tuningLength <= 0) {
-    return pitch
-  }
-
-  let octaveShift = Math.floor(pitch / tuningLength)
-  const normalizedPitch = euclidMod(pitch, tuningLength)
-  let index = validPitches.findIndex((validPitch) => validPitch >= normalizedPitch)
-
-  if (index === -1 || validPitches[index] !== normalizedPitch) {
-    if (direction === 'down') {
-      if (index <= 0) {
-        index = validPitches.length - 1
-        octaveShift -= 1
-      } else {
-        index -= 1
-      }
-    } else if (index === -1) {
-      index = 0
-      octaveShift += 1
-    }
-  }
-
-  return (validPitches[index] ?? normalizedPitch) + octaveShift * tuningLength
-}
-
-const collectNotePitches = (cell: Cell): number[] => {
-  if (cell.type === 'Note') {
-    return [cell.pitch]
-  }
-
-  if (cell.type === 'Sequence') {
-    return cell.cells.flatMap(collectNotePitches)
-  }
-
-  return []
-}
-
-const getCellWeight = (weight: number): number => (weight > 0 ? weight : 1)
-
-const flattenMeasureToNoteIR = (measure: Measure, sequenceIndex: number): NoteSpanIR[] => {
-  const noteSpans: NoteSpanIR[] = []
-
-  const walkCell = (cell: Cell, segmentStart: number, segmentWidth: number): void => {
-    if (segmentWidth <= 0) {
-      return
-    }
-
-    if (cell.type === 'Rest') {
-      return
-    }
-
-    if (cell.type === 'Note') {
-      const noteDelay = clampNumber(cell.delay, 0, 1)
-      const noteGate = clampNumber(cell.gate, 0, 1)
-      const noteStart = segmentStart + noteDelay * segmentWidth
-      const noteEnd = noteStart + Math.max(0, (1 - noteDelay) * noteGate * segmentWidth)
-      const clampedStart = clampNumber(noteStart, 0, 1)
-      const clampedEnd = clampNumber(noteEnd, 0, 1)
-      const clampedWidth = clampedEnd - clampedStart
-      if (clampedWidth <= 0) {
-        return
-      }
-
-      noteSpans.push({
-        sequenceIndex,
-        pitch: cell.pitch,
-        x: clampedStart,
-        width: clampedWidth,
-        velocity: clampNumber(cell.velocity, 0, 1),
-      })
-      return
-    }
-
-    if (cell.cells.length === 0) {
-      return
-    }
-
-    const totalWeight = cell.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
-    if (totalWeight <= 0) {
-      return
-    }
-
-    let cursor = segmentStart
-    for (const child of cell.cells) {
-      const childWidth = (segmentWidth * getCellWeight(child.weight)) / totalWeight
-      walkCell(child, cursor, childWidth)
-      cursor += childWidth
-    }
-  }
-
-  walkCell(measure.cell, 0, 1)
-  return noteSpans
-}
-
-const windowBackgroundNotes = (
-  bgIr: NoteSpanIR[],
-  ratioFgToBg: number,
-  selectedPhase: number,
-  bgPhase: number
-): NoteSpanIR[] => {
-  if (!Number.isFinite(ratioFgToBg) || ratioFgToBg <= 0) {
-    return []
-  }
-
-  const bgPhaseAtSelectedStart = bgPhase - selectedPhase * ratioFgToBg
-  const bgWindowStart = bgPhaseAtSelectedStart
-  const bgWindowEnd = bgPhaseAtSelectedStart + ratioFgToBg
-  const projectedNotes: NoteSpanIR[] = []
-
-  for (const note of bgIr) {
-    const noteStart = clampNumber(note.x, 0, 1)
-    const noteEnd = clampNumber(note.x + note.width, 0, 1)
-    if (noteEnd <= noteStart) {
-      continue
-    }
-
-    const firstLoop = Math.floor(bgWindowStart - noteEnd) + 1
-    const lastLoop = Math.ceil(bgWindowEnd - noteStart) - 1
-
-    for (let loopIndex = firstLoop; loopIndex <= lastLoop; loopIndex += 1) {
-      const loopStart = loopIndex + noteStart
-      const loopEnd = loopIndex + noteEnd
-      const overlapStart = Math.max(loopStart, bgWindowStart)
-      const overlapEnd = Math.min(loopEnd, bgWindowEnd)
-      if (overlapEnd <= overlapStart) {
-        continue
-      }
-
-      const projectedStart = clampNumber(
-        (overlapStart - bgPhaseAtSelectedStart) / ratioFgToBg,
-        0,
-        1
-      )
-      const projectedEnd = clampNumber((overlapEnd - bgPhaseAtSelectedStart) / ratioFgToBg, 0, 1)
-      const projectedWidth = projectedEnd - projectedStart
-      if (projectedWidth <= 0) {
-        continue
-      }
-
-      projectedNotes.push({
-        sequenceIndex: note.sequenceIndex,
-        pitch: note.pitch,
-        x: projectedStart,
-        width: projectedWidth,
-        velocity: note.velocity,
-      })
-    }
-  }
-
-  return projectedNotes
-}
-
-const getProjectedBgTriggerPhase = (
-  ratioFgToBg: number,
-  selectedPhase: number,
-  bgPhase: number
-): number | null => {
-  if (!Number.isFinite(ratioFgToBg) || ratioFgToBg <= 0) {
-    return null
-  }
-
-  const bgPhaseAtSelectedStart = bgPhase - selectedPhase * ratioFgToBg
-  const eps = 1e-9
-  const triggerOrdinal = Math.ceil(bgPhaseAtSelectedStart - eps)
-  const projected = (triggerOrdinal - bgPhaseAtSelectedStart) / ratioFgToBg
-  if (!Number.isFinite(projected) || projected < 0 || projected >= 1) {
-    return null
-  }
-
-  return projected
-}
-
-type LeafCell = {
-  path: number[]
-}
-
-type StatusCellMetaItem = {
-  label: string
-  value: string
-}
-
-type TimeSignatureParts = {
-  numerator: number
-  denominator: number
-}
-
-const collectLeafCells = (cells: Cell[]): LeafCell[] => {
-  const result: LeafCell[] = []
-
-  const walk = (groupCells: Cell[], parentPath: number[]): void => {
-    if (groupCells.length === 0) {
-      return
-    }
-
-    groupCells.forEach((cell, index) => {
-      const path = [...parentPath, index]
-
-      if (cell.type === 'Sequence') {
-        if (cell.cells.length === 0) {
-          result.push({ path })
-          return
-        }
-
-        walk(cell.cells, path)
-        return
-      }
-
-      result.push({ path })
-    })
-  }
-
-  walk(cells, [])
-
-  return result
-}
-
-const isPathPrefix = (prefix: number[], path: number[]): boolean => {
-  if (prefix.length > path.length) {
-    return false
-  }
-
-  for (let index = 0; index < prefix.length; index += 1) {
-    if (prefix[index] !== path[index]) {
-      return false
-    }
-  }
-
-  return true
-}
-
-const pathToKey = (path: number[]): string => path.join('.')
-
-const getCellAtPath = (cells: Cell[], path: number[]): Cell | null => {
-  if (path.length === 0) {
-    return null
-  }
-
-  let currentCells = cells
-  let currentCell: Cell | null = null
-
-  for (let index = 0; index < path.length; index += 1) {
-    const segment = path[index]
-    const nextCell = currentCells[segment]
-    if (!nextCell) {
-      return null
-    }
-
-    currentCell = nextCell
-    if (index < path.length - 1) {
-      if (nextCell.type !== 'Sequence') {
-        return null
-      }
-      currentCells = nextCell.cells
-    }
-  }
-
-  return currentCell
-}
-
-const formatMetaNumber = (value: number, precision = 2): string => {
-  if (!Number.isFinite(value)) {
-    return '0'
-  }
-  const rounded = value.toFixed(precision)
-  return rounded.replace(/\.?0+$/, '')
-}
-
-const formatMetaFixed2 = (value: number): string => {
-  if (!Number.isFinite(value)) {
-    return '0.00'
-  }
-  return value.toFixed(2)
-}
-
-const getStatusCellMeta = (cell: Cell | null): StatusCellMetaItem[] => {
-  if (!cell) {
-    return []
-  }
-
-  if (cell.type === 'Sequence') {
-    return [
-      { label: 'n', value: `${cell.cells.length}` },
-      { label: 'w', value: formatMetaNumber(cell.weight) },
-    ]
-  }
-
-  if (cell.type === 'Rest') {
-    return [{ label: 'w', value: formatMetaNumber(cell.weight) }]
-  }
-
-  return [
-    { label: 'p', value: `${Math.trunc(cell.pitch)}` },
-    { label: 'd', value: formatMetaFixed2(cell.delay) },
-    { label: 'g', value: formatMetaFixed2(cell.gate) },
-    { label: 'v', value: formatMetaFixed2(cell.velocity) },
-    { label: 'w', value: formatMetaNumber(cell.weight) },
-  ]
-}
-
-const parseTimeSignatureInput = (value: string): TimeSignatureParts | null => {
-  const match = value.trim().match(/^(\d+)\s*\/\s*(\d+)$/)
-  if (!match) {
-    return null
-  }
-
-  const numerator = Number.parseInt(match[1], 10)
-  const denominator = Number.parseInt(match[2], 10)
-  if (!Number.isFinite(numerator) || !Number.isFinite(denominator)) {
-    return null
-  }
-  if (numerator <= 0 || denominator <= 0) {
-    return null
-  }
-
-  return { numerator, denominator }
-}
-
-const formatTimeSignature = ({ numerator, denominator }: TimeSignatureParts): string =>
-  `${numerator}/${denominator}`
-
-const parseIntegerInput = (value: string): number | null => {
-  const trimmed = value.trim()
-  if (!/^-?\d+$/.test(trimmed)) {
-    return null
-  }
-  const parsed = Number.parseInt(trimmed, 10)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-const parsePositiveFloatInput = (value: string): number | null => {
-  const trimmed = value.trim()
-  if (!/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
-    return null
-  }
-  const parsed = Number.parseFloat(trimmed)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return null
-  }
-  return parsed
-}
-
+  MAX_COMMAND_HISTORY,
+  DEFAULT_TUNING_LENGTH,
+  TRANSPORT_SEQUENCE_COUNT,
+  MOD_TARGET_SPECS,
+  LFO_PHASE_OFFSET_MIN,
+  LFO_PHASE_OFFSET_MAX,
+  clampNumber,
+  roundByStep,
+  toNormalizedPhase,
+  frequencyToRatio,
+  ratioToFrequency,
+  createTransportState,
+  getErrorMessage,
+  getMeasureLoopQuarterNotes,
+  getLibrarySnapshot,
+  getPayloadError,
+  getCommandSuffix,
+  quoteCommandArg,
+  formatOctaveForDisplay,
+  parseKeyBinding,
+  matchesBinding,
+  applyNumberParameter,
+  sampleWaveShape,
+  createMorphModulator,
+  buildCommandForTarget,
+  buildCommandLines,
+  isEditableTarget,
+  getTuningRatios,
+  generateValidPitches,
+  mapPitchToScale,
+  collectNotePitches,
+  collectLeafCells,
+  normalizePitch,
+  isPathPrefix,
+  getCellAtPath,
+  getStatusCellMeta,
+} from './app/shared'
+import type {
+  MessageLevel,
+  TranslateDirection,
+  InputMode,
+  Cell,
+  Measure,
+  UiStateSnapshot,
+  TransportState,
+  SyncedTransportPhases,
+  ModTarget,
+  WaveType,
+  TargetControl,
+  LeafCell,
+  StatusCellMetaItem,
+} from './app/shared'
 function App() {
   const [currentInputMode, setCurrentInputMode] = useState<InputMode>('pitch')
   const [statusMessage, setStatusMessage] = useState('')
   const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
   const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<UiStateSnapshot | null>(null)
-  const [isTimeSignatureEditing, setIsTimeSignatureEditing] = useState(false)
-  const [timeSignatureDraft, setTimeSignatureDraft] = useState('4/4')
-  const [isKeyEditing, setIsKeyEditing] = useState(false)
-  const [keyDraft, setKeyDraft] = useState('0')
-  const [isBaseFrequencyEditing, setIsBaseFrequencyEditing] = useState(false)
-  const [baseFrequencyDraft, setBaseFrequencyDraft] = useState('440')
-  const [isSequenceNameEditing, setIsSequenceNameEditing] = useState(false)
-  const [sequenceNameDraft, setSequenceNameDraft] = useState('')
-  const [isScaleUpdating, setIsScaleUpdating] = useState(false)
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
-  const [isCommandMode, setIsCommandMode] = useState(false)
-  const [commandText, setCommandText] = useState('')
-  const [commandSuffix, setCommandSuffix] = useState('')
-  const [commandHistory, setCommandHistory] = useState<string[]>([])
-  const [sequenceViewKeymap, setSequenceViewKeymap] = useState<SequenceViewKeymap>({})
-  const [historyIndex, setHistoryIndex] = useState<number>(-1)
+  const [sequenceViewKeymap, setSequenceViewKeymap] = useState<Record<string, string>>({})
+  const {
+    isCommandMode,
+    setIsCommandMode,
+    commandText,
+    setCommandText,
+    commandSuffix,
+    setCommandSuffix,
+    commandHistory,
+    setCommandHistory,
+    historyIndex,
+    setHistoryIndex,
+    liveCommandBufferRef,
+    openCommandMode,
+    closeCommandMode,
+  } = useCommandState()
   const eventTokenRef = useRef<unknown>(null)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const timeSignatureInputRef = useRef<HTMLInputElement>(null)
@@ -1844,7 +94,6 @@ function App() {
   const baseFrequencyInputRef = useRef<HTMLInputElement>(null)
   const sequenceNameInputRef = useRef<HTMLInputElement>(null)
   const scaleMenuRef = useRef<HTMLDivElement | null>(null)
-  const liveCommandBufferRef = useRef('')
   const lastSnapshotVersionRef = useRef<number>(-1)
   const completionRequestVersionRef = useRef(0)
   const pendingNumberRef = useRef('')
@@ -1854,8 +103,6 @@ function App() {
   const transportRef = useRef<TransportState>(createTransportState())
   const selectedMeasureIndexRef = useRef(0)
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
-  const animationFrameRef = useRef<number | null>(null)
-  const lastAnimationFrameMsRef = useRef<number | null>(null)
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
   const [syncedTransportPhases, setSyncedTransportPhases] = useState<SyncedTransportPhases>({
     wrapped: Array(TRANSPORT_SEQUENCE_COUNT).fill(0),
@@ -1864,414 +111,87 @@ function App() {
   const [activeSequenceFlags, setActiveSequenceFlags] = useState<boolean[]>(
     Array(TRANSPORT_SEQUENCE_COUNT).fill(false)
   )
-  const [modulatorInstances, setModulatorInstances] = useState<ModulatorPanelState[]>(() =>
-    Array.from({ length: 4 }, () => createInitialModulatorPanelState())
-  )
-  const [activeModulatorTab, setActiveModulatorTab] = useState(0)
-  const [activeReferenceTab, setActiveReferenceTab] = useState<'commands' | 'keybindings'>('commands')
-  const [referenceCommandSearch, setReferenceCommandSearch] = useState('')
-  const referenceSearchInputRef = useRef<HTMLInputElement>(null)
-  const [tuningSearch, setTuningSearch] = useState('')
-  const tuningSearchInputRef = useRef<HTMLInputElement>(null)
-  const [sequenceSearch, setSequenceSearch] = useState('')
-  const sequenceSearchInputRef = useRef<HTMLInputElement>(null)
-  const [tuningSortMode, setTuningSortMode] = useState<TuningSortMode>('name')
-  const [activeLibraryTab, setActiveLibraryTab] = useState<
-    'tunings' | 'sequences' | 'scales' | 'chords'
-  >('tunings')
-  const [sessionReference, setSessionReference] = useState<SessionReference>({
-    commands: [],
-    keybindings: [],
+  const {
+    activeReferenceTab,
+    setActiveReferenceTab,
+    referenceCommandSearch,
+    setReferenceCommandSearch,
+    referenceSearchInputRef,
+    tuningSearch,
+    setTuningSearch,
+    tuningSearchInputRef,
+    sequenceSearch,
+    setSequenceSearch,
+    sequenceSearchInputRef,
+    tuningSortMode,
+    setTuningSortMode,
+    activeLibraryTab,
+    setActiveLibraryTab,
+    sessionReference,
+    setSessionReference,
+    librarySnapshot,
+    setLibrarySnapshot,
+    libraryLoading,
+    setLibraryLoading,
+    sequenceViewReferenceBindings,
+    filteredReferenceCommands,
+    tuningHierarchyRows,
+    sequenceHierarchyRows,
+  } = useLibraryPanelState()
+  const {
+    modulatorInstances,
+    setModulatorInstances,
+    activeModulatorTab,
+    setActiveModulatorTab,
+    waveAType,
+    setWaveAType,
+    waveBType,
+    setWaveBType,
+    waveAPulseWidth,
+    setWaveAPulseWidth,
+    waveBPulseWidth,
+    setWaveBPulseWidth,
+    waveLerp,
+    setWaveLerp,
+    lfoAFrequency,
+    setLfoAFrequency,
+    lfoAPhaseOffset,
+    setLfoAPhaseOffset,
+    lfoBFrequency,
+    setLfoBFrequency,
+    lfoBPhaseOffset,
+    setLfoBPhaseOffset,
+    openWaveMenu,
+    setOpenWaveMenu,
+    targetControls,
+    setTargetControls,
+    padDragRef,
+    wavePadDragRef,
+    lastWaveHandleUsedRef,
+    liveEmitFrameRef,
+    liveEmitCommandsRef,
+    waveMenuRef,
+    isSwitchingModTabRef,
+    modulatorInstancesRef,
+  } = useModulatorPanelState()
+  const { sendBridgeRequest, executeBackendCommand } = useBridgeSession({
+    eventTokenRef,
+    transportRef,
+    selectedMeasureIndexRef,
+    lastSnapshotVersionRef,
+    setSnapshot,
+    setCurrentInputMode,
+    setStatusMessage,
+    setStatusLevel,
+    setBridgeUnavailableMessage,
+    setSessionReference,
+    setSequenceViewKeymap,
+    setLibraryLoading,
+    setLibrarySnapshot,
+    setActiveSequenceFlags,
+    setPlayheadPhase,
+    setSyncedTransportPhases,
   })
-  const [librarySnapshot, setLibrarySnapshot] = useState<LibrarySnapshot>({
-    paths: {
-      library: '',
-      sequences: '',
-      tunings: '',
-    },
-    sequenceBanks: [],
-    tunings: [],
-    scales: [],
-    chords: [],
-    commands: {
-      reloadScales: '',
-      reloadChords: '',
-      libraryDirectory: '',
-    },
-    active: {
-      tuningName: '',
-      scaleName: null,
-    },
-  })
-  const [libraryLoading, setLibraryLoading] = useState(false)
-  const [waveAType, setWaveAType] = useState<WaveType>('sine')
-  const [waveBType, setWaveBType] = useState<WaveType>('triangle')
-  const [waveAPulseWidth, setWaveAPulseWidth] = useState(0.5)
-  const [waveBPulseWidth, setWaveBPulseWidth] = useState(0.5)
-  const [waveLerp, setWaveLerp] = useState(0)
-  const [lfoAFrequency, setLfoAFrequency] = useState(1)
-  const [lfoAPhaseOffset, setLfoAPhaseOffset] = useState(0)
-  const [lfoBFrequency, setLfoBFrequency] = useState(1)
-  const [lfoBPhaseOffset, setLfoBPhaseOffset] = useState(0)
-  const [openWaveMenu, setOpenWaveMenu] = useState<'a' | 'b' | null>(null)
-  const [targetControls, setTargetControls] = useState<Record<ModTarget, TargetControl>>(
-    createInitialTargetControls()
-  )
-  const padDragRef = useRef<{
-    pointerId: number
-    target: ModTarget
-    mode: 'amount' | 'center'
-    host: HTMLDivElement
-    startClientX: number
-    startClientY: number
-    startAmount: number
-    startCenter: number
-  } | null>(null)
-  const wavePadDragRef = useRef<{
-    pointerId: number
-    wave: 'a' | 'b'
-    host: HTMLDivElement
-    startClientX: number
-    startClientY: number
-    moved: boolean
-  } | null>(null)
-  const lastWaveHandleUsedRef = useRef<'a' | 'b'>('a')
-  const liveEmitFrameRef = useRef<number | null>(null)
-  const liveEmitCommandsRef = useRef<string[] | null>(null)
-  const waveMenuRef = useRef<HTMLDivElement | null>(null)
-  const isSwitchingModTabRef = useRef(false)
-  const modulatorInstancesRef = useRef(modulatorInstances)
-
-  const sendBridgeRequest = useCallback(
-    async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
-      const request = {
-        protocol: BRIDGE_PROTOCOL,
-        type: 'request' as const,
-        name,
-        request_id: createRequestId(),
-        payload,
-      }
-
-      const requestFn = await getXenBridgeRequest()
-      const rawResponse = await requestFn(JSON.stringify(request))
-      const envelope = parseWireEnvelope(rawResponse)
-
-      if (envelope.type !== 'response') {
-        throw new Error(`Unexpected '${envelope.type}' envelope for '${name}'`)
-      }
-
-      return envelope
-    },
-    []
-  )
-
-  const applySnapshot = useCallback((rawSnapshot: unknown): number | null => {
-    const parsedSnapshot = parseUiStateSnapshot(rawSnapshot)
-    if (!parsedSnapshot) {
-      return null
-    }
-
-    if (parsedSnapshot.snapshot_version <= lastSnapshotVersionRef.current) {
-      return parsedSnapshot.snapshot_version
-    }
-
-    lastSnapshotVersionRef.current = parsedSnapshot.snapshot_version
-    setSnapshot(parsedSnapshot)
-    setCurrentInputMode(parsedSnapshot.editor.input_mode)
-    return parsedSnapshot.snapshot_version
-  }, [])
-
-  const executeBackendCommand = useCallback(
-    async (command: string): Promise<void> => {
-      const response = await sendBridgeRequest('command.execute', { command })
-      const payloadError = getPayloadError(response.payload)
-      if (payloadError) {
-        throw new Error(payloadError)
-      }
-
-      const commandSnapshot = getCommandSnapshot(response.payload)
-      applySnapshot(commandSnapshot)
-      const commandStatus = getCommandStatus(response.payload)
-
-      if (commandStatus && commandStatus.level !== 'debug') {
-        setStatusMessage(commandStatus.message)
-        setStatusLevel(commandStatus.level)
-      }
-    },
-    [applySnapshot, sendBridgeRequest]
-  )
-
-  const openCommandMode = useCallback((): void => {
-    liveCommandBufferRef.current = commandText
-    setHistoryIndex(-1)
-    setIsCommandMode(true)
-  }, [commandText])
-
-  const closeCommandMode = useCallback(
-    (options?: { preserveText?: boolean }): void => {
-      setIsCommandMode(false)
-      setHistoryIndex(-1)
-      if (!options?.preserveText) {
-        setCommandText('')
-        liveCommandBufferRef.current = ''
-      }
-    },
-    []
-  )
-
-  useEffect(() => {
-    let isMounted = true
-
-    const connect = async (): Promise<void> => {
-      try {
-        eventTokenRef.current = addXenBridgeListener((rawEvent) => {
-          try {
-            const eventEnvelope = parseWireEnvelope(rawEvent)
-            if (eventEnvelope.type !== 'event') {
-              return
-            }
-
-            if (eventEnvelope.name === 'state.changed') {
-              applySnapshot(eventEnvelope.payload)
-              return
-            }
-
-            const payload = asRecord(eventEnvelope.payload)
-            if (!payload) {
-              return
-            }
-
-            if (eventEnvelope.name === 'transport.trigger.noteOn') {
-              const sequenceIndex = toSequenceIndex(payload.sequence_index)
-              if (sequenceIndex === null) {
-                return
-              }
-
-              transportRef.current.active[sequenceIndex] = true
-              setActiveSequenceFlags((previous) => {
-                if (previous[sequenceIndex]) {
-                  return previous
-                }
-                const next = [...previous]
-                next[sequenceIndex] = true
-                return next
-              })
-              if (sequenceIndex === selectedMeasureIndexRef.current) {
-                setPlayheadPhase(transportRef.current.phase[sequenceIndex] ?? 0)
-              }
-              return
-            }
-
-            if (eventEnvelope.name === 'transport.trigger.noteOff') {
-              const sequenceIndex = toSequenceIndex(payload.sequence_index)
-              if (sequenceIndex === null) {
-                return
-              }
-
-              transportRef.current.active[sequenceIndex] = false
-              setActiveSequenceFlags((previous) => {
-                if (!previous[sequenceIndex]) {
-                  return previous
-                }
-                const next = [...previous]
-                next[sequenceIndex] = false
-                return next
-              })
-              transportRef.current.phase[sequenceIndex] = 0
-              setSyncedTransportPhases((previous) => {
-                if (
-                  (previous.wrapped[sequenceIndex] ?? 0) === 0 &&
-                  (previous.unwrapped[sequenceIndex] ?? 0) === 0
-                ) {
-                  return previous
-                }
-                const nextWrapped = [...previous.wrapped]
-                const nextUnwrapped = [...previous.unwrapped]
-                nextWrapped[sequenceIndex] = 0
-                nextUnwrapped[sequenceIndex] = 0
-                return {
-                  wrapped: nextWrapped,
-                  unwrapped: nextUnwrapped,
-                }
-              })
-              if (sequenceIndex === selectedMeasureIndexRef.current) {
-                setPlayheadPhase(null)
-              }
-              return
-            }
-
-            if (eventEnvelope.name === 'transport.phase.sync') {
-              if (typeof payload.bpm === 'number' && Number.isFinite(payload.bpm) && payload.bpm > 0) {
-                transportRef.current.bpm = payload.bpm
-              }
-
-              const phases = Array.isArray(payload.phases) ? payload.phases : []
-              setSyncedTransportPhases((previous) => {
-                const nextWrapped = [...previous.wrapped]
-                const nextUnwrapped = [...previous.unwrapped]
-                let changed = false
-                for (const rawPhaseEntry of phases) {
-                  const phaseEntry = asRecord(rawPhaseEntry)
-                  if (!phaseEntry) {
-                    continue
-                  }
-
-                  const sequenceIndex = toSequenceIndex(phaseEntry.sequence_index)
-                  if (sequenceIndex === null) {
-                    continue
-                  }
-
-                  const phase = phaseEntry.phase
-                  if (typeof phase !== 'number' || !Number.isFinite(phase)) {
-                    continue
-                  }
-
-                  const normalizedPhase = normalizePhase(phase)
-                  const previousWrapped = previous.wrapped[sequenceIndex] ?? 0
-                  const previousUnwrapped = previous.unwrapped[sequenceIndex] ?? 0
-                  let delta = normalizedPhase - previousWrapped
-                  if (delta > 0.5) {
-                    delta -= 1
-                  } else if (delta < -0.5) {
-                    delta += 1
-                  }
-                  const nextUnwrappedPhase = previousUnwrapped + delta
-
-                  if (
-                    nextWrapped[sequenceIndex] === normalizedPhase &&
-                    nextUnwrapped[sequenceIndex] === nextUnwrappedPhase
-                  ) {
-                    continue
-                  }
-                  nextWrapped[sequenceIndex] = normalizedPhase
-                  nextUnwrapped[sequenceIndex] = nextUnwrappedPhase
-                  changed = true
-                }
-
-                return changed
-                  ? {
-                      wrapped: nextWrapped,
-                      unwrapped: nextUnwrapped,
-                    }
-                  : previous
-              })
-              for (const rawPhaseEntry of phases) {
-                const phaseEntry = asRecord(rawPhaseEntry)
-                if (!phaseEntry) {
-                  continue
-                }
-
-                const sequenceIndex = toSequenceIndex(phaseEntry.sequence_index)
-                if (sequenceIndex === null) {
-                  continue
-                }
-
-                const phase = phaseEntry.phase
-                if (typeof phase !== 'number' || !Number.isFinite(phase)) {
-                  continue
-                }
-
-                const normalizedPhase = normalizePhase(phase)
-                transportRef.current.phase[sequenceIndex] = normalizedPhase
-              }
-
-              const selectedIndex = selectedMeasureIndexRef.current
-              if (transportRef.current.active[selectedIndex]) {
-                setPlayheadPhase(transportRef.current.phase[selectedIndex] ?? 0)
-              } else {
-                setPlayheadPhase(null)
-              }
-            }
-          } catch {
-            // Keep footer status reserved for command responses only.
-          }
-        })
-
-        const helloResponse = await sendBridgeRequest('session.hello', {
-          protocol: BRIDGE_PROTOCOL,
-          snapshot_schema_version: 1,
-          frontend_app: FRONTEND_APP,
-          frontend_version: FRONTEND_VERSION,
-        })
-
-        const helloError = getPayloadError(helloResponse.payload)
-        if (helloError) {
-          throw new Error(helloError)
-        }
-
-        if (isMounted) {
-          setBridgeUnavailableMessage(null)
-          setSessionReference(getSessionReference(helloResponse.payload))
-        }
-
-        const stateResponse = await sendBridgeRequest('state.get', {})
-        const stateError = getPayloadError(stateResponse.payload)
-        if (stateError) {
-          throw new Error(stateError)
-        }
-
-        applySnapshot(stateResponse.payload)
-
-        const keymapResponse = await sendBridgeRequest('keymap.get', {})
-        const keymapError = getPayloadError(keymapResponse.payload)
-        if (keymapError) {
-          throw new Error(keymapError)
-        }
-        if (isMounted) {
-          setSequenceViewKeymap(getSequenceViewKeymap(keymapResponse.payload))
-        }
-
-        if (isMounted) {
-          setLibraryLoading(true)
-        }
-        const libraryResponse = await sendBridgeRequest('library.get', {})
-        const libraryError = getPayloadError(libraryResponse.payload)
-        if (libraryError) {
-          throw new Error(libraryError)
-        }
-        if (isMounted) {
-          const parsedLibrary = getLibrarySnapshot(libraryResponse.payload)
-          setLibrarySnapshot(parsedLibrary)
-          setLibraryLoading(false)
-        }
-
-        const welcomeResponse = await sendBridgeRequest('command.execute', { command: 'welcome' })
-        const welcomeError = getPayloadError(welcomeResponse.payload)
-        if (welcomeError) {
-          throw new Error(welcomeError)
-        }
-
-        const welcomeSnapshot = getCommandSnapshot(welcomeResponse.payload)
-        applySnapshot(welcomeSnapshot)
-        const welcomeStatus = getCommandStatus(welcomeResponse.payload)
-
-        if (isMounted) {
-          if (welcomeStatus && welcomeStatus.level !== 'debug') {
-            setStatusMessage(welcomeStatus.message)
-            setStatusLevel(welcomeStatus.level)
-          }
-        }
-      } catch (error) {
-        if (isMounted) {
-          setLibraryLoading(false)
-          const message = getErrorMessage(error)
-          if (message.startsWith('JUCE bridge unavailable:')) {
-            setBridgeUnavailableMessage(message)
-          }
-        }
-      }
-    }
-
-    void connect()
-
-    return () => {
-      isMounted = false
-      if (eventTokenRef.current !== null) {
-        removeXenBridgeListener(eventTokenRef.current)
-        eventTokenRef.current = null
-      }
-    }
-  }, [applySnapshot, sendBridgeRequest])
 
   useEffect(() => {
     if (!isCommandMode) {
@@ -2287,7 +207,7 @@ function App() {
     input.focus()
     const textLength = input.value.length
     input.setSelectionRange(textLength, textLength)
-  }, [isCommandMode])
+  }, [isCommandMode, setCommandSuffix])
 
   useEffect(() => {
     if (!isCommandMode || bridgeUnavailableMessage !== null) {
@@ -2320,55 +240,7 @@ function App() {
     }
 
     void loadSuffix()
-  }, [bridgeUnavailableMessage, commandText, isCommandMode, sendBridgeRequest])
-
-  useEffect(() => {
-    const tick = (frameTimeMs: number): void => {
-      if (lastAnimationFrameMsRef.current === null) {
-        lastAnimationFrameMsRef.current = frameTimeMs
-      }
-
-      const dtSec = Math.max(0, (frameTimeMs - (lastAnimationFrameMsRef.current ?? frameTimeMs)) / 1000)
-      lastAnimationFrameMsRef.current = frameTimeMs
-
-      const selectedIndex = selectedMeasureIndexRef.current
-      const { numerator, denominator } = selectedTimeSignatureRef.current
-      const transport = transportRef.current
-
-      if (
-        !transport.active[selectedIndex] ||
-        transport.bpm <= 0 ||
-        numerator <= 0 ||
-        denominator <= 0
-      ) {
-        setPlayheadPhase((previous) => (previous === null ? previous : null))
-        animationFrameRef.current = requestAnimationFrame(tick)
-        return
-      }
-
-      const quartersPerLoop = numerator * (4 / denominator)
-      const loopSec = (quartersPerLoop * 60) / transport.bpm
-      if (loopSec <= 0) {
-        setPlayheadPhase((previous) => (previous === null ? previous : null))
-        animationFrameRef.current = requestAnimationFrame(tick)
-        return
-      }
-
-      const nextPhase = (transport.phase[selectedIndex] + dtSec / loopSec) % 1
-      transport.phase[selectedIndex] = nextPhase
-      setPlayheadPhase(nextPhase)
-      animationFrameRef.current = requestAnimationFrame(tick)
-    }
-
-    animationFrameRef.current = requestAnimationFrame(tick)
-    return () => {
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current)
-        animationFrameRef.current = null
-      }
-      lastAnimationFrameMsRef.current = null
-    }
-  }, [])
+  }, [bridgeUnavailableMessage, commandText, isCommandMode, sendBridgeRequest, setCommandSuffix])
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent): void => {
@@ -2521,7 +393,14 @@ function App() {
         closeCommandMode({ preserveText: !shouldClearCommandText })
       }
     },
-    [closeCommandMode, commandText, executeBackendCommand]
+    [
+      closeCommandMode,
+      commandText,
+      executeBackendCommand,
+      liveCommandBufferRef,
+      setCommandHistory,
+      setHistoryIndex,
+    ]
   )
 
   const {
@@ -2700,156 +579,99 @@ function App() {
     }
   }, [snapshot])
 
-  useEffect(() => {
-    selectedMeasureIndexRef.current = selectedMeasureIndex
-    selectedTimeSignatureRef.current = {
-      numerator: selectedMeasureNumerator,
-      denominator: selectedMeasureDenominator,
-    }
+  const {
+    isTimeSignatureEditing,
+    timeSignatureDraft,
+    setTimeSignatureDraft,
+    isKeyEditing,
+    keyDraft,
+    setKeyDraft,
+    isBaseFrequencyEditing,
+    baseFrequencyDraft,
+    setBaseFrequencyDraft,
+    isSequenceNameEditing,
+    sequenceNameDraft,
+    setSequenceNameDraft,
+    isScaleUpdating,
+    commitTimeSignature,
+    commitKey,
+    commitBaseFrequency,
+    commitSequenceName,
+    beginTimeSignatureEdit,
+    cancelTimeSignatureEdit,
+    beginKeyEdit,
+    cancelKeyEdit,
+    beginBaseFrequencyEdit,
+    cancelBaseFrequencyEdit,
+    beginSequenceNameEdit,
+    cancelSequenceNameEdit,
+    applyTimeSignatureScale,
+    scaleOptions,
+    modeOptions,
+    applyModeSelection,
+    applyScaleSelection,
+    toggleTranslateDirection,
+  } = useHeaderEditing({
+    bridgeUnavailableMessage,
+    timeSignature,
+    keyDisplay,
+    baseFrequency,
+    selectedMeasureName,
+    selectedMeasureIndex,
+    scaleName,
+    scaleMode,
+    scaleSize,
+    scaleTranslateDirection,
+    librarySnapshot,
+    executeBackendCommand,
+    setStatusMessage,
+    setStatusLevel,
+    timeSignatureInputRef,
+    keyInputRef,
+    baseFrequencyInputRef,
+    sequenceNameInputRef,
+  })
 
-    if (transportRef.current.active[selectedMeasureIndex]) {
-      setPlayheadPhase(transportRef.current.phase[selectedMeasureIndex] ?? 0)
-      return
-    }
+  useTransportPlayhead({
+    selectedMeasureIndex,
+    selectedMeasureNumerator,
+    selectedMeasureDenominator,
+    transportRef,
+    selectedMeasureIndexRef,
+    selectedTimeSignatureRef,
+    setPlayheadPhase,
+  })
 
-    setPlayheadPhase(null)
-  }, [selectedMeasureDenominator, selectedMeasureIndex, selectedMeasureNumerator])
-
-  const flattenedNoteIrBySequence = useMemo(() => {
-    const flattened = Array.from({ length: TRANSPORT_SEQUENCE_COUNT }, () => [] as NoteSpanIR[])
-    const boundedLength = Math.min(sequenceBank.length, TRANSPORT_SEQUENCE_COUNT)
-    for (let index = 0; index < boundedLength; index += 1) {
-      const measure = sequenceBank[index]
-      if (!measure) {
-        continue
-      }
-      flattened[index] = flattenMeasureToNoteIR(measure, index)
-    }
-    return flattened
-  }, [sequenceBank])
-
-  const backgroundOverlayStates = useMemo((): BgOverlayState[] => {
-    if (!snapshot || !selectedMeasure || selectedLoopQuarterNotes <= 0) {
-      return []
-    }
-
-    if (!activeSequenceFlags[selectedMeasureIndex]) {
-      return []
-    }
-
-    const selectedPhase = syncedTransportPhases.unwrapped[selectedMeasureIndex] ?? 0
-    const overlays: BgOverlayState[] = []
-
-    for (let sequenceIndex = 0; sequenceIndex < TRANSPORT_SEQUENCE_COUNT; sequenceIndex += 1) {
-      if (sequenceIndex === selectedMeasureIndex || !activeSequenceFlags[sequenceIndex]) {
-        continue
-      }
-
-      const bgMeasure = sequenceBank[sequenceIndex]
-      if (!bgMeasure) {
-        continue
-      }
-
-      const bgLoopQuarterNotes = getMeasureLoopQuarterNotes(bgMeasure)
-      if (bgLoopQuarterNotes <= 0) {
-        continue
-      }
-
-      const ratioFgToBg = selectedLoopQuarterNotes / bgLoopQuarterNotes
-      const bgPhase = syncedTransportPhases.unwrapped[sequenceIndex] ?? 0
-      const projectedNotes = windowBackgroundNotes(
-        flattenedNoteIrBySequence[sequenceIndex] ?? [],
-        ratioFgToBg,
-        selectedPhase,
-        bgPhase
-      )
-      const triggerPhase = getProjectedBgTriggerPhase(ratioFgToBg, selectedPhase, bgPhase)
-      if (projectedNotes.length === 0 && triggerPhase === null) {
-        continue
-      }
-
-      overlays.push({
-        sequenceIndex,
-        notes: projectedNotes,
-        triggerPhase,
-      })
-    }
-
-    return overlays
-  }, [
-    activeSequenceFlags,
-    flattenedNoteIrBySequence,
-    syncedTransportPhases,
-    selectedLoopQuarterNotes,
+  const {
+    backgroundOverlayStates,
+    pitchRows,
+    ratioToBottom,
+    selectSequenceFromBank,
+    sequenceBankCells,
+    renderRollCells,
+  } = useSequencerRollState({
+    snapshot,
     selectedMeasure,
+    selectedLoopQuarterNotes,
     selectedMeasureIndex,
     sequenceBank,
-    snapshot,
-  ])
-
-  const pitchRows = useMemo(
-    () => Array.from({ length: tuningLength }, (_, index) => tuningLength - 1 - index),
-    [tuningLength]
-  )
-
-  const referenceMax = getLargestElement(REFERENCE_RATIOS)
-  const rulerOffset = (1 - referenceMax) / 2
-
-  const ratioToBottom = useCallback(
-    (ratio: number): number => {
-      let bottom = ratio + rulerOffset
-      while (bottom > 1) {
-        bottom -= 1
-      }
-      while (bottom < 0) {
-        bottom += 1
-      }
-      return bottom * 100
-    },
-    [rulerOffset]
-  )
+    syncedTransportPhases,
+    activeSequenceFlags,
+    tuningLength,
+    commandText,
+    isCommandMode,
+    selectedLeafFlags,
+    leafCells,
+    leafPatternScopeIndices,
+    patternScopeCellCount,
+    staffLineBandByPitch,
+    bridgeUnavailableMessage,
+    executeBackendCommand,
+    setStatusMessage,
+    setStatusLevel,
+  })
 
   const currentInputModeLetter = currentInputMode.charAt(0).toUpperCase()
-  const selectSequenceFromBank = useCallback(
-    (sequenceIndex: number): void => {
-      if (bridgeUnavailableMessage !== null) {
-        return
-      }
-
-      void executeBackendCommand(`select sequence ${sequenceIndex}`).catch((error: unknown) => {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-      })
-    },
-    [bridgeUnavailableMessage, executeBackendCommand]
-  )
-
-  const sequenceBankCells = useMemo(
-    () =>
-      Array.from({ length: TRANSPORT_SEQUENCE_COUNT }, (_, index) => {
-        const row = 4 - Math.floor(index / 4)
-        const column = (index % 4) + 1
-        return { index, row, column }
-      }),
-    []
-  )
-
-  const sequenceViewReferenceBindings = useMemo(
-    () =>
-      sessionReference.keybindings
-        .filter((group) => group.component === 'SequenceView')
-        .flatMap((group) => group.bindings),
-    [sessionReference.keybindings]
-  )
-
-  const filteredReferenceCommands = useMemo(() => {
-    const query = referenceCommandSearch.trim().toLowerCase()
-    if (!query) {
-      return sessionReference.commands
-    }
-
-    return sessionReference.commands.filter((command) => command.id.toLowerCase().includes(query))
-  }, [referenceCommandSearch, sessionReference.commands])
 
   const focusCommandBarWithText = useCallback(
     (commandTemplate: string): void => {
@@ -2877,252 +699,9 @@ function App() {
         input.setSelectionRange(textLength, textLength)
       })
     },
-    [historyIndex]
+    [historyIndex, liveCommandBufferRef, setCommandText, setHistoryIndex, setIsCommandMode]
   )
 
-  const tuningHierarchyRows = useMemo(
-    () => {
-      const query = tuningSearch.trim().toLowerCase()
-      const tunings =
-        query.length === 0
-          ? librarySnapshot.tunings
-          : librarySnapshot.tunings.filter((tuning) => tuning.stem.toLowerCase().includes(query))
-
-      const sortedTunings = [...tunings].sort((a, b) => {
-        if (tuningSortMode === 'name') {
-          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-        }
-
-        if (tuningSortMode === 'noteCount') {
-          const aCount = a.noteCount
-          const bCount = b.noteCount
-          if (aCount !== null && bCount !== null && aCount !== bCount) {
-            return aCount - bCount
-          }
-          if (aCount === null && bCount !== null) {
-            return 1
-          }
-          if (aCount !== null && bCount === null) {
-            return -1
-          }
-          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-        }
-
-        const aOctave = a.octave
-        const bOctave = b.octave
-        if (aOctave !== null && bOctave !== null && aOctave !== bOctave) {
-          return aOctave - bOctave
-        }
-        if (aOctave === null && bOctave !== null) {
-          return 1
-        }
-        if (aOctave !== null && bOctave === null) {
-          return -1
-        }
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-      })
-
-      return getHierarchyRows(sortedTunings, { sortByName: false })
-    },
-    [librarySnapshot.tunings, tuningSearch, tuningSortMode]
-  )
-
-  const sequenceHierarchyRows = useMemo(
-    () => {
-      const query = sequenceSearch.trim().toLowerCase()
-      const sequenceBanks =
-        query.length === 0
-          ? librarySnapshot.sequenceBanks
-          : librarySnapshot.sequenceBanks.filter((sequenceBank) =>
-              sequenceBank.stem.toLowerCase().includes(query)
-            )
-      return getHierarchyRows(sequenceBanks)
-    },
-    [librarySnapshot.sequenceBanks, sequenceSearch]
-  )
-
-  const displayedLeafFlags = useMemo(() => {
-    if (!isCommandMode) {
-      return selectedLeafFlags
-    }
-
-    const pattern = parsePatternPrefix(commandText)
-    if (!pattern) {
-      return selectedLeafFlags
-    }
-
-    const matchingIndices = getPatternIndices(patternScopeCellCount, pattern)
-    return leafCells.map((_, index) => matchingIndices.has(leafPatternScopeIndices[index] ?? -1))
-  }, [
-    commandText,
-    isCommandMode,
-    leafCells,
-    leafPatternScopeIndices,
-    patternScopeCellCount,
-    selectedLeafFlags,
-  ])
-
-  const selectedLeafPathKeySet = useMemo(() => {
-    const selectedKeys = new Set<string>()
-    displayedLeafFlags.forEach((isSelected, index) => {
-      if (!isSelected) {
-        return
-      }
-
-      const leafPath = leafCells[index]?.path
-      if (!leafPath) {
-        return
-      }
-
-      selectedKeys.add(pathToKey(leafPath))
-    })
-    return selectedKeys
-  }, [displayedLeafFlags, leafCells])
-
-  const selectedLeafStartPathKeySet = useMemo(() => {
-    const selectedStartKeys = new Set<string>()
-    displayedLeafFlags.forEach((isSelected, index) => {
-      if (!isSelected || (displayedLeafFlags[index - 1] ?? false)) {
-        return
-      }
-
-      const leafPath = leafCells[index]?.path
-      if (!leafPath) {
-        return
-      }
-
-      selectedStartKeys.add(pathToKey(leafPath))
-    })
-    return selectedStartKeys
-  }, [displayedLeafFlags, leafCells])
-
-  const selectedLeafEndPathKeySet = useMemo(() => {
-    const selectedEndKeys = new Set<string>()
-    displayedLeafFlags.forEach((isSelected, index) => {
-      if (!isSelected || (displayedLeafFlags[index + 1] ?? false)) {
-        return
-      }
-
-      const leafPath = leafCells[index]?.path
-      if (!leafPath) {
-        return
-      }
-
-      selectedEndKeys.add(pathToKey(leafPath))
-    })
-    return selectedEndKeys
-  }, [displayedLeafFlags, leafCells])
-
-  const renderRollCells = useCallback(
-    (cells: Cell[], parentPath: number[], sequenceDepth: number) => {
-      if (cells.length === 0) {
-        return []
-      }
-
-      const siblings = cells
-
-      return siblings.map((cell, index) => {
-        const normalizedWeight = getCellWeight(cell.weight)
-        const cellPath = [...parentPath, index]
-        const cellKey = pathToKey(cellPath)
-        const previousSibling = index > 0 ? siblings[index - 1] : null
-        const hasSequenceBoundary =
-          index > 0 && (cell.type === 'Sequence' || previousSibling?.type === 'Sequence')
-
-        if (cell.type === 'Sequence' && cell.cells.length > 0) {
-          return (
-            <div
-              key={`roll-segment-${cellKey}`}
-              className={`rollSegment${hasSequenceBoundary ? ' rollSegment-sequenceBoundary' : ''}`}
-              style={
-                {
-                  flexGrow: normalizedWeight,
-                  flexBasis: 0,
-                  '--roll-sequence-boundary-depth': sequenceDepth,
-                } as CSSProperties
-              }
-            >
-              <div className="rollBranch">
-                {renderRollCells(cell.cells, cellPath, sequenceDepth + 1)}
-              </div>
-            </div>
-          )
-        }
-
-        const isSelected = selectedLeafPathKeySet.has(cellKey)
-        const isSelectedStart = selectedLeafStartPathKeySet.has(cellKey)
-        const isSelectedEnd = selectedLeafEndPathKeySet.has(cellKey)
-        const normalizedVelocity =
-          cell.type === 'Note' ? clampNumber(cell.velocity, 0, 1) : 0
-        const normalizedDelay = cell.type === 'Note' ? clampNumber(cell.delay, 0, 1) : 0
-        const normalizedGate = cell.type === 'Note' ? clampNumber(cell.gate, 0, 1) : 0
-        const normalizedPitch =
-          cell.type === 'Note' && tuningLength > 0
-            ? normalizePitch(cell.pitch, tuningLength)
-            : cell.type === 'Note'
-              ? Math.trunc(cell.pitch)
-              : 0
-        const noteOctave =
-          cell.type === 'Note' && tuningLength > 0 ? Math.floor(cell.pitch / tuningLength) : 0
-
-        return (
-          <div
-            key={`roll-segment-${cellKey}`}
-            className={`rollSegment${hasSequenceBoundary ? ' rollSegment-sequenceBoundary' : ''}`}
-            style={
-              {
-                flexGrow: normalizedWeight,
-                flexBasis: 0,
-                '--roll-sequence-boundary-depth': sequenceDepth,
-              } as CSSProperties
-            }
-          >
-            <div
-              className={`rollIsland${isSelected ? ' rollIsland-selected' : ''}${isSelectedStart ? ' rollIsland-selectedStart' : ''}${isSelectedEnd ? ' rollIsland-selectedEnd' : ''}`}
-            >
-              <div className="rollIslandGrid">
-                {pitchRows.map((pitch) => (
-                  <div
-                    key={`roll-island-${cellKey}-row-${pitch}`}
-                    className={`rollRow ${(staffLineBandByPitch[pitch] ?? 0) === 0 ? 'rollRow-bandEven' : 'rollRow-bandOdd'}`}
-                  >
-                    <div className="rollRowLine" aria-hidden="true" />
-                    {cell.type === 'Note' && normalizedPitch === pitch ? (
-                      <div
-                        className={`rollNote${normalizedDelay > 0 ? ' rollNote-hasDelay' : ''}${normalizedGate < 1 ? ' rollNote-shortGate' : ''}`}
-                        style={
-                          {
-                            left: `${normalizedDelay * 100}%`,
-                            width: `max(${(1 - normalizedDelay) * normalizedGate * 100}%, 4px)`,
-                            background: `rgb(241 245 249 / ${0.18 + normalizedVelocity * 0.72})`,
-                          } as CSSProperties
-                        }
-                        aria-hidden="true"
-                      >
-                        {noteOctave !== 0 ? (
-                          <span className="rollNoteOctave mono">
-                            {noteOctave > 0 ? `+${noteOctave}` : noteOctave}
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )
-      })
-    },
-    [
-      pitchRows,
-      selectedLeafEndPathKeySet,
-      selectedLeafPathKeySet,
-      selectedLeafStartPathKeySet,
-      staffLineBandByPitch,
-      tuningLength,
-    ]
-  )
 
   const { waveAPreviewPath, waveBPreviewPath, morphedWavePreviewPath } = useMemo(() => {
     const width = 420
@@ -3234,7 +813,7 @@ function App() {
         emitCommandsNow(pending)
       })
     },
-    [bridgeUnavailableMessage, emitCommandsNow]
+    [bridgeUnavailableMessage, emitCommandsNow, liveEmitCommandsRef, liveEmitFrameRef]
   )
 
   useEffect(
@@ -3245,12 +824,12 @@ function App() {
       }
       liveEmitCommandsRef.current = null
     },
-    []
+    [liveEmitCommandsRef, liveEmitFrameRef]
   )
 
   useEffect(() => {
     modulatorInstancesRef.current = modulatorInstances
-  }, [modulatorInstances])
+  }, [modulatorInstances, modulatorInstancesRef])
 
   useEffect(() => {
     const nextState = modulatorInstancesRef.current[activeModulatorTab]
@@ -3273,7 +852,21 @@ function App() {
     queueMicrotask(() => {
       isSwitchingModTabRef.current = false
     })
-  }, [activeModulatorTab])
+  }, [
+    activeModulatorTab,
+    isSwitchingModTabRef,
+    modulatorInstancesRef,
+    setLfoAFrequency,
+    setLfoAPhaseOffset,
+    setLfoBFrequency,
+    setLfoBPhaseOffset,
+    setTargetControls,
+    setWaveAPulseWidth,
+    setWaveAType,
+    setWaveBPulseWidth,
+    setWaveBType,
+    setWaveLerp,
+  ])
 
   useEffect(() => {
     if (isSwitchingModTabRef.current) {
@@ -3311,6 +904,8 @@ function App() {
     waveBPulseWidth,
     waveBType,
     waveLerp,
+    isSwitchingModTabRef,
+    setModulatorInstances,
   ])
 
   useEffect(() => {
@@ -3340,7 +935,7 @@ function App() {
       window.removeEventListener('mousedown', handlePointerDown)
       window.removeEventListener('keydown', handleEscape)
     }
-  }, [openWaveMenu])
+  }, [openWaveMenu, setOpenWaveMenu, waveMenuRef])
 
   useEffect(() => {
     if (!openScaleMenu) {
@@ -3381,7 +976,7 @@ function App() {
         },
       }))
     },
-    []
+    [setTargetControls]
   )
 
   const applyPadMotion = useCallback(
@@ -3518,6 +1113,11 @@ function App() {
       waveBPulseWidth,
       waveBType,
       waveLerp,
+      lastWaveHandleUsedRef,
+      setLfoAFrequency,
+      setLfoAPhaseOffset,
+      setLfoBFrequency,
+      setLfoBPhaseOffset,
     ]
   )
 
@@ -3570,6 +1170,11 @@ function App() {
       waveBPulseWidth,
       waveBType,
       waveLerp,
+      lastWaveHandleUsedRef,
+      setLfoAFrequency,
+      setLfoAPhaseOffset,
+      setLfoBFrequency,
+      setLfoBPhaseOffset,
     ]
   )
 
@@ -3580,7 +1185,7 @@ function App() {
       setWaveBType(waveType)
     }
     setOpenWaveMenu(null)
-  }, [])
+  }, [setOpenWaveMenu, setWaveAType, setWaveBType])
 
   const refreshLibraryView = useCallback(async (): Promise<void> => {
     if (bridgeUnavailableMessage !== null || libraryLoading) {
@@ -3602,7 +1207,13 @@ function App() {
     } finally {
       setLibraryLoading(false)
     }
-  }, [bridgeUnavailableMessage, libraryLoading, sendBridgeRequest])
+  }, [
+    bridgeUnavailableMessage,
+    libraryLoading,
+    sendBridgeRequest,
+    setLibraryLoading,
+    setLibrarySnapshot,
+  ])
 
   const runLibraryCommand = useCallback(
     async (command: string): Promise<void> => {
@@ -3621,352 +1232,6 @@ function App() {
   )
 
   const previousLibraryTabRef = useRef(activeLibraryTab)
-
-  useEffect(() => {
-    if (isTimeSignatureEditing) {
-      return
-    }
-    setTimeSignatureDraft(timeSignature)
-  }, [isTimeSignatureEditing, timeSignature])
-
-  useEffect(() => {
-    if (!isTimeSignatureEditing) {
-      return
-    }
-    const input = timeSignatureInputRef.current
-    if (!input) {
-      return
-    }
-    input.focus()
-    input.select()
-  }, [isTimeSignatureEditing])
-
-  useEffect(() => {
-    if (isKeyEditing) {
-      return
-    }
-    setKeyDraft(`${keyDisplay}`)
-  }, [isKeyEditing, keyDisplay])
-
-  useEffect(() => {
-    if (!isKeyEditing) {
-      return
-    }
-    const input = keyInputRef.current
-    if (!input) {
-      return
-    }
-    input.focus()
-    input.select()
-  }, [isKeyEditing])
-
-  useEffect(() => {
-    if (isBaseFrequencyEditing) {
-      return
-    }
-    setBaseFrequencyDraft(`${baseFrequency}`)
-  }, [baseFrequency, isBaseFrequencyEditing])
-
-  useEffect(() => {
-    if (!isBaseFrequencyEditing) {
-      return
-    }
-    const input = baseFrequencyInputRef.current
-    if (!input) {
-      return
-    }
-    input.focus()
-    input.select()
-  }, [isBaseFrequencyEditing])
-
-  useEffect(() => {
-    if (isSequenceNameEditing) {
-      return
-    }
-    setSequenceNameDraft(selectedMeasureName)
-  }, [isSequenceNameEditing, selectedMeasureName])
-
-  useEffect(() => {
-    if (!isSequenceNameEditing) {
-      return
-    }
-    const input = sequenceNameInputRef.current
-    if (!input) {
-      return
-    }
-    input.focus()
-    input.select()
-  }, [isSequenceNameEditing])
-
-  const commitTimeSignature = useCallback(
-    async (value: string): Promise<boolean> => {
-      if (bridgeUnavailableMessage !== null) {
-        return false
-      }
-
-      const parsed = parseTimeSignatureInput(value)
-      if (!parsed) {
-        setStatusMessage('Invalid time signature. Use N/D, e.g. 4/4')
-        setStatusLevel('warning')
-        setTimeSignatureDraft(timeSignature)
-        setIsTimeSignatureEditing(false)
-        return false
-      }
-
-      const normalized = formatTimeSignature(parsed)
-      try {
-        await executeBackendCommand(`set sequence timeSignature ${normalized}`)
-        setIsTimeSignatureEditing(false)
-        return true
-      } catch (error) {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-        setTimeSignatureDraft(timeSignature)
-        setIsTimeSignatureEditing(false)
-        return false
-      }
-    },
-    [bridgeUnavailableMessage, executeBackendCommand, timeSignature]
-  )
-
-  const commitKey = useCallback(
-    async (value: string): Promise<boolean> => {
-      if (bridgeUnavailableMessage !== null) {
-        return false
-      }
-
-      const parsed = parseIntegerInput(value)
-      if (parsed === null) {
-        setStatusMessage('Invalid key. Use an integer value.')
-        setStatusLevel('warning')
-        setKeyDraft(`${keyDisplay}`)
-        setIsKeyEditing(false)
-        return false
-      }
-
-      try {
-        await executeBackendCommand(`set key ${parsed}`)
-        setIsKeyEditing(false)
-        return true
-      } catch (error) {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-        setKeyDraft(`${keyDisplay}`)
-        setIsKeyEditing(false)
-        return false
-      }
-    },
-    [bridgeUnavailableMessage, executeBackendCommand, keyDisplay]
-  )
-
-  const commitBaseFrequency = useCallback(
-    async (value: string): Promise<boolean> => {
-      if (bridgeUnavailableMessage !== null) {
-        return false
-      }
-
-      const parsed = parsePositiveFloatInput(value)
-      if (parsed === null) {
-        setStatusMessage('Invalid base frequency. Use a positive number.')
-        setStatusLevel('warning')
-        setBaseFrequencyDraft(`${baseFrequency}`)
-        setIsBaseFrequencyEditing(false)
-        return false
-      }
-
-      try {
-        await executeBackendCommand(`set baseFrequency ${parsed}`)
-        setIsBaseFrequencyEditing(false)
-        return true
-      } catch (error) {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-        setBaseFrequencyDraft(`${baseFrequency}`)
-        setIsBaseFrequencyEditing(false)
-        return false
-      }
-    },
-    [baseFrequency, bridgeUnavailableMessage, executeBackendCommand]
-  )
-
-  const commitSequenceName = useCallback(
-    async (value: string): Promise<boolean> => {
-      if (bridgeUnavailableMessage !== null) {
-        return false
-      }
-
-      const normalized = value.trim()
-      if (!normalized) {
-        setStatusMessage('Sequence name cannot be empty.')
-        setStatusLevel('warning')
-        setSequenceNameDraft(selectedMeasureName)
-        setIsSequenceNameEditing(false)
-        return false
-      }
-
-      try {
-        await executeBackendCommand(
-          `set sequence name ${quoteCommandArg(normalized)} ${selectedMeasureIndex}`
-        )
-        setIsSequenceNameEditing(false)
-        return true
-      } catch (error) {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-        setSequenceNameDraft(selectedMeasureName)
-        setIsSequenceNameEditing(false)
-        return false
-      }
-    },
-    [bridgeUnavailableMessage, executeBackendCommand, selectedMeasureIndex, selectedMeasureName]
-  )
-
-  const beginTimeSignatureEdit = useCallback((): void => {
-    setTimeSignatureDraft(timeSignature)
-    setIsTimeSignatureEditing(true)
-  }, [timeSignature])
-
-  const cancelTimeSignatureEdit = useCallback((): void => {
-    setTimeSignatureDraft(timeSignature)
-    setIsTimeSignatureEditing(false)
-  }, [timeSignature])
-
-  const beginKeyEdit = useCallback((): void => {
-    setKeyDraft(`${keyDisplay}`)
-    setIsKeyEditing(true)
-  }, [keyDisplay])
-
-  const cancelKeyEdit = useCallback((): void => {
-    setKeyDraft(`${keyDisplay}`)
-    setIsKeyEditing(false)
-  }, [keyDisplay])
-
-  const beginBaseFrequencyEdit = useCallback((): void => {
-    setBaseFrequencyDraft(`${baseFrequency}`)
-    setIsBaseFrequencyEditing(true)
-  }, [baseFrequency])
-
-  const cancelBaseFrequencyEdit = useCallback((): void => {
-    setBaseFrequencyDraft(`${baseFrequency}`)
-    setIsBaseFrequencyEditing(false)
-  }, [baseFrequency])
-
-  const beginSequenceNameEdit = useCallback((): void => {
-    setSequenceNameDraft(selectedMeasureName)
-    setIsSequenceNameEditing(true)
-  }, [selectedMeasureName])
-
-  const cancelSequenceNameEdit = useCallback((): void => {
-    setSequenceNameDraft(selectedMeasureName)
-    setIsSequenceNameEditing(false)
-  }, [selectedMeasureName])
-
-  const applyTimeSignatureScale = useCallback(
-    (mode: 'half' | 'double'): void => {
-      if (bridgeUnavailableMessage !== null || isTimeSignatureEditing) {
-        return
-      }
-
-      const parsed = parseTimeSignatureInput(timeSignature)
-      if (!parsed) {
-        return
-      }
-
-      const next =
-        mode === 'double'
-          ? formatTimeSignature({
-              numerator: parsed.numerator * 2,
-              denominator: parsed.denominator,
-            })
-          : parsed.numerator > 1
-            ? formatTimeSignature({
-                numerator: Math.max(1, Math.round(parsed.numerator / 2)),
-                denominator: parsed.denominator,
-              })
-            : formatTimeSignature({
-                numerator: 1,
-                denominator: parsed.denominator * 2,
-              })
-      void commitTimeSignature(next)
-    },
-    [bridgeUnavailableMessage, commitTimeSignature, isTimeSignatureEditing, timeSignature]
-  )
-
-  const scaleOptions = useMemo(() => {
-    const names = new Set<string>()
-    librarySnapshot.scales.forEach((scale) => names.add(scale.name))
-    if (scaleName.trim().length > 0) {
-      names.add(scaleName)
-    }
-    return Array.from(names).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-  }, [librarySnapshot.scales, scaleName])
-
-  const modeOptions = useMemo(() => {
-    const isChromatic = /chromatic/i.test(scaleName)
-    if (isChromatic || scaleSize <= 1) {
-      return [] as number[]
-    }
-    return Array.from({ length: scaleSize }, (_, index) => index + 1)
-  }, [scaleName, scaleSize])
-
-  const applyModeSelection = useCallback(
-    async (modeIndex: number): Promise<void> => {
-      if (
-        bridgeUnavailableMessage !== null ||
-        !Number.isFinite(modeIndex) ||
-        modeIndex < 0 ||
-        modeIndex === scaleMode
-      ) {
-        return
-      }
-
-      try {
-        await executeBackendCommand(`set mode ${modeIndex}`)
-      } catch (error) {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-      }
-    },
-    [bridgeUnavailableMessage, executeBackendCommand, scaleMode]
-  )
-
-  const applyScaleSelection = useCallback(
-    async (nextScaleName: string): Promise<void> => {
-      if (
-        bridgeUnavailableMessage !== null ||
-        isScaleUpdating ||
-        !nextScaleName ||
-        nextScaleName === scaleName
-      ) {
-        return
-      }
-
-      setIsScaleUpdating(true)
-      try {
-        await executeBackendCommand(`set scale ${quoteCommandArg(nextScaleName)}`)
-      } catch (error) {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-      } finally {
-        setIsScaleUpdating(false)
-      }
-    },
-    [bridgeUnavailableMessage, executeBackendCommand, isScaleUpdating, scaleName]
-  )
-
-  const toggleTranslateDirection = useCallback(async (): Promise<void> => {
-    if (bridgeUnavailableMessage !== null) {
-      return
-    }
-
-    const nextDirection: TranslateDirection = scaleTranslateDirection === 'down' ? 'up' : 'down'
-    try {
-      await executeBackendCommand(`set translateDirection ${nextDirection}`)
-    } catch (error) {
-      setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-      setStatusLevel('error')
-    }
-  }, [bridgeUnavailableMessage, executeBackendCommand, scaleTranslateDirection])
 
   useEffect(() => {
     if (isScaleUpdating) {
@@ -3993,1369 +1258,151 @@ function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <div className="headerGroup">
-          <div className="headerGrid headerGrid-primary">
-            <div className="headerField headerField-timeSignature">
-              <span className="fieldLabel">Time Signature</span>
-              <div className="timeSignatureControl">
-                <div className="timeSignatureValueSlot">
-                  {isTimeSignatureEditing ? (
-                    <input
-                      ref={timeSignatureInputRef}
-                      className="timeSignatureInput mono"
-                      type="text"
-                      value={timeSignatureDraft}
-                      onChange={(event) => setTimeSignatureDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          void commitTimeSignature(timeSignatureDraft)
-                          return
-                        }
-                        if (event.key === 'Escape') {
-                          event.preventDefault()
-                          cancelTimeSignatureEdit()
-                        }
-                      }}
-                      onBlur={cancelTimeSignatureEdit}
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      aria-label="Edit time signature"
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="timeSignatureDisplay fieldValue mono"
-                      onClick={beginTimeSignatureEdit}
-                      disabled={bridgeUnavailableMessage !== null}
-                      aria-label={`Time signature ${timeSignature}. Click to edit`}
-                    >
-                      {timeSignature}
-                    </button>
-                  )}
-                </div>
-                <div className="timeSignatureButtons" aria-label="Time signature quick actions">
-                  <button
-                    type="button"
-                    className="timeSignatureAction mono"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => applyTimeSignatureScale('half')}
-                    disabled={bridgeUnavailableMessage !== null || isTimeSignatureEditing}
-                    aria-label="Halve time signature numerator"
-                  >
-                    /2
-                  </button>
-                  <button
-                    type="button"
-                    className="timeSignatureAction mono"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => applyTimeSignatureScale('double')}
-                    disabled={bridgeUnavailableMessage !== null || isTimeSignatureEditing}
-                    aria-label="Double time signature numerator"
-                  >
-                    x2
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="headerField headerField-key">
-              <span className="fieldLabel">Key</span>
-              <div className="headerEditableValueSlot">
-                {isKeyEditing ? (
-                  <input
-                    ref={keyInputRef}
-                    className="headerEditableInput mono"
-                    type="text"
-                    value={keyDraft}
-                    onChange={(event) => setKeyDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        void commitKey(keyDraft)
-                        return
-                      }
-                      if (event.key === 'Escape') {
-                        event.preventDefault()
-                        cancelKeyEdit()
-                      }
-                    }}
-                    onBlur={cancelKeyEdit}
-                    spellCheck={false}
-                    autoCapitalize="off"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    aria-label="Edit key"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="headerEditableDisplay fieldValue mono"
-                    onClick={beginKeyEdit}
-                    disabled={bridgeUnavailableMessage !== null}
-                    aria-label={`Key ${keyDisplay}. Click to edit`}
-                  >
-                    {keyDisplay}
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="headerField headerField-baseFrequency">
-              <span className="fieldLabel">Zero Freq. (Hz)</span>
-              <div className="headerEditableValueSlot">
-                {isBaseFrequencyEditing ? (
-                  <input
-                    ref={baseFrequencyInputRef}
-                    className="headerEditableInput mono"
-                    type="text"
-                    value={baseFrequencyDraft}
-                    onChange={(event) => setBaseFrequencyDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        void commitBaseFrequency(baseFrequencyDraft)
-                        return
-                      }
-                      if (event.key === 'Escape') {
-                        event.preventDefault()
-                        cancelBaseFrequencyEdit()
-                      }
-                    }}
-                    onBlur={cancelBaseFrequencyEdit}
-                    spellCheck={false}
-                    autoCapitalize="off"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    aria-label="Edit base frequency"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="headerEditableDisplay fieldValue mono"
-                    onClick={beginBaseFrequencyEdit}
-                    disabled={bridgeUnavailableMessage !== null}
-                    aria-label={`Zero frequency ${baseFrequency} hertz. Click to edit`}
-                  >
-                    {baseFrequency}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="headerGroup">
-          <div className="headerGrid">
-            <div className="headerField">
-              <span className="fieldLabel">Scale</span>
-              <div className="headerScaleControl">
-                <div className="waveSelect headerScaleSelect" ref={scaleMenuRef}>
-                  <button
-                    type="button"
-                    className="waveSelectTrigger headerScaleTrigger fieldValue"
-                    onClick={() => setOpenScaleMenu((previous) => !previous)}
-                    disabled={
-                      bridgeUnavailableMessage !== null || isScaleUpdating || scaleOptions.length === 0
-                    }
-                    aria-haspopup="listbox"
-                    aria-expanded={openScaleMenu}
-                    aria-label="Select active scale"
-                  >
-                    <span className="headerScaleLabel">{scaleName}</span>
-                    <span className="waveSelectChevron" aria-hidden="true">
-                      ▾
-                    </span>
-                  </button>
-                  {openScaleMenu ? (
-                    <div className="waveSelectMenu headerScaleMenu" role="listbox" aria-label="Scale options">
-                      {scaleOptions.map((name) => (
-                        <button
-                          key={`scale-option-${name}`}
-                          type="button"
-                          className={`waveSelectOption${name === scaleName ? ' waveSelectOption-active' : ''}`}
-                          onClick={() => {
-                            setOpenScaleMenu(false)
-                            void applyScaleSelection(name)
-                          }}
-                          role="option"
-                          aria-selected={name === scaleName}
-                        >
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  className="scaleDirectionGlyph mono"
-                  onClick={() => {
-                    void toggleTranslateDirection()
-                  }}
-                  disabled={bridgeUnavailableMessage !== null}
-                  aria-label={`Translate direction ${scaleTranslateDirection}. Click to set ${
-                    scaleTranslateDirection === 'down' ? 'up' : 'down'
-                  }`}
-                  title={`Translate ${scaleTranslateDirection} (click to flip)`}
-                >
-                  {scaleTranslateDirection === 'down' ? '↓' : '↑'}
-                </button>
-              </div>
-            </div>
-            <div className="headerField">
-              <span className="fieldLabel">Mode</span>
-              <div className="modePicker" role="listbox" aria-label="Scale modes">
-                {modeOptions.length > 0 ? (
-                  modeOptions.map((modeIndex) => (
-                    <button
-                      key={`mode-option-${modeIndex}`}
-                      type="button"
-                      className={`modeChip mono${modeIndex === scaleMode ? ' modeChip-active' : ''}`}
-                      onClick={() => {
-                        void applyModeSelection(modeIndex)
-                      }}
-                      disabled={bridgeUnavailableMessage !== null}
-                      role="option"
-                      aria-selected={modeIndex === scaleMode}
-                      aria-label={`Set mode ${modeIndex}`}
-                    >
-                      {modeIndex}
-                    </button>
-                  ))
-                ) : (
-                  <span className="modePickerEmpty mono">n/a</span>
-                )}
-              </div>
-            </div>
-            <div className="headerField">
-              <span className="fieldLabel">Tuning</span>
-              <span className="fieldValue mono">{tuningName}</span>
-            </div>
-          </div>
-        </div>
-        <div className="headerGroup">
-          <div className="headerGrid">
-            <div className="headerField headerField-sequenceName">
-              <span className="fieldLabel">Sequence Name</span>
-              <div className="sequenceNameControl">
-                <span className="sequenceNameIndex mono">{`${selectedMeasureIndex}:`}</span>
-                <div className="headerEditableValueWide sequenceNameValue">
-                  {isSequenceNameEditing ? (
-                    <input
-                      ref={sequenceNameInputRef}
-                      className="headerEditableInput fieldValue"
-                      type="text"
-                      value={sequenceNameDraft}
-                      onChange={(event) => setSequenceNameDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          void commitSequenceName(sequenceNameDraft)
-                          return
-                        }
-                        if (event.key === 'Escape') {
-                          event.preventDefault()
-                          cancelSequenceNameEdit()
-                        }
-                      }}
-                      onBlur={cancelSequenceNameEdit}
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      aria-label="Edit sequence name"
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="headerEditableDisplay fieldValue"
-                      onClick={beginSequenceNameEdit}
-                      disabled={bridgeUnavailableMessage !== null}
-                      aria-label={`Sequence ${selectedMeasureIndex}: ${selectedMeasureName}. Click to edit`}
-                    >
-                      {selectedMeasureName}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-      <main className="sequencer">
-        {bridgeUnavailableMessage ? (
-          <section className="bridgeNotice" aria-live="polite">
-            <h1 className="bridgeNoticeTitle">JUCE native bridge not detected</h1>
-            <p className="bridgeNoticeBody">{bridgeUnavailableMessage}</p>
-            <p className="bridgeNoticeHint">
-              Run this frontend inside the JUCE WebView host to enable backend requests and events.
-            </p>
-          </section>
-        ) : (
-          <section className="sequencerShell" aria-label="Single octave sequencer view">
-            <aside className="pitchIndexBar" aria-label="Pitch index">
-              {pitchRows.map((pitch) => (
-                <div key={`left-pitch-${pitch}`} className="pitchIndexRow mono">
-                  {pitch}
-                </div>
-              ))}
-            </aside>
-
-            <div className="pianoRoll" role="img" aria-label="Single octave piano roll">
-              <div className="rollBackgroundOverlay" aria-hidden="true">
-                {backgroundOverlayStates.map((overlay) => (
-                  <div
-                    key={`roll-bg-overlay-${overlay.sequenceIndex}`}
-                    className="rollBackgroundLayer"
-                    aria-hidden="true"
-                  >
-                    {overlay.notes.map((note, noteIndex) => {
-                      const normalizedPitch = normalizePitch(note.pitch, tuningLength)
-                      const rowFromTop = tuningLength - 1 - normalizedPitch
-                      const rowHeightPercent = 100 / Math.max(tuningLength, 1)
-                      const rowTopPercent = rowFromTop * rowHeightPercent
-                      const bgNoteHeightPercent = rowHeightPercent * 0.76
-                      const bgNoteTopPercent = rowTopPercent + (rowHeightPercent - bgNoteHeightPercent) / 2
-                      const noteAlpha = 0.06 + note.velocity * 0.14
-
-                      return (
-                        <div
-                          key={`roll-bg-note-${overlay.sequenceIndex}-${noteIndex}`}
-                          className="rollBgNote"
-                          style={
-                              {
-                              left: `calc(${note.x * 100}% + 4px)`,
-                              width: `max(calc(${note.width * 100}% - 9px), 1px)`,
-                              top: `${bgNoteTopPercent}%`,
-                              height: `${bgNoteHeightPercent}%`,
-                              background: getSequenceOverlayColor(overlay.sequenceIndex, noteAlpha),
-                              borderColor: getSequenceOverlayColor(overlay.sequenceIndex, 0.24),
-                            } as CSSProperties
-                          }
-                        />
-                      )
-                    })}
-                    {overlay.triggerPhase !== null ? (
-                      <div
-                        className="rollBgTrigger"
-                        style={
-                          {
-                            left: `${overlay.triggerPhase * 100}%`,
-                            background: getSequenceOverlayColor(overlay.sequenceIndex, 0.64),
-                          } as CSSProperties
-                        }
-                      />
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-              <div className="rollIslands" aria-hidden="true">
-                {renderRollCells(
-                  rootCells.length > 0 ? rootCells : [{ type: 'Rest', weight: 1 }],
-                  [],
-                  0
-                )}
-                </div>
-              {playheadPhase !== null ? (
-                <div
-                  className="rollPlayhead"
-                  style={{ left: `${Math.max(0, Math.min(playheadPhase, 1)) * 100}%` }}
-                  aria-hidden="true"
-                />
-              ) : null}
-            </div>
-
-            <aside className="tuningRuler" aria-label="Tuning ruler">
-              <div className="tuningRulerLine" />
-              {REFERENCE_RATIOS.map((ratio, index) => (
-                <span
-                  key={`reference-mark-${index}`}
-                  className="rulerMark rulerMark-reference"
-                  style={{ bottom: `${ratioToBottom(ratio)}%` }}
-                />
-              ))}
-              {rulerRatios.map((ratio, index) => (
-                <span
-                  key={`tuning-mark-${index}`}
-                  className={`rulerMark rulerMark-tuning${highlightedPitches.has(index) ? ' rulerMark-active' : ''}`}
-                  style={{ bottom: `${ratioToBottom(ratio)}%` }}
-                />
-              ))}
-            </aside>
-          </section>
-        )}
-      </main>
-      <footer className="statusBar">
-        <div className="statusLeft">
-          <span className="modeBadge mono" aria-label={`Input mode ${currentInputMode}`}>
-            {currentInputModeLetter}
-          </span>
-        </div>
-        {isCommandMode ? (
-          <form className="statusCommandForm" onSubmit={submitCommand}>
-            <span className="statusPrompt mono">:</span>
-            <div className="statusCommandField">
-              <input
-                ref={commandInputRef}
-                className="statusCommandInput mono"
-                type="text"
-                value={commandText}
-                size={Math.max(1, commandText.length)}
-                onChange={(event) => {
-                  const nextValue = event.target.value
-                  if (historyIndex !== -1) {
-                    setHistoryIndex(-1)
-                  }
-                  setCommandText(nextValue)
-                  liveCommandBufferRef.current = nextValue
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Tab') {
-                    event.preventDefault()
-
-                    if (!commandSuffix) {
-                      return
-                    }
-
-                    const completedCore = `${commandText}${commandSuffix}`
-                    const completedText = completedCore.endsWith(' ')
-                      ? completedCore
-                      : `${completedCore} `
-                    if (historyIndex !== -1) {
-                      setHistoryIndex(-1)
-                    }
-                    setCommandText(completedText)
-                    liveCommandBufferRef.current = completedText
-                    return
-                  }
-
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    closeCommandMode({ preserveText: true })
-                    return
-                  }
-
-                  if (event.key === 'Backspace' && commandText.length === 0) {
-                    event.preventDefault()
-                    closeCommandMode({ preserveText: true })
-                    return
-                  }
-
-                  if (event.key === 'ArrowUp') {
-                    if (commandHistory.length === 0) {
-                      return
-                    }
-
-                    event.preventDefault()
-
-                    if (historyIndex === -1) {
-                      liveCommandBufferRef.current = commandText
-                      setHistoryIndex(0)
-                      setCommandText(commandHistory[0])
-                      return
-                    }
-
-                    const nextIndex = Math.min(historyIndex + 1, commandHistory.length - 1)
-                    setHistoryIndex(nextIndex)
-                    setCommandText(commandHistory[nextIndex])
-                    return
-                  }
-
-                  if (event.key === 'ArrowDown') {
-                    if (commandHistory.length === 0 || historyIndex === -1) {
-                      return
-                    }
-
-                    event.preventDefault()
-
-                    if (historyIndex === 0) {
-                      setHistoryIndex(-1)
-                      setCommandText(liveCommandBufferRef.current)
-                      return
-                    }
-
-                    const nextIndex = historyIndex - 1
-                    setHistoryIndex(nextIndex)
-                    setCommandText(commandHistory[nextIndex])
-                  }
-                }}
-                onBlur={() => closeCommandMode({ preserveText: true })}
-                spellCheck={false}
-                autoCapitalize="off"
-                autoComplete="off"
-                autoCorrect="off"
-                aria-label="Command input"
-              />
-              {commandSuffix ? <span className="statusCommandGhost mono">{commandSuffix}</span> : null}
-            </div>
-          </form>
-        ) : (
-          <span className={`statusText status-${statusLevel}`}>{statusMessage}</span>
-        )}
-        {selectedCellMeta.length > 0 ? (
-          <div className="statusMeta mono" aria-label="Selected cell metadata">
-            {selectedCellMeta.map((item) => (
-              <span key={`cell-meta-${item.label}`} className="statusMetaItem">
-                <span className="statusMetaKey">{item.label}</span>
-                <span className="statusMetaValue">{item.value}</span>
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </footer>
-      <section className="bottomModules" aria-label="Temporary module area">
-        <div className="bottomModuleRow">
-          <article className="bottomModule bottomModule-rowItem">
-            <p className="bottomModuleLabel">Sequence Bank</p>
-            <div className="sequenceBankGrid" role="grid" aria-label="Sequence bank">
-              {sequenceBankCells.map(({ index, row, column }) => {
-                const isSelected = index === selectedMeasureIndex
-                const isActive = activeSequenceFlags[index] ?? false
-                const isDisabled = index >= sequenceCount
-                return (
-                  <button
-                    key={`sequence-bank-cell-${index}`}
-                    type="button"
-                    className={`sequenceBankCell${isSelected ? ' sequenceBankCell-selected' : ''}${isActive ? ' sequenceBankCell-active' : ''}`}
-                    style={{ gridRow: row, gridColumn: column }}
-                    onClick={() => selectSequenceFromBank(index)}
-                    disabled={isDisabled}
-                    aria-label={`Select sequence 0x${index.toString(16).toUpperCase()}`}
-                  >
-                    <span className="mono">{`0x${index.toString(16).toUpperCase()}`}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </article>
-          <article className="bottomModule bottomModule-rowItem bottomModule-modulators">
-            <div className="bottomModuleHeader">
-              <p className="bottomModuleLabel">Modulators</p>
-              <div className="modTabs" role="tablist" aria-label="Modulator instances">
-                {Array.from({ length: 4 }, (_, index) => (
-                  <button
-                    key={`mod-tab-${index}`}
-                    type="button"
-                    className={`modTab${activeModulatorTab === index ? ' modTab-active' : ''}`}
-                    onClick={() => {
-                      setOpenWaveMenu(null)
-                      setActiveModulatorTab(index)
-                    }}
-                    role="tab"
-                    aria-selected={activeModulatorTab === index}
-                  >
-                    {index + 1}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="modulatorPanel">
-              <div className="modulatorTopRow" ref={waveMenuRef}>
-                <div className="waveSelect">
-                  <button
-                    type="button"
-                    className="waveSelectTrigger mono"
-                    onClick={() => setOpenWaveMenu((previous) => (previous === 'a' ? null : 'a'))}
-                    aria-haspopup="listbox"
-                    aria-expanded={openWaveMenu === 'a'}
-                    aria-label="Wave A type"
-                  >
-                    <span>{WAVE_OPTION_LABELS[waveAType]}</span>
-                    <span className="waveSelectChevron" aria-hidden="true">
-                      ▾
-                    </span>
-                  </button>
-                  {openWaveMenu === 'a' ? (
-                    <div className="waveSelectMenu" role="listbox" aria-label="Wave A options">
-                      {WAVE_OPTIONS.map((waveType) => (
-                        <button
-                          key={`wave-a-option-${waveType}`}
-                          type="button"
-                          className={`waveSelectOption mono${waveType === waveAType ? ' waveSelectOption-active' : ''}`}
-                          onClick={() => selectWaveType('a', waveType)}
-                          role="option"
-                          aria-selected={waveType === waveAType}
-                        >
-                          {WAVE_OPTION_LABELS[waveType]}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <input
-                  className="modulatorSlider modulatorTopLerp"
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={waveLerp}
-                  onChange={(event) => setWaveLerp(Number(event.target.value))}
-                  aria-label="Wave lerp"
-                />
-                <div className="waveSelect">
-                  <button
-                    type="button"
-                    className="waveSelectTrigger mono"
-                    onClick={() => setOpenWaveMenu((previous) => (previous === 'b' ? null : 'b'))}
-                    aria-haspopup="listbox"
-                    aria-expanded={openWaveMenu === 'b'}
-                    aria-label="Wave B type"
-                  >
-                    <span>{WAVE_OPTION_LABELS[waveBType]}</span>
-                    <span className="waveSelectChevron" aria-hidden="true">
-                      ▾
-                    </span>
-                  </button>
-                  {openWaveMenu === 'b' ? (
-                    <div className="waveSelectMenu" role="listbox" aria-label="Wave B options">
-                      {WAVE_OPTIONS.map((waveType) => (
-                        <button
-                          key={`wave-b-option-${waveType}`}
-                          type="button"
-                          className={`waveSelectOption mono${waveType === waveBType ? ' waveSelectOption-active' : ''}`}
-                          onClick={() => selectWaveType('b', waveType)}
-                          role="option"
-                          aria-selected={waveType === waveBType}
-                        >
-                          {WAVE_OPTION_LABELS[waveType]}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              {(waveAType === 'square' || waveBType === 'square') && (
-                <div className="modulatorRow">
-                  {waveAType === 'square' ? (
-                    <label className="modulatorField">
-                      <span className="modulatorFieldLabel">Wave A Pulse Width</span>
-                      <input
-                        className="modulatorSlider"
-                        type="range"
-                        min={0.05}
-                        max={0.95}
-                        step={0.01}
-                        value={waveAPulseWidth}
-                        onChange={(event) => setWaveAPulseWidth(Number(event.target.value))}
-                      />
-                    </label>
-                  ) : (
-                    <div className="modulatorField modulatorField-empty" />
-                  )}
-                  {waveBType === 'square' ? (
-                    <label className="modulatorField">
-                      <span className="modulatorFieldLabel">Wave B Pulse Width</span>
-                      <input
-                        className="modulatorSlider"
-                        type="range"
-                        min={0.05}
-                        max={0.95}
-                        step={0.01}
-                        value={waveBPulseWidth}
-                        onChange={(event) => setWaveBPulseWidth(Number(event.target.value))}
-                      />
-                    </label>
-                  ) : (
-                    <div className="modulatorField modulatorField-empty" />
-                  )}
-                </div>
-              )}
-
-              <div
-                className="modWavePreview"
-                aria-label="Morphed wave preview"
-                onPointerDown={(event) => {
-                  if (!(event.currentTarget instanceof HTMLDivElement)) {
-                    return
-                  }
-                  const bounds = event.currentTarget.getBoundingClientRect()
-                  const xRatio = clampNumber((event.clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
-                  const yRatio = clampNumber((event.clientY - bounds.top) / Math.max(bounds.height, 1), 0, 1)
-                  const distanceA = Math.hypot(xRatio - waveHandleA.x / 100, yRatio - waveHandleA.y / 100)
-                  const distanceB = Math.hypot(xRatio - waveHandleB.x / 100, yRatio - waveHandleB.y / 100)
-                  const selectedWave: 'a' | 'b' = distanceA <= distanceB ? 'a' : 'b'
-                  wavePadDragRef.current = {
-                    pointerId: event.pointerId,
-                    wave: selectedWave,
-                    host: event.currentTarget,
-                    startClientX: event.clientX,
-                    startClientY: event.clientY,
-                    moved: false,
-                  }
-                  event.currentTarget.setPointerCapture(event.pointerId)
-                }}
-                onPointerMove={(event) => {
-                  const drag = wavePadDragRef.current
-                  if (!drag || drag.pointerId !== event.pointerId) {
-                    return
-                  }
-                  const movedDistance = Math.hypot(
-                    event.clientX - drag.startClientX,
-                    event.clientY - drag.startClientY
-                  )
-                  if (!drag.moved && movedDistance >= 3) {
-                    drag.moved = true
-                  }
-                  if (!drag.moved) {
-                    return
-                  }
-                  const lockMode = event.shiftKey
-                    ? 'frequency'
-                    : event.altKey
-                      ? 'offset'
-                      : 'none'
-                  applyWavePadMotion(drag.wave, drag.host, event.clientX, event.clientY, lockMode)
-                }}
-                onPointerUp={(event) => {
-                  const drag = wavePadDragRef.current
-                  if (drag?.pointerId === event.pointerId) {
-                    if (!drag.moved) {
-                      const clickWave = lastWaveHandleUsedRef.current
-                      const bounds = drag.host.getBoundingClientRect()
-                      const xRatio = clampNumber(
-                        (event.clientX - bounds.left) / Math.max(bounds.width, 1),
-                        0,
-                        1
-                      )
-                      const yRatio = clampNumber(
-                        (event.clientY - bounds.top) / Math.max(bounds.height, 1),
-                        0,
-                        1
-                      )
-                      const isNearFreqCenterLine = Math.abs(xRatio - 0.5) <= 0.06
-                      const isNearCenterLine = Math.abs(yRatio - 0.5) <= 0.06
-                      if (isNearCenterLine || isNearFreqCenterLine) {
-                        snapWaveToCenterGuides(clickWave, {
-                          snapFrequency: isNearFreqCenterLine,
-                          snapOffset: isNearCenterLine,
-                        })
-                      } else {
-                        const lockMode = event.shiftKey
-                          ? 'frequency'
-                          : event.altKey
-                            ? 'offset'
-                            : 'none'
-                        applyWavePadMotion(clickWave, drag.host, event.clientX, event.clientY, lockMode)
-                      }
-                    }
-                    wavePadDragRef.current = null
-                  }
-                }}
-                onPointerCancel={(event) => {
-                  if (wavePadDragRef.current?.pointerId === event.pointerId) {
-                    wavePadDragRef.current = null
-                  }
-                }}
-                title="Drag handle: horizontal = frequency, vertical = phase offset. Shift=frequency only. Option/Alt=offset only."
-              >
-                <svg viewBox="-2 -2 424 144" preserveAspectRatio="none">
-                  <line x1="0" y1="70" x2="420" y2="70" className="modWaveAxis" />
-                  <line x1="210" y1="0" x2="210" y2="140" className="modWaveAxis" />
-                  <line
-                    x1={`${waveHandleA.x * 4.2}`}
-                    y1="0"
-                    x2={`${waveHandleA.x * 4.2}`}
-                    y2="140"
-                    className="modWaveGuide modWaveGuide-a"
-                    style={{ opacity: waveAOpacity }}
-                  />
-                  <line
-                    x1="0"
-                    y1={`${waveHandleA.y * 1.4}`}
-                    x2="420"
-                    y2={`${waveHandleA.y * 1.4}`}
-                    className="modWaveGuide modWaveGuide-a"
-                    style={{ opacity: waveAOpacity }}
-                  />
-                  <line
-                    x1={`${waveHandleB.x * 4.2}`}
-                    y1="0"
-                    x2={`${waveHandleB.x * 4.2}`}
-                    y2="140"
-                    className="modWaveGuide modWaveGuide-b"
-                    style={{ opacity: waveBOpacity }}
-                  />
-                  <line
-                    x1="0"
-                    y1={`${waveHandleB.y * 1.4}`}
-                    x2="420"
-                    y2={`${waveHandleB.y * 1.4}`}
-                    className="modWaveGuide modWaveGuide-b"
-                    style={{ opacity: waveBOpacity }}
-                  />
-                  <polyline
-                    points={waveAPreviewPath}
-                    className="modWaveLine modWaveLine-a"
-                    style={{ opacity: waveAOpacity }}
-                  />
-                  <polyline
-                    points={waveBPreviewPath}
-                    className="modWaveLine modWaveLine-b"
-                    style={{ opacity: waveBOpacity }}
-                  />
-                  <polyline points={morphedWavePreviewPath} className="modWaveLine modWaveLine-mix" />
-                  <circle
-                    cx={`${waveHandleA.x * 4.2}`}
-                    cy={`${waveHandleA.y * 1.4}`}
-                    r="5"
-                    className="modWaveHandle modWaveHandle-a"
-                    style={{ opacity: waveAOpacity }}
-                  />
-                  <circle
-                    cx={`${waveHandleB.x * 4.2}`}
-                    cy={`${waveHandleB.y * 1.4}`}
-                    r="5"
-                    className="modWaveHandle modWaveHandle-b"
-                    style={{ opacity: waveBOpacity }}
-                  />
-                </svg>
-              </div>
-              <div className="modTargetList">
-                {MOD_TARGET_ORDER.map((target) => {
-                  const spec = MOD_TARGET_SPECS[target]
-                  const control = targetControls[target]
-                  const clampedCenter = clampNumber(control.center, spec.min, spec.max)
-                  const maxPositiveSpan = spec.max - clampedCenter
-                  const maxNegativeSpan = clampedCenter - spec.min
-                  const spanMagnitude = Math.min(maxPositiveSpan, maxNegativeSpan) * Math.abs(control.amount)
-                  const isInverted = control.amount < 0
-                  const spanMin = clampNumber(clampedCenter - spanMagnitude, spec.min, spec.max)
-                  const spanMax = clampNumber(clampedCenter + spanMagnitude, spec.min, spec.max)
-                  const left = ((spanMin - spec.min) / (spec.max - spec.min)) * 100
-                  const right = ((spanMax - spec.min) / (spec.max - spec.min)) * 100
-                  const center = ((clampedCenter - spec.min) / (spec.max - spec.min)) * 100
-
-                  return (
-                    <div key={`mod-target-${target}`} className="modTargetRow">
-                      <label className="modTargetHeader">
-                        <input
-                          className="modTargetLed"
-                          type="checkbox"
-                          checked={control.enabled}
-                          onChange={(event) => updateTargetControl(target, { enabled: event.target.checked })}
-                        />
-                        <span className="mono">{spec.label}</span>
-                      </label>
-                      <div
-                        className={`modRangePad${control.enabled ? '' : ' modRangePad-disabled'}`}
-                        onPointerDown={(event) => {
-                          if (!(event.currentTarget instanceof HTMLDivElement)) {
-                            return
-                          }
-                          if (!control.enabled) {
-                            updateTargetControl(target, { enabled: true })
-                          }
-                          const mode = event.metaKey || event.ctrlKey ? 'center' : 'amount'
-                          padDragRef.current = {
-                            pointerId: event.pointerId,
-                            target,
-                            mode,
-                            host: event.currentTarget,
-                            startClientX: event.clientX,
-                            startClientY: event.clientY,
-                            startAmount: control.amount,
-                            startCenter: control.center,
-                          }
-                          event.currentTarget.setPointerCapture(event.pointerId)
-                          applyPadMotion(
-                            target,
-                            event.currentTarget,
-                            event.clientX,
-                            event.clientY,
-                            mode,
-                            {
-                              startClientX: event.clientX,
-                              startClientY: event.clientY,
-                              startAmount: control.amount,
-                              startCenter: control.center,
-                            },
-                            event.shiftKey ? 'fine' : 'coarse'
-                          )
-                        }}
-                        onPointerMove={(event) => {
-                          const drag = padDragRef.current
-                          if (!drag || drag.pointerId !== event.pointerId || drag.target !== target) {
-                            return
-                          }
-                          applyPadMotion(
-                            target,
-                            drag.host,
-                            event.clientX,
-                            event.clientY,
-                            drag.mode,
-                            {
-                              startClientX: drag.startClientX,
-                              startClientY: drag.startClientY,
-                              startAmount: drag.startAmount,
-                              startCenter: drag.startCenter,
-                            },
-                            event.shiftKey ? 'fine' : 'coarse'
-                          )
-                        }}
-                        onPointerUp={(event) => {
-                          if (padDragRef.current?.pointerId === event.pointerId) {
-                            padDragRef.current = null
-                          }
-                        }}
-                        onPointerCancel={(event) => {
-                          if (padDragRef.current?.pointerId === event.pointerId) {
-                            padDragRef.current = null
-                          }
-                        }}
-                        onDoubleClick={() => {
-                          const resetCenter = spec.defaultCenter
-                          const resetAmount = 0
-                          updateTargetControl(target, {
-                            center: resetCenter,
-                            amount: resetAmount,
-                          })
-                          if (control.enabled) {
-                            scheduleLiveEmit([
-                              buildCommandForTarget(
-                                target,
-                                {
-                                  ...control,
-                                  center: resetCenter,
-                                  amount: resetAmount,
-                                },
-                                baseMorphModulator
-                              ),
-                            ])
-                          }
-                        }}
-                        title="Drag up/down to set depth and inversion. Shift=finer. Cmd/Ctrl+drag moves center."
-                      >
-                        <div className="modRangeTrack" />
-                        <div
-                          className={`modRangeBand${isInverted ? ' modRangeBand-inverted' : ''}`}
-                          style={{ left: `${left}%`, width: `${Math.max(0, right - left)}%` }}
-                        />
-                        <div className="modRangeCenter" style={{ left: `${center}%` }} />
-                      </div>
-
-                    </div>
-                  )
-                })}
-              </div>
-
-            </div>
-          </article>
-          <article className="bottomModule bottomModule-rowItem bottomModule-reference">
-            <div className="bottomModuleHeader">
-              <p className="bottomModuleLabel">Reference</p>
-              <div className="referenceTabs" role="tablist" aria-label="Reference tabs">
-                <button
-                  type="button"
-                  className={`referenceTab${activeReferenceTab === 'commands' ? ' referenceTab-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeReferenceTab === 'commands'}
-                  onClick={() => setActiveReferenceTab('commands')}
-                >
-                  Commands
-                </button>
-                <button
-                  type="button"
-                  className={`referenceTab${activeReferenceTab === 'keybindings' ? ' referenceTab-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeReferenceTab === 'keybindings'}
-                  onClick={() => setActiveReferenceTab('keybindings')}
-                >
-                  Keybindings
-                </button>
-              </div>
-            </div>
-            <div className="referenceContent">
-              {activeReferenceTab === 'commands' ? (
-                sessionReference.commands.length > 0 ? (
-                  <div className="referenceCommands">
-                    <div className="referenceCommandSearchField">
-                      <input
-                        ref={referenceSearchInputRef}
-                        type="search"
-                        className="referenceCommandSearchInput mono"
-                        value={referenceCommandSearch}
-                        onChange={(event) => setReferenceCommandSearch(event.target.value)}
-                        placeholder="Search command name..."
-                        aria-label="Search command name"
-                      />
-                      {referenceCommandSearch.length > 0 ? (
-                        <button
-                          type="button"
-                          className="referenceCommandSearchClear"
-                          aria-label="Clear command search"
-                          onMouseDown={(event) => {
-                            event.preventDefault()
-                          }}
-                          onClick={() => {
-                            setReferenceCommandSearch('')
-                            referenceSearchInputRef.current?.focus()
-                          }}
-                        >
-                          x
-                        </button>
-                      ) : null}
-                    </div>
-                    {filteredReferenceCommands.length > 0 ? (
-                      filteredReferenceCommands.map((command) => (
-                        <button
-                          key={`reference-command-${command.id}`}
-                          type="button"
-                          className="referenceCommandRow referenceCommandButton"
-                          onClick={() => focusCommandBarWithText(command.signature || command.id)}
-                        >
-                          <p className="referenceCommandId mono">{command.id}</p>
-                          <p className="referenceCommandSignature mono">{command.signature}</p>
-                          <p className="referenceCommandDescription">{command.description}</p>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="referencePlaceholder">No commands match that search.</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="referencePlaceholder">No command reference data received.</p>
-                )
-              ) : (
-                sequenceViewReferenceBindings.length > 0 ? (
-                  <div className="referenceKeybindings">
-                    <div className="referenceModeLegend">
-                      <span className="referenceModeBadge mono">[p] Pitch</span>
-                      <span className="referenceModeBadge mono">[v] Velocity</span>
-                      <span className="referenceModeBadge mono">[d] Delay</span>
-                      <span className="referenceModeBadge mono">[g] Gate</span>
-                      <span className="referenceModeBadge mono">[c] Scale</span>
-                    </div>
-                    <div className="referenceKeybindingGroup">
-                      <table className="referenceKeybindingTable">
-                        <thead>
-                          <tr>
-                            <th className="mono">Key Chord</th>
-                            <th className="mono">Command</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sequenceViewReferenceBindings.map((binding, index) => (
-                            <tr key={`reference-keybinding-sequence-view-${index}`}>
-                              <td className="referenceKeybindingKey mono">{binding.key}</td>
-                              <td className="referenceKeybindingCommand mono">{binding.command}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="referencePlaceholder">No SequenceView keybindings received.</p>
-                )
-              )}
-            </div>
-          </article>
-          <article className="bottomModule bottomModule-rowItem bottomModule-library">
-          <div className="bottomModuleHeader">
-            <p className="bottomModuleLabel">Library View</p>
-            <div className="libraryTabs" role="tablist" aria-label="Library tabs">
-              <button
-                type="button"
-                className={`libraryTab${activeLibraryTab === 'tunings' ? ' libraryTab-active' : ''}`}
-                role="tab"
-                aria-selected={activeLibraryTab === 'tunings'}
-                onClick={() => setActiveLibraryTab('tunings')}
-              >
-                Tunings
-              </button>
-              <button
-                type="button"
-                className={`libraryTab${activeLibraryTab === 'sequences' ? ' libraryTab-active' : ''}`}
-                role="tab"
-                aria-selected={activeLibraryTab === 'sequences'}
-                onClick={() => setActiveLibraryTab('sequences')}
-              >
-                Sequences
-              </button>
-              <button
-                type="button"
-                className={`libraryTab${activeLibraryTab === 'scales' ? ' libraryTab-active' : ''}`}
-                role="tab"
-                aria-selected={activeLibraryTab === 'scales'}
-                onClick={() => setActiveLibraryTab('scales')}
-              >
-                Scales
-              </button>
-              <button
-                type="button"
-                className={`libraryTab${activeLibraryTab === 'chords' ? ' libraryTab-active' : ''}`}
-                role="tab"
-                aria-selected={activeLibraryTab === 'chords'}
-                onClick={() => setActiveLibraryTab('chords')}
-              >
-                Chords
-              </button>
-            </div>
-          </div>
-          <div className="libraryList" role="list">
-            {activeLibraryTab === 'scales' ? (
-              librarySnapshot.scales.length > 0 ? (
-                librarySnapshot.scales.map((scale, index) => {
-                  return (
-                    <button
-                      key={`library-scale-${index}-${scale.name}`}
-                      type="button"
-                      className="libraryItem"
-                      onClick={() => {
-                        void runLibraryCommand(
-                          scale.command || `set scale ${quoteCommandArg(scale.name)}`
-                        )
-                      }}
-                    >
-                      <span className="libraryItemName mono">{scale.name}</span>
-                      <span className="libraryItemMeta mono">
-                        {scale.intervals.length > 0
-                          ? `[${scale.intervals.join(', ')}]`
-                          : 'Intervals unavailable'}
-                      </span>
-                    </button>
-                  )
-                })
-              ) : (
-                <p className="libraryPlaceholder">No scales loaded.</p>
-              )
-            ) : null}
-
-            {activeLibraryTab === 'tunings' ? (
-              <>
-                <div className="referenceCommandSearchField">
-                  <input
-                    ref={tuningSearchInputRef}
-                    type="search"
-                    className="referenceCommandSearchInput mono"
-                    value={tuningSearch}
-                    onChange={(event) => setTuningSearch(event.target.value)}
-                    placeholder="Search tuning stem..."
-                    aria-label="Search tunings by stem"
-                  />
-                  {tuningSearch.length > 0 ? (
-                    <button
-                      type="button"
-                      className="referenceCommandSearchClear"
-                      aria-label="Clear tuning search"
-                      onMouseDown={(event) => {
-                        event.preventDefault()
-                      }}
-                      onClick={() => {
-                        setTuningSearch('')
-                        tuningSearchInputRef.current?.focus()
-                      }}
-                    >
-                      x
-                    </button>
-                  ) : null}
-                </div>
-                <div className="librarySortChips" role="group" aria-label="Tune sort">
-                  <button
-                    type="button"
-                    className={`librarySortChip${tuningSortMode === 'name' ? ' librarySortChip-active' : ''}`}
-                    onClick={() => setTuningSortMode('name')}
-                  >
-                    Name
-                  </button>
-                  <button
-                    type="button"
-                    className={`librarySortChip${tuningSortMode === 'noteCount' ? ' librarySortChip-active' : ''}`}
-                    onClick={() => setTuningSortMode('noteCount')}
-                  >
-                    Notes
-                  </button>
-                  <button
-                    type="button"
-                    className={`librarySortChip${tuningSortMode === 'octave' ? ' librarySortChip-active' : ''}`}
-                    onClick={() => setTuningSortMode('octave')}
-                  >
-                    Oct
-                  </button>
-                </div>
-                {tuningHierarchyRows.length > 0 ? (
-                  tuningHierarchyRows.map((row) => {
-                    if (row.kind === 'directory') {
-                      return (
-                        <div
-                          key={row.key}
-                          className="libraryDirectoryRow mono"
-                          style={{ paddingLeft: `${row.depth * 0.9 + 0.4}rem` }}
-                        >
-                          <span className="libraryDirectoryCaret" aria-hidden="true">
-                            ▸
-                          </span>
-                          <span className="libraryDirectoryName">{row.label}</span>
-                        </div>
-                      )
-                    }
-
-                    const tuning = row.entry
-                    if (!tuning) {
-                      return null
-                    }
-                    const isActive =
-                      tuning.name.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase() ||
-                      tuning.stem.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase()
-                    const stemParts = tuning.stem.split('/').filter((part) => part.length > 0)
-                    const tuningNameLeaf = stemParts[stemParts.length - 1] || row.label
-                    const tuningFolderPath = stemParts.slice(0, -1).join('/')
-
-                    return (
-                      <button
-                        key={row.key}
-                        type="button"
-                        className={`libraryItem${isActive ? ' libraryItem-active' : ''}`}
-                        style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
-                        onClick={() => {
-                          void runLibraryCommand(
-                            tuning.command || `load tuning ${quoteCommandArg(tuning.name)}`
-                          )
-                        }}
-                      >
-                        <span className="libraryItemName mono">
-                          {tuningFolderPath ? (
-                            <span className="libraryItemPathPrefix">{`${tuningFolderPath}/`}</span>
-                          ) : null}
-                          <span className="libraryItemPathLeaf">{tuningNameLeaf}</span>
-                        </span>
-                        <span className="libraryItemMeta libraryItemMeta-multiline mono">
-                          {[
-                            tuning.description || tuning.stem || tuning.relativePath || tuning.path,
-                            tuning.noteCount !== null ? `${tuning.noteCount} notes` : '',
-                            tuning.octave !== null
-                              ? `octave ${formatOctaveForDisplay(tuning.octave)}`
-                              : '',
-                          ]
-                            .filter((value) => value.length > 0)
-                            .join(' · ')}
-                        </span>
-                      </button>
-                    )
-                  })
-                ) : (
-                  <p className="libraryPlaceholder">
-                    {tuningSearch.trim() ? 'No tunings match that search.' : 'No tuning files found.'}
-                  </p>
-                )}
-              </>
-            ) : null}
-
-            {activeLibraryTab === 'sequences' ? (
-              <>
-                <div className="referenceCommandSearchField">
-                  <input
-                    ref={sequenceSearchInputRef}
-                    type="search"
-                    className="referenceCommandSearchInput mono"
-                    value={sequenceSearch}
-                    onChange={(event) => setSequenceSearch(event.target.value)}
-                    placeholder="Search sequence stem..."
-                    aria-label="Search sequences by stem"
-                  />
-                  {sequenceSearch.length > 0 ? (
-                    <button
-                      type="button"
-                      className="referenceCommandSearchClear"
-                      aria-label="Clear sequence search"
-                      onMouseDown={(event) => {
-                        event.preventDefault()
-                      }}
-                      onClick={() => {
-                        setSequenceSearch('')
-                        sequenceSearchInputRef.current?.focus()
-                      }}
-                    >
-                      x
-                    </button>
-                  ) : null}
-                </div>
-                {sequenceHierarchyRows.length > 0 ? (
-                  sequenceHierarchyRows.map((row) => {
-                    if (row.kind === 'directory') {
-                      return (
-                        <div
-                          key={row.key}
-                          className="libraryDirectoryRow mono"
-                          style={{ paddingLeft: `${row.depth * 0.9 + 0.4}rem` }}
-                        >
-                          <span className="libraryDirectoryCaret" aria-hidden="true">
-                            ▸
-                          </span>
-                          <span className="libraryDirectoryName">{row.label}</span>
-                        </div>
-                      )
-                    }
-
-                    const sequenceBank = row.entry
-                    if (!sequenceBank) {
-                      return null
-                    }
-                    const stemParts = sequenceBank.stem.split('/').filter((part) => part.length > 0)
-                    const sequenceNameLeaf = stemParts[stemParts.length - 1] || row.label
-                    const sequenceFolderPath = stemParts.slice(0, -1).join('/')
-                    return (
-                      <button
-                        key={row.key}
-                        type="button"
-                        className="libraryItem"
-                        style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
-                        onClick={() => {
-                          void runLibraryCommand(
-                            sequenceBank.command ||
-                              `load sequenceBank ${quoteCommandArg(sequenceBank.name)}`
-                          )
-                        }}
-                      >
-                        <span className="libraryItemName mono">
-                          {sequenceFolderPath ? (
-                            <span className="libraryItemPathPrefix">{`${sequenceFolderPath}/`}</span>
-                          ) : null}
-                          <span className="libraryItemPathLeaf">{sequenceNameLeaf}</span>
-                        </span>
-                        <span className="libraryItemMeta mono">
-                          {sequenceBank.relativePath || sequenceBank.path}
-                        </span>
-                      </button>
-                    )
-                  })
-                ) : (
-                  <p className="libraryPlaceholder">
-                    {sequenceSearch.trim() ? 'No sequences match that search.' : 'No saved sequences found.'}
-                  </p>
-                )}
-              </>
-            ) : null}
-
-            {activeLibraryTab === 'chords' ? (
-              librarySnapshot.chords.length > 0 ? (
-                librarySnapshot.chords.map((chord, index) => (
-                  <button
-                    key={`library-chord-${index}-${chord.name}`}
-                    type="button"
-                    className="libraryItem"
-                    onClick={() => {
-                      void runLibraryCommand(chord.command || `arp ${quoteCommandArg(chord.name)}`)
-                    }}
-                  >
-                    <span className="libraryItemName mono">{chord.name}</span>
-                    <span className="libraryItemMeta mono">
-                      {chord.intervals.length > 0
-                        ? `[${chord.intervals.join(', ')}]`
-                        : 'Intervals unavailable'}
-                    </span>
-                  </button>
-                ))
-              ) : (
-                <p className="libraryPlaceholder">No chords loaded.</p>
-              )
-            ) : null}
-          </div>
-          </article>
-        </div>
-      </section>
+      <HeaderSection
+        isTimeSignatureEditing={isTimeSignatureEditing}
+        timeSignatureInputRef={timeSignatureInputRef}
+        timeSignatureDraft={timeSignatureDraft}
+        setTimeSignatureDraft={setTimeSignatureDraft}
+        commitTimeSignature={commitTimeSignature}
+        cancelTimeSignatureEdit={cancelTimeSignatureEdit}
+        beginTimeSignatureEdit={beginTimeSignatureEdit}
+        bridgeUnavailableMessage={bridgeUnavailableMessage}
+        timeSignature={timeSignature}
+        applyTimeSignatureScale={applyTimeSignatureScale}
+        isKeyEditing={isKeyEditing}
+        keyInputRef={keyInputRef}
+        keyDraft={keyDraft}
+        setKeyDraft={setKeyDraft}
+        commitKey={commitKey}
+        cancelKeyEdit={cancelKeyEdit}
+        beginKeyEdit={beginKeyEdit}
+        keyDisplay={keyDisplay}
+        isBaseFrequencyEditing={isBaseFrequencyEditing}
+        baseFrequencyInputRef={baseFrequencyInputRef}
+        baseFrequencyDraft={baseFrequencyDraft}
+        setBaseFrequencyDraft={setBaseFrequencyDraft}
+        commitBaseFrequency={commitBaseFrequency}
+        cancelBaseFrequencyEdit={cancelBaseFrequencyEdit}
+        beginBaseFrequencyEdit={beginBaseFrequencyEdit}
+        baseFrequency={baseFrequency}
+        scaleMenuRef={scaleMenuRef}
+        openScaleMenu={openScaleMenu}
+        setOpenScaleMenu={setOpenScaleMenu}
+        isScaleUpdating={isScaleUpdating}
+        scaleOptions={scaleOptions}
+        scaleName={scaleName}
+        applyScaleSelection={applyScaleSelection}
+        scaleTranslateDirection={scaleTranslateDirection}
+        toggleTranslateDirection={toggleTranslateDirection}
+        modeOptions={modeOptions}
+        scaleMode={scaleMode}
+        applyModeSelection={applyModeSelection}
+        tuningName={tuningName}
+        selectedMeasureIndex={selectedMeasureIndex}
+        isSequenceNameEditing={isSequenceNameEditing}
+        sequenceNameInputRef={sequenceNameInputRef}
+        sequenceNameDraft={sequenceNameDraft}
+        setSequenceNameDraft={setSequenceNameDraft}
+        commitSequenceName={commitSequenceName}
+        cancelSequenceNameEdit={cancelSequenceNameEdit}
+        beginSequenceNameEdit={beginSequenceNameEdit}
+        selectedMeasureName={selectedMeasureName}
+      />
+      <SequencerSection
+        bridgeUnavailableMessage={bridgeUnavailableMessage}
+        pitchRows={pitchRows}
+        backgroundOverlayStates={backgroundOverlayStates}
+        tuningLength={tuningLength}
+        renderRollCells={renderRollCells}
+        rootCells={rootCells}
+        playheadPhase={playheadPhase}
+        ratioToBottom={ratioToBottom}
+        rulerRatios={rulerRatios}
+        highlightedPitches={highlightedPitches}
+      />
+      <StatusSection
+        currentInputMode={currentInputMode}
+        currentInputModeLetter={currentInputModeLetter}
+        isCommandMode={isCommandMode}
+        submitCommand={submitCommand}
+        commandInputRef={commandInputRef}
+        commandText={commandText}
+        setCommandText={setCommandText}
+        historyIndex={historyIndex}
+        setHistoryIndex={setHistoryIndex}
+        commandSuffix={commandSuffix}
+        closeCommandMode={closeCommandMode}
+        commandHistory={commandHistory}
+        liveCommandBufferRef={liveCommandBufferRef}
+        statusLevel={statusLevel}
+        statusMessage={statusMessage}
+        selectedCellMeta={selectedCellMeta}
+      />
+      <BottomModulesSection
+        sequenceBankCells={sequenceBankCells}
+        selectedMeasureIndex={selectedMeasureIndex}
+        activeSequenceFlags={activeSequenceFlags}
+        sequenceCount={sequenceCount}
+        selectSequenceFromBank={selectSequenceFromBank}
+        activeModulatorTab={activeModulatorTab}
+        setOpenWaveMenu={setOpenWaveMenu}
+        setActiveModulatorTab={setActiveModulatorTab}
+        waveMenuRef={waveMenuRef}
+        openWaveMenu={openWaveMenu}
+        waveAType={waveAType}
+        waveBType={waveBType}
+        selectWaveType={selectWaveType}
+        waveLerp={waveLerp}
+        setWaveLerp={setWaveLerp}
+        waveAPulseWidth={waveAPulseWidth}
+        setWaveAPulseWidth={setWaveAPulseWidth}
+        waveBPulseWidth={waveBPulseWidth}
+        setWaveBPulseWidth={setWaveBPulseWidth}
+        wavePadDragRef={wavePadDragRef}
+        clampNumber={clampNumber}
+        waveHandleA={waveHandleA}
+        waveHandleB={waveHandleB}
+        lastWaveHandleUsedRef={lastWaveHandleUsedRef}
+        snapWaveToCenterGuides={snapWaveToCenterGuides}
+        applyWavePadMotion={applyWavePadMotion}
+        waveAOpacity={waveAOpacity}
+        waveBOpacity={waveBOpacity}
+        waveAPreviewPath={waveAPreviewPath}
+        waveBPreviewPath={waveBPreviewPath}
+        morphedWavePreviewPath={morphedWavePreviewPath}
+        targetControls={targetControls}
+        updateTargetControl={updateTargetControl}
+        padDragRef={padDragRef}
+        applyPadMotion={applyPadMotion}
+        scheduleLiveEmit={scheduleLiveEmit}
+        buildCommandForTarget={buildCommandForTarget}
+        baseMorphModulator={baseMorphModulator}
+        activeReferenceTab={activeReferenceTab}
+        setActiveReferenceTab={setActiveReferenceTab}
+        sessionReference={sessionReference}
+        referenceSearchInputRef={referenceSearchInputRef}
+        referenceCommandSearch={referenceCommandSearch}
+        setReferenceCommandSearch={setReferenceCommandSearch}
+        filteredReferenceCommands={filteredReferenceCommands}
+        focusCommandBarWithText={focusCommandBarWithText}
+        sequenceViewReferenceBindings={sequenceViewReferenceBindings}
+        activeLibraryTab={activeLibraryTab}
+        setActiveLibraryTab={setActiveLibraryTab}
+        librarySnapshot={librarySnapshot}
+        runLibraryCommand={runLibraryCommand}
+        quoteCommandArg={quoteCommandArg}
+        tuningSearchInputRef={tuningSearchInputRef}
+        tuningSearch={tuningSearch}
+        setTuningSearch={setTuningSearch}
+        tuningSortMode={tuningSortMode}
+        setTuningSortMode={setTuningSortMode}
+        tuningHierarchyRows={tuningHierarchyRows}
+        formatOctaveForDisplay={formatOctaveForDisplay}
+        sequenceSearchInputRef={sequenceSearchInputRef}
+        sequenceSearch={sequenceSearch}
+        setSequenceSearch={setSequenceSearch}
+        sequenceHierarchyRows={sequenceHierarchyRows}
+      />
     </div>
   )
 }

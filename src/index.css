@@ -1,20 +1,21 @@
 /* =========================================================
-   Global Defaults
-   Keep this file for app-wide styles only.
+   Section 1: Global Defaults
+   Purpose: App-wide defaults that should not live in feature stylesheets.
    ========================================================= */
 
 :root {
-  /* Use a neutral monospace font for the plugin prototype UI */
+  /* Notes: Use a neutral monospace face for this plugin prototype UI. */
   font-family: monospace;
 }
 
-/* Include border/padding in element dimensions */
+/* Notes: Include border/padding in element dimensions. */
 * {
   box-sizing: border-box;
 }
 
 /* =========================================================
-   Page Frame
+   Section 2: Page Frame
+   Purpose: Baseline body and root sizing/background.
    ========================================================= */
 
 body {

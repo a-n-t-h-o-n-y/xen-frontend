@@ -1,0 +1,452 @@
+/* =========================================================
+   Section 1: Design Tokens
+   Purpose: Keep spacing, color, and sizing values centralized.
+   Notes: Favor tokens first before introducing one-off values.
+   ========================================================= */
+
+:root {
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --border-subtle: 1px solid rgb(255 255 255 / 35%);
+  --surface-1: #000;
+  --surface-2: #0d0d0d;
+  --text-primary: #fff;
+  --text-secondary: #c9c9c9;
+  --sequencer-max-height: calc(24rem - 15px);
+  --seq-shell-bg: #070707;
+  --seq-panel-bg: #101010;
+  --seq-border: 1px solid rgb(255 255 255 / 20%);
+  --seq-grid-line: rgb(255 255 255 / 14%);
+  --seq-row-even: rgb(22 22 22 / 94%);
+  --seq-row-odd: rgb(33 33 33 / 94%);
+  --seq-playhead: rgb(255 255 255 / 88%);
+  --seq-note: rgb(241 245 249 / 86%);
+  --seq-note-text: rgb(10 10 10 / 92%);
+  --seq-selection: rgb(245 196 90 / 58%);
+  --seq-selection-soft: rgb(245 196 90 / 20%);
+  --roll-island-gap: 5px;
+  --roll-divider-x-bias: 0px;
+  --roll-divider-edge-inset-base: 12px;
+  --roll-divider-edge-inset-step: 12px;
+  --extras-row-height: 21rem;
+  --square-module-label-offset: 2.5rem;
+}
+
+/* =========================================================
+   Section 2: App Layout
+   Purpose: Define the high-level vertical frame for the app.
+   Notes: Rows are header, sequencer, status, then lower modules.
+   ========================================================= */
+
+.app {
+  display: grid;
+  grid-template-rows: auto minmax(0, var(--sequencer-max-height)) auto minmax(0, 1fr);
+  gap: var(--space-3);
+
+  min-height: 300px;
+  height: calc(100vh - 1rem);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-3) var(--space-3) var(--space-1);
+
+  color: var(--text-primary);
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* =========================================================
+   Section 3: Header Shell
+   Purpose: Structure the two header groups and field grid containers.
+   ========================================================= */
+
+.header {
+  position: relative;
+  z-index: 40;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-3);
+  padding: 0;
+  overflow: visible;
+}
+
+.headerGroup {
+  flex: 0.8 1 0;
+  min-width: 240px;
+  padding: var(--space-3);
+  border: var(--border-subtle);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
+}
+
+.headerGroup:nth-child(2) {
+  flex: 1.4 1 0;
+}
+
+.headerGrid {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-4);
+}
+
+.headerField {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+/* =========================================================
+   Section 4: Header Fields and Editable Controls
+   Purpose: Typography and input/display pairs for header values.
+   Notes: Edit/display states should keep identical dimensions.
+   ========================================================= */
+
+.fieldLabel {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fieldValue {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.timeSignatureControl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.5rem;
+}
+
+.timeSignatureValueSlot {
+  display: inline-flex;
+  align-items: center;
+  width: 6ch;
+}
+
+.timeSignatureDisplay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 1.35rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.timeSignatureDisplay:disabled {
+  opacity: 0.75;
+  cursor: default;
+  background: transparent;
+}
+
+.timeSignatureDisplay:hover:not(:disabled),
+.timeSignatureDisplay:focus-visible:not(:disabled) {
+  background: rgb(255 255 255 / 7%);
+}
+
+.timeSignatureInput {
+  width: 100%;
+  min-width: 0;
+  min-height: 1.35rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  background: rgb(255 255 255 / 14%);
+  font: inherit;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.headerEditableValueSlot {
+  display: inline-flex;
+  align-items: center;
+  width: 8ch;
+  min-height: 1.5rem;
+}
+
+.headerEditableDisplay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 1.35rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.headerEditableDisplay:disabled {
+  opacity: 0.75;
+  cursor: default;
+  background: transparent;
+}
+
+.headerEditableDisplay:hover:not(:disabled),
+.headerEditableDisplay:focus-visible:not(:disabled) {
+  background: rgb(255 255 255 / 7%);
+}
+
+/* Notes: Inputs mirror display sizing so edit mode does not shift layout. */
+.headerEditableInput {
+  width: 100%;
+  min-width: 0;
+  min-height: 1.35rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  background: rgb(255 255 255 / 14%);
+  font: inherit;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.headerEditableValueWide {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.headerEditableDisplay-editable {
+  cursor: text;
+}
+
+/* =========================================================
+   Section 5: Scale and Mode Controls
+   Purpose: Chip controls, scale picker, and translate direction control.
+   ========================================================= */
+
+.modePicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.22rem;
+  min-height: 1.5rem;
+}
+
+.modeChip {
+  min-width: 1.35rem;
+  height: 1.1rem;
+  padding: 0 0.28rem;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.68rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 170ms ease,
+    border-color 170ms ease,
+    color 170ms ease;
+}
+
+.modeChip:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 32%);
+  background: rgb(255 255 255 / 9%);
+  color: rgb(255 255 255 / 86%);
+}
+
+.modeChip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modeChip-active {
+  border-color: rgb(245 196 90 / 48%);
+  background: rgb(245 196 90 / 20%);
+  color: rgb(252 245 223);
+}
+
+.modePickerEmpty {
+  font-size: 0.74rem;
+  color: rgb(255 255 255 / 45%);
+}
+
+.headerScaleSelect {
+  width: 100%;
+  max-width: 12.5rem;
+}
+
+.headerScaleControl {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.headerScaleTrigger {
+  width: 100%;
+  min-width: 0;
+  height: 1.5rem;
+  padding: 0.12rem 0.45rem;
+  line-height: 1.2;
+  font-size: 0.86rem;
+}
+
+.headerScaleTrigger:disabled {
+  opacity: 0.75;
+}
+
+.headerScaleLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerScaleMenu {
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.headerScaleMenu .waveSelectOption {
+  font-size: 0.78rem;
+}
+
+.scaleDirectionGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 82%);
+  font-size: 0.82rem;
+  line-height: 1;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.scaleDirectionGlyph:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* =========================================================
+   Section 6: Header Layout Presets
+   Purpose: Keep field proportions explicit and easy to tune.
+   ========================================================= */
+
+.headerGrid-primary {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.headerField-timeSignature {
+  flex: 1.7 1 0;
+  min-width: 0;
+}
+
+.headerField-key {
+  flex: 0.7 1 0;
+  min-width: 0;
+}
+
+.headerField-baseFrequency {
+  flex: 1.1 1 0;
+  min-width: 0;
+}
+
+.headerField-sequenceName {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sequenceNameControl {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.sequenceNameIndex {
+  flex: 0 0 auto;
+  color: rgb(255 255 255 / 72%);
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.sequenceNameValue {
+  flex: 1 1 auto;
+}
+
+.timeSignatureButtons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.timeSignatureAction {
+  min-width: 2.2rem;
+  height: 1.1rem;
+  padding: 0 0.35rem;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.66rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.timeSignatureAction:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 30%);
+  background: rgb(255 255 255 / 9%);
+  color: rgb(255 255 255 / 80%);
+}
+
+.timeSignatureAction:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   Section 7: Utility
+   Purpose: Small reusable helper classes.
+   ========================================================= */
+
+.mono {
+  font-variant-numeric: tabular-nums;
+}

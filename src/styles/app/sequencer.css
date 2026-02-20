@@ -1,0 +1,353 @@
+/* =========================================================
+   Section 1: Sequencer Shell
+   Purpose: Main 3-column sequencer frame (index, roll, ruler).
+   ========================================================= */
+
+.sequencer {
+  height: 100%;
+  width: 100%;
+  max-height: var(--sequencer-max-height);
+  min-height: 0;
+  padding: var(--space-2);
+  border: var(--seq-border);
+  border-radius: var(--radius-2);
+  background: var(--seq-shell-bg);
+}
+
+.sequencerShell {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr 2.5rem;
+  gap: var(--space-2);
+  height: 100%;
+  min-height: 0;
+}
+
+.pitchIndexBar {
+  display: grid;
+  grid-auto-rows: 1fr;
+  border: var(--seq-border);
+  border-radius: var(--radius-1);
+  background: var(--seq-panel-bg);
+  overflow: hidden;
+}
+
+.pitchIndexRow {
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--seq-grid-line);
+}
+
+.pitchIndexRow:last-child {
+  border-bottom: 0;
+}
+
+.pianoRoll {
+  position: relative;
+  background: transparent;
+}
+
+/* =========================================================
+   Section 2: Background Overlay Layers
+   Purpose: Render projected/background notes above roll rows.
+   Notes: Overlay layers are pointer-transparent by design.
+   ========================================================= */
+
+.rollBackgroundOverlay {
+  position: absolute;
+  inset: 4px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.rollBackgroundLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.rollIslands {
+  position: relative;
+  display: flex;
+  gap: var(--roll-island-gap);
+  height: 100%;
+  min-width: 0;
+  padding: 4px;
+  z-index: 2;
+}
+
+.rollBranch {
+  display: flex;
+  gap: var(--roll-island-gap);
+  height: 100%;
+  min-width: 0;
+}
+
+.rollSegment {
+  position: relative;
+  min-width: 0;
+}
+
+.rollPlayhead {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--seq-playhead);
+  box-shadow: 0 0 0 1px rgb(8 15 24 / 62%);
+  transform: translateX(-1px);
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* =========================================================
+   Section 3: Roll Segments and Selection States
+   Purpose: Define nested sequence segments and selected leaf styling.
+   ========================================================= */
+
+.rollBgNote {
+  position: absolute;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.rollBgTrigger {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-0.5px);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.rollIsland {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 1px solid var(--seq-grid-line);
+  border-radius: 10px;
+  overflow: visible;
+  isolation: isolate;
+}
+
+.rollSegment-sequenceBoundary::before {
+  content: '';
+  position: absolute;
+  top: calc(
+    var(--roll-divider-edge-inset-base) +
+      (var(--roll-sequence-boundary-depth, 0) * var(--roll-divider-edge-inset-step))
+  );
+  bottom: calc(
+    var(--roll-divider-edge-inset-base) +
+      (var(--roll-sequence-boundary-depth, 0) * var(--roll-divider-edge-inset-step))
+  );
+  left: calc((var(--roll-island-gap) / -2) + var(--roll-divider-x-bias));
+  transform: translateX(-50%);
+  width: 1px;
+  background: rgb(148 163 184 / 76%);
+  pointer-events: none;
+  z-index: 26;
+}
+
+/* Notes: Nested boundary lines step inward to avoid visual stacking noise. */
+.rollIsland::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.rollIsland-selected {
+  border-color: var(--seq-grid-line);
+}
+
+.rollIsland-selected::after {
+  background: transparent;
+  box-shadow: 0 0 8px 1.5px rgb(245 196 90 / 28%);
+}
+
+.rollIsland-selectedStart {
+  border-color: var(--seq-grid-line);
+}
+
+.rollIsland-selectedStart::after {
+  background: transparent;
+  box-shadow: 0 0 8px 1.5px rgb(245 196 90 / 28%);
+}
+
+.rollIsland-selectedEnd {
+  border-color: var(--seq-grid-line);
+}
+
+.rollIsland-selectedEnd::after {
+  background: transparent;
+  box-shadow: 0 0 8px 1.5px rgb(245 196 90 / 28%);
+}
+
+/* =========================================================
+   Section 4: Roll Grid Rows
+   Purpose: Alternating row bands and row separators.
+   ========================================================= */
+
+.rollIslandGrid {
+  position: relative;
+  border-radius: inherit;
+  overflow: hidden;
+  display: grid;
+  grid-auto-rows: 1fr;
+  height: 100%;
+}
+
+.rollRow {
+  position: relative;
+}
+
+.rollRow:not(:last-child) {
+  box-shadow: inset 0 -1px var(--seq-grid-line);
+}
+
+.rollRow-bandEven {
+  background: var(--seq-row-even);
+}
+
+.rollRow-bandOdd {
+  background: var(--seq-row-odd);
+}
+
+.rollRowLine {
+  display: none;
+}
+
+/* =========================================================
+   Section 5: Note Rendering
+   Purpose: Draw note bars and octave labels inside each row.
+   ========================================================= */
+
+.rollNote {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  top: 0;
+  bottom: 0;
+  background: var(--seq-note);
+  z-index: 2;
+}
+
+.rollNoteOctave {
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--seq-note-text);
+  text-shadow: 0 1px 0 rgb(15 23 42 / 24%);
+}
+
+.rollNote-hasDelay {
+  border-left: 1px solid rgb(15 23 42 / 52%);
+}
+
+.rollNote-shortGate {
+  border-right: 1px solid rgb(15 23 42 / 52%);
+}
+
+/* =========================================================
+   Section 6: Tuning Ruler
+   Purpose: Show vertical guide and reference/tuning ratio marks.
+   ========================================================= */
+
+.tuningRuler {
+  position: relative;
+  border: var(--seq-border);
+  border-radius: var(--radius-1);
+  background: var(--seq-panel-bg);
+}
+
+.tuningRulerLine {
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: 50%;
+  width: 1px;
+  background: rgb(148 163 184 / 72%);
+  transform: translateX(-0.5px);
+}
+
+.rulerMark {
+  position: absolute;
+  height: 2px;
+  transform: translateY(1px);
+}
+
+.rulerMark-reference {
+  left: 50%;
+  width: 0.65rem;
+  background: rgb(148 163 184 / 72%);
+}
+
+.rulerMark-tuning {
+  right: 50%;
+  width: 0.65rem;
+  background: rgb(148 163 184 / 42%);
+}
+
+.rulerMark-active {
+  background: var(--seq-selection);
+}
+
+/* =========================================================
+   Section 7: Bridge Notice
+   Purpose: Empty/error state shown when backend bridge is unavailable.
+   ========================================================= */
+
+.bridgeNotice {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: var(--space-3);
+
+  height: 100%;
+  padding: var(--space-4);
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+}
+
+.bridgeNoticeTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.bridgeNoticeBody,
+.bridgeNoticeHint {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+/* =========================================================
+   Section 8: Responsive Overrides
+   Purpose: Compress side columns for narrower viewports.
+   ========================================================= */
+
+@media (max-width: 860px) {
+  .sequencerShell {
+    grid-template-columns: 2rem 1fr 2rem;
+  }
+
+  .pitchIndexRow {
+    font-size: 0.65rem;
+  }
+
+  .rulerMark-reference,
+  .rulerMark-tuning {
+    width: 0.5rem;
+  }
+}

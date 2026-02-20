@@ -1,0 +1,958 @@
+/* =========================================================
+   Section 1: Bottom Modules Shell
+   Purpose: Shared container and module-level layout primitives.
+   ========================================================= */
+
+.bottomModules {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-3);
+  padding: 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.bottomModule {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: var(--radius-2);
+  background: var(--surface-1);
+}
+
+.bottomModuleHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--space-2);
+}
+
+.bottomModule-library {
+  min-height: var(--extras-row-height);
+}
+
+/* =========================================================
+   Section 2: Library Panel
+   Purpose: Tabs, sort chips, hierarchy rows, and list presentation.
+   ========================================================= */
+
+.libraryTabs {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.librarySortChips {
+  display: inline-flex;
+  gap: 0.3rem;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.librarySortChip {
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text-secondary);
+  font-size: 0.64rem;
+  line-height: 1;
+  padding: 0.24rem 0.46rem;
+  white-space: nowrap;
+}
+
+.librarySortChip-active {
+  border-color: rgb(245 196 90 / 58%);
+  background: rgb(245 196 90 / 14%);
+  color: rgb(252 245 223);
+}
+
+.libraryTab {
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 0.3rem 0.5rem;
+}
+
+.libraryTab-active {
+  border-color: rgb(245 196 90 / 58%);
+  background: rgb(245 196 90 / 14%);
+  color: rgb(252 245 223);
+}
+
+.libraryList {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.libraryItem {
+  display: grid;
+  gap: 0.2rem;
+  align-items: start;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-primary);
+  padding: 0.42rem 0.5rem;
+}
+
+.libraryItem:hover {
+  border-color: rgb(255 255 255 / 26%);
+  background: rgb(255 255 255 / 6%);
+}
+
+.libraryItem-active {
+  border-color: rgb(245 196 90 / 56%);
+  background: rgb(245 196 90 / 14%);
+}
+
+.libraryDirectoryRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.45rem;
+  color: rgb(255 255 255 / 66%);
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.libraryDirectoryCaret {
+  color: rgb(255 255 255 / 45%);
+  font-size: 0.6rem;
+}
+
+.libraryDirectoryName {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libraryItemName {
+  min-width: 0;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libraryItemPathPrefix {
+  color: rgb(255 255 255 / 56%);
+}
+
+.libraryItemPathLeaf {
+  color: var(--text-primary);
+}
+
+.libraryItemMeta {
+  min-width: 0;
+  font-size: 0.64rem;
+  line-height: 1.25;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libraryItemMeta-multiline {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+}
+
+.libraryPlaceholder {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.bottomModuleRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.bottomModule-rowItem {
+  min-width: 0;
+  height: calc(var(--extras-row-height) + var(--square-module-label-offset));
+  max-height: calc(var(--extras-row-height) + var(--square-module-label-offset));
+  min-height: calc(var(--extras-row-height) + var(--square-module-label-offset));
+  overflow: hidden;
+}
+
+.bottomModule-reference {
+  min-width: 0;
+}
+
+/* =========================================================
+   Section 3: Modulator Panel
+   Purpose: Wave controls, visualizer, target routing, and live controls.
+   ========================================================= */
+
+.modulatorPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.modulatorTopRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 0.9fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.waveSelect {
+  position: relative;
+}
+
+.modulatorRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.modulatorField {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.modulatorField-full {
+  grid-column: 1 / -1;
+}
+
+.modulatorField-empty {
+  visibility: hidden;
+}
+
+.modulatorFieldLabel {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.modulatorSelect,
+.modulatorNumber {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: var(--radius-1);
+  background: rgb(255 255 255 / 6%);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.4rem;
+}
+
+.modulatorSelect {
+  appearance: none;
+}
+
+.waveSelectTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: var(--radius-1);
+  background: rgb(255 255 255 / 6%);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  padding: 0.32rem 0.45rem;
+}
+
+.waveSelectChevron {
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.65rem;
+}
+
+.waveSelectMenu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 2px;
+  padding: 0.2rem;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: var(--radius-1);
+  background: rgb(16 16 16 / 96%);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 40%);
+  z-index: 30;
+}
+
+/* Notes: Overlay menu must sit above neighboring modules when open. */
+.waveSelectOption {
+  width: 100%;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-align: left;
+  padding: 0.28rem 0.35rem;
+}
+
+.waveSelectOption:hover {
+  background: rgb(255 255 255 / 10%);
+  color: var(--text-primary);
+}
+
+.waveSelectOption-active {
+  background: rgb(245 196 90 / 14%);
+  color: rgb(252 245 223);
+}
+
+.modulatorSlider {
+  width: 100%;
+}
+
+.modulatorTopLerp {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 0.95rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* Notes: Duplicate slider pseudo-elements for WebKit and Gecko parity. */
+.modulatorTopLerp::-webkit-slider-runnable-track {
+  height: 0.22rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 30%);
+}
+
+.modulatorTopLerp::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-top: -0.24rem;
+  border: 1px solid rgb(255 255 255 / 85%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 96%);
+}
+
+.modulatorTopLerp::-moz-range-track {
+  height: 0.22rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 30%);
+}
+
+.modulatorTopLerp::-moz-range-thumb {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 1px solid rgb(255 255 255 / 85%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 96%);
+}
+
+.modulatorTopLerp:focus-visible {
+  outline: none;
+}
+
+.modulatorTopLerp:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px rgb(245 196 90 / 28%);
+}
+
+.modulatorTopLerp:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px rgb(245 196 90 / 28%);
+}
+
+.modWavePreview {
+  flex: 1 1 auto;
+  position: relative;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: var(--radius-1);
+  background: rgb(255 255 255 / 4%);
+  min-height: 5rem;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Notes: touch-action none keeps pointer-drag behavior stable on touch screens. */
+.modWavePreview svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.modWaveAxis {
+  stroke: rgb(255 255 255 / 22%);
+  stroke-width: 1;
+}
+
+.modWaveLine {
+  fill: none;
+  stroke-width: 2;
+}
+
+.modWaveLine-a {
+  stroke: rgb(103 232 249 / 78%);
+}
+
+.modWaveLine-b {
+  stroke: rgb(248 113 113 / 78%);
+}
+
+.modWaveLine-mix {
+  stroke: rgb(245 196 90 / 92%);
+}
+
+.modWaveGuide {
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.modWaveGuide-a {
+  stroke: rgb(103 232 249 / 26%);
+}
+
+.modWaveGuide-b {
+  stroke: rgb(248 113 113 / 26%);
+}
+
+.modWaveHandle {
+  stroke-width: 1;
+}
+
+.modWaveHandle-a {
+  fill: rgb(103 232 249 / 94%);
+  stroke: rgb(9 22 27 / 90%);
+}
+
+.modWaveHandle-b {
+  fill: rgb(248 113 113 / 94%);
+  stroke: rgb(36 10 10 / 90%);
+}
+
+.modTargetList {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.modTargetRow {
+  display: grid;
+  grid-template-columns: 5.75rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.modTargetHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  font-size: 0.75rem;
+}
+
+.modTargetLed {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin: 0;
+  border: 1px solid rgb(255 255 255 / 26%);
+  border-radius: 999px;
+  background: rgb(28 10 10 / 92%);
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 35%),
+    0 0 0 1px rgb(0 0 0 / 18%);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.modTargetLed:checked {
+  border-color: rgb(255 136 136 / 86%);
+  background: rgb(245 80 80 / 94%);
+  box-shadow:
+    0 0 0 1px rgb(245 80 80 / 25%),
+    0 0 8px rgb(245 80 80 / 55%),
+    inset 0 0 0 1px rgb(255 255 255 / 20%);
+}
+
+.modTargetLed:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgb(245 80 80 / 26%),
+    0 0 0 1px rgb(245 80 80 / 40%);
+}
+
+.modTargetMode {
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: var(--radius-1);
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-secondary);
+  padding: 0.25rem 0.45rem;
+  font-size: 0.7rem;
+}
+
+.modTargetMode-active {
+  color: rgb(252 245 223);
+  border-color: rgb(245 196 90 / 58%);
+}
+
+/* Notes: Drag intent is vertical amount and horizontal center positioning. */
+.modRangePad {
+  position: relative;
+  height: 1.7rem;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: var(--radius-1);
+  background: rgb(255 255 255 / 4%);
+  cursor: ns-resize;
+}
+
+.modRangePad-disabled {
+  opacity: 0.55;
+}
+
+.modRangeTrack {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-0.5px);
+  background: rgb(255 255 255 / 25%);
+}
+
+.modRangeBand {
+  position: absolute;
+  top: 0.45rem;
+  bottom: 0.45rem;
+  border-radius: 999px;
+  background: rgb(192 132 252 / 16%);
+  box-shadow:
+    inset 0 0 0 1px rgb(192 132 252 / 30%),
+    0 0 0 1px rgb(0 0 0 / 12%);
+}
+
+.modRangeBand-inverted {
+  background: rgb(56 189 248 / 16%);
+  box-shadow:
+    inset 0 0 0 1px rgb(56 189 248 / 30%),
+    0 0 0 1px rgb(0 0 0 / 12%);
+}
+
+.modRangeCenter {
+  position: absolute;
+  top: 0.15rem;
+  bottom: 0.15rem;
+  width: 2px;
+  transform: translateX(-1px);
+  background: rgb(255 255 255 / 82%);
+}
+
+.modulatorPreviewBlock {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.modulatorPreviewLabel {
+  margin: 0;
+  font-size: 0.66rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.modulatorPreview {
+  margin: 0;
+  padding: 0.4rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: var(--radius-1);
+  background: rgb(255 255 255 / 2%);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.modulatorApplyButton {
+  border: 1px solid rgb(245 196 90 / 58%);
+  border-radius: var(--radius-1);
+  background: rgb(245 196 90 / 14%);
+  color: rgb(252 245 223);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.6rem;
+}
+
+.modulatorApplyButton:disabled {
+  opacity: 0.45;
+}
+
+/* =========================================================
+   Section 4: Sequence Bank Panel
+   Purpose: 4x4 transport/selection matrix and per-slot states.
+   ========================================================= */
+
+.sequenceBankGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  flex: 1 1 auto;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 0;
+}
+
+.sequenceBankCell {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 0;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: var(--radius-1);
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.sequenceBankCell:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 48%);
+  background: rgb(255 255 255 / 10%);
+  color: var(--text-primary);
+}
+
+.sequenceBankCell-selected {
+  border-color: rgb(245 196 90 / 72%);
+  background: rgb(245 196 90 / 14%);
+  color: rgb(252 245 223);
+}
+
+.sequenceBankCell-active {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 22%);
+}
+
+.sequenceBankCell:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.bottomModuleLabel {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.modTabs {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.modTab {
+  display: inline-grid;
+  place-items: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  line-height: 1;
+  padding: 0;
+  text-align: center;
+}
+
+.modTab-active {
+  border-color: rgb(245 196 90 / 58%);
+  background: rgb(245 196 90 / 14%);
+  color: rgb(252 245 223);
+}
+
+/* =========================================================
+   Section 5: Reference Panel
+   Purpose: Command reference search and keybinding documentation tables.
+   ========================================================= */
+
+.referenceTabs {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.referenceTab {
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  line-height: 1;
+  padding: 0.22rem 0.38rem;
+}
+
+.referenceTab-active {
+  border-color: rgb(245 196 90 / 58%);
+  background: rgb(245 196 90 / 14%);
+  color: rgb(252 245 223);
+}
+
+.referenceContent {
+  display: grid;
+  align-content: start;
+  justify-items: stretch;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding-right: 0.15rem;
+  overflow: auto;
+}
+
+.referenceCommands,
+.referenceKeybindings {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.referenceCommandSearchField {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 4%);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.referenceCommandSearchField:focus-within {
+  border-color: rgb(245 196 90 / 60%);
+  background: rgb(255 255 255 / 7%);
+}
+
+.referenceCommandSearchInput {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  padding: 0.34rem 0.3rem 0.34rem 0.48rem;
+  min-width: 0;
+}
+
+.referenceCommandSearchInput::placeholder {
+  color: rgb(255 255 255 / 46%);
+}
+
+.referenceCommandSearchInput:focus-visible {
+  outline: none;
+}
+
+.referenceCommandSearchInput::-webkit-search-cancel-button,
+.referenceCommandSearchInput::-webkit-search-decoration,
+.referenceCommandSearchInput::-webkit-search-results-button,
+.referenceCommandSearchInput::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.referenceCommandSearchClear {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-right: 0.28rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgb(255 255 255 / 56%);
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.referenceCommandSearchClear:hover {
+  background: rgb(255 255 255 / 14%);
+  color: var(--text-primary);
+}
+
+.referenceCommandSearchClear:focus-visible {
+  outline: 1px solid rgb(245 196 90 / 60%);
+  outline-offset: 1px;
+}
+
+.referenceModeLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.referenceModeBadge {
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text-secondary);
+  font-size: 0.64rem;
+  line-height: 1;
+  padding: 0.18rem 0.38rem;
+}
+
+.referenceCommandRow,
+.referenceKeybindingGroup {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.referenceCommandButton {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.referenceCommandButton:hover {
+  border-color: rgb(255 255 255 / 24%);
+  background: rgb(255 255 255 / 6%);
+}
+
+.referenceCommandButton:focus-visible {
+  outline: 1px solid rgb(245 196 90 / 60%);
+  outline-offset: 1px;
+}
+
+.referenceCommandId {
+  margin: 0;
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgb(245 196 90 / 90%);
+}
+
+.referenceCommandSignature {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.referenceCommandDescription {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--text-secondary);
+}
+
+.referenceKeybindingRows {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.referenceKeybindingTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.referenceKeybindingTable th,
+.referenceKeybindingTable td {
+  padding: 0.26rem 0.22rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.referenceKeybindingTable th {
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(245 196 90 / 88%);
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
+}
+
+.referenceKeybindingTable tbody tr + tr td {
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.referenceKeybindingTable th:first-child,
+.referenceKeybindingTable td:first-child {
+  width: 7.5rem;
+}
+
+.referenceKeybindingKey {
+  font-size: 0.68rem;
+  color: var(--text-primary);
+}
+
+.referenceKeybindingCommand {
+  min-width: 0;
+  font-size: 0.7rem;
+  line-height: 1.25;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.referencePlaceholder {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+/* =========================================================
+   Section 6: Responsive Overrides
+   Purpose: Collapse multi-column controls for narrow layouts.
+   ========================================================= */
+
+@media (max-width: 860px) {
+  .bottomModuleRow {
+    grid-template-columns: 1fr;
+  }
+
+  .modulatorRow {
+    grid-template-columns: 1fr;
+  }
+
+  .modTargetRow {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}

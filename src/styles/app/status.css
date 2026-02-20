@@ -1,0 +1,148 @@
+/* =========================================================
+   Section 1: Status Bar Shell
+   Purpose: Layout for mode badge, status text, and metadata.
+   ========================================================= */
+
+.statusBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-subtle);
+  border-radius: var(--radius-2);
+  background: var(--surface-1);
+}
+
+.statusLeft {
+  display: flex;
+  align-items: center;
+}
+
+.modeBadge {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: var(--border-subtle);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.statusText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  font-size: 0.73rem;
+  line-height: 1;
+  color: rgb(255 255 255 / 52%);
+  white-space: nowrap;
+}
+
+.statusMetaItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+
+.statusMetaKey {
+  text-transform: lowercase;
+  color: rgb(255 255 255 / 36%);
+}
+
+.statusMetaValue {
+  color: rgb(255 255 255 / 62%);
+}
+
+/* Notes: Semantic colors map directly to status message severity. */
+.status-debug {
+  color: #bcbcbc;
+}
+
+.status-info {
+  color: var(--text-primary);
+}
+
+.status-warning {
+  color: #f3dd9a;
+}
+
+.status-error {
+  color: #f7a8a8;
+}
+
+/* =========================================================
+   Section 2: Command Mode
+   Purpose: Prompt, live input, and inline completion ghost text.
+   ========================================================= */
+
+.statusCommandForm {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.statusCommandField {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.statusPrompt {
+  flex: 0 0 auto;
+  margin-right: var(--space-1);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.statusCommandInput {
+  flex: 0 0 auto;
+  min-width: 1ch;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  line-height: 1;
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+  user-select: text;
+  -webkit-user-select: text;
+  caret-color: var(--text-primary);
+}
+
+.statusCommandGhost {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: -1ch;
+  color: rgb(255 255 255 / 35%);
+  font-size: 0.95rem;
+  line-height: 1;
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* Notes: Ghost text stays click-through so caret placement always targets input. */
