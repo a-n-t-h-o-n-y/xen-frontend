@@ -486,13 +486,6 @@ function App() {
     const directCells =
       selectedCell?.type === 'Sequence' ? selectedCell.cells : selectedCell ? [selectedCell] : []
 
-    const allMeasurePitches = selectedCell ? collectNotePitches(selectedCell) : []
-    const mappedHighlights = new Set(
-      allMeasurePitches.map((pitch) =>
-        normalizePitch(mapPitch(normalizePitch(pitch, derivedTuningLength)), derivedTuningLength)
-      )
-    )
-
     const tuningRatios = getTuningRatios(snapshot.engine.tuning.intervals)
     const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
     const hasScale = snapshot.engine.scale !== null
@@ -525,6 +518,12 @@ function App() {
     const selectionPath = snapshot.editor.selected.cell
     const resolvedSelectedCell =
       getCellAtPath(directCells, selectionPath) ?? (selectionPath.length === 0 ? selectedCell : null)
+    const selectedPitches = resolvedSelectedCell ? collectNotePitches(resolvedSelectedCell) : []
+    const mappedHighlights = new Set(
+      selectedPitches.map((pitch) =>
+        normalizePitch(mapPitch(normalizePitch(pitch, derivedTuningLength)), derivedTuningLength)
+      )
+    )
     const patternScopePath =
       resolvedSelectedCell?.type === 'Sequence'
         ? selectionPath
