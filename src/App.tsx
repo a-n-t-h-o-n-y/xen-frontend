@@ -254,6 +254,17 @@ function App() {
         return
       }
 
+      const isPlainSpace =
+        (event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space') &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      if (!isCommandMode && isPlainSpace) {
+        event.preventDefault()
+        pendingNumberRef.current = ''
+        return
+      }
+
       const isDigitKey =
         event.key.length === 1 &&
         event.key >= '0' &&
