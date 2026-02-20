@@ -267,6 +267,7 @@ export function useBridgeSession({
                     }
                   : previous
               })
+              const syncedActiveSequenceIndices = new Set<number>()
               for (const rawPhaseEntry of phases) {
                 const phaseEntry = asRecord(rawPhaseEntry)
                 if (!phaseEntry) {
@@ -285,6 +286,22 @@ export function useBridgeSession({
 
                 const normalizedPhase = normalizePhase(phase)
                 transportRef.current.phase[sequenceIndex] = normalizedPhase
+                transportRef.current.active[sequenceIndex] = true
+                syncedActiveSequenceIndices.add(sequenceIndex)
+              }
+
+              if (syncedActiveSequenceIndices.size > 0) {
+                setActiveSequenceFlags((previous) => {
+                  let changed = false
+                  const next = [...previous]
+                  syncedActiveSequenceIndices.forEach((sequenceIndex) => {
+                    if (!next[sequenceIndex]) {
+                      next[sequenceIndex] = true
+                      changed = true
+                    }
+                  })
+                  return changed ? next : previous
+                })
               }
 
               const selectedIndex = selectedMeasureIndexRef.current
