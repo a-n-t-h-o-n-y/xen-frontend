@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import {
   MOD_TARGET_ORDER,
-  MOD_TARGET_SPECS,
+  getModTargetSpecForTuning,
   WAVE_OPTIONS,
   WAVE_OPTION_LABELS,
   type ModTarget,
@@ -40,7 +40,7 @@ type ModulatorsPanelProps = {
   waveBType: WaveType
   selectWaveType: (wave: 'a' | 'b', waveType: WaveType) => void
   waveLerp: number
-  setWaveLerp: Dispatch<SetStateAction<number>>
+  onWaveLerpChange: (value: number) => void
   waveAPulseWidth: number
   setWaveAPulseWidth: Dispatch<SetStateAction<number>>
   waveBPulseWidth: number
@@ -90,6 +90,7 @@ type ModulatorsPanelProps = {
     baseMorphModulator: Modulator
   ) => string
   baseMorphModulator: Modulator
+  tuningLength: number
 }
 
 export function ModulatorsPanel({
@@ -102,7 +103,7 @@ export function ModulatorsPanel({
   waveBType,
   selectWaveType,
   waveLerp,
-  setWaveLerp,
+  onWaveLerpChange,
   waveAPulseWidth,
   setWaveAPulseWidth,
   waveBPulseWidth,
@@ -126,6 +127,7 @@ export function ModulatorsPanel({
   scheduleLiveEmit,
   buildCommandForTarget,
   baseMorphModulator,
+  tuningLength,
 }: ModulatorsPanelProps) {
   return (
     <article className="bottomModule bottomModule-rowItem bottomModule-modulators">
@@ -189,7 +191,7 @@ export function ModulatorsPanel({
             max={1}
             step={0.01}
             value={waveLerp}
-            onChange={(event) => setWaveLerp(Number(event.target.value))}
+            onChange={(event) => onWaveLerpChange(Number(event.target.value))}
             aria-label="Wave lerp"
           />
           <div className="waveSelect">
@@ -394,7 +396,7 @@ export function ModulatorsPanel({
         </div>
         <div className="modTargetList">
           {MOD_TARGET_ORDER.map((target) => {
-            const spec = MOD_TARGET_SPECS[target]
+            const spec = getModTargetSpecForTuning(target, tuningLength)
             const control = targetControls[target]
             const clampedCenter = clampNumber(control.center, spec.min, spec.max)
             const maxPositiveSpan = spec.max - clampedCenter

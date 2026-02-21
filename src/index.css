@@ -18,15 +18,24 @@
    Purpose: Baseline body and root sizing/background.
    ========================================================= */
 
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  height: 100vh;
   background: #111;
   color: #fff;
+  overflow: hidden;
 }
 
 #root {
   min-height: 100vh;
+  height: 100vh;
   padding: 0.5rem;
+  overflow: hidden;
 }

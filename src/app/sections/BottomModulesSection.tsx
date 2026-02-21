@@ -30,7 +30,7 @@ export function BottomModulesSection(props: BottomModulesSectionProps) {
           waveBType={props.waveBType}
           selectWaveType={props.selectWaveType}
           waveLerp={props.waveLerp}
-          setWaveLerp={props.setWaveLerp}
+          onWaveLerpChange={props.onWaveLerpChange}
           waveAPulseWidth={props.waveAPulseWidth}
           setWaveAPulseWidth={props.setWaveAPulseWidth}
           waveBPulseWidth={props.waveBPulseWidth}
@@ -54,6 +54,7 @@ export function BottomModulesSection(props: BottomModulesSectionProps) {
           scheduleLiveEmit={props.scheduleLiveEmit}
           buildCommandForTarget={props.buildCommandForTarget}
           baseMorphModulator={props.baseMorphModulator}
+          tuningLength={props.tuningLength}
         />
         <ReferencePanel
           activeReferenceTab={props.activeReferenceTab}

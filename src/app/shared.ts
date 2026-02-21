@@ -377,6 +377,24 @@ export const LFO_FREQUENCY_MAX = Math.sqrt(LFO_FREQUENCY_RANGE_RATIO)
 export const LFO_PHASE_OFFSET_MIN = -0.5
 export const LFO_PHASE_OFFSET_MAX = 0.5
 
+export const getModTargetSpecForTuning = (target: ModTarget, tuningLength: number): ModTargetSpec => {
+  const baseSpec = MOD_TARGET_SPECS[target]
+  if (target !== 'pitch') {
+    return baseSpec
+  }
+
+  const clampedTuningLength = Number.isFinite(tuningLength) && tuningLength > 0
+    ? Math.max(1, Math.trunc(tuningLength))
+    : DEFAULT_TUNING_LENGTH
+  const pitchSpan = clampedTuningLength * 2
+
+  return {
+    ...baseSpec,
+    min: -pitchSpan,
+    max: pitchSpan,
+  }
+}
+
 export const clampNumber = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 

@@ -15,7 +15,6 @@ import {
   MAX_COMMAND_HISTORY,
   DEFAULT_TUNING_LENGTH,
   TRANSPORT_SEQUENCE_COUNT,
-  MOD_TARGET_SPECS,
   LFO_PHASE_OFFSET_MIN,
   LFO_PHASE_OFFSET_MAX,
   clampNumber,
@@ -36,8 +35,9 @@ import {
   applyNumberParameter,
   sampleWaveShape,
   createMorphModulator,
-  buildCommandForTarget,
-  buildCommandLines,
+  createTargetModulator,
+  MOD_TARGET_ORDER,
+  getModTargetSpecForTuning,
   isEditableTarget,
   getTuningRatios,
   generateValidPitches,
@@ -989,6 +989,55 @@ function App() {
     [setTargetControls]
   )
 
+  const buildModTargetCommand = useCallback(
+    (target: ModTarget, control: TargetControl, modulator: ReturnType<typeof createMorphModulator>): string => {
+      const spec = getModTargetSpecForTuning(target, tuningLength)
+      const targetModulator = createTargetModulator(modulator, spec, control.center, control.amount)
+      return `set ${target} ${JSON.stringify(targetModulator)}`
+    },
+    [tuningLength]
+  )
+
+  const buildModTargetCommands = useCallback(
+    (controls: Record<ModTarget, TargetControl>, modulator: ReturnType<typeof createMorphModulator>): string[] =>
+      MOD_TARGET_ORDER.filter((target) => controls[target].enabled).map((target) =>
+        buildModTargetCommand(target, controls[target], modulator)
+      ),
+    [buildModTargetCommand]
+  )
+
+  const handleWaveLerpChange = useCallback(
+    (nextLerp: number): void => {
+      setWaveLerp(nextLerp)
+      const liveBase = createMorphModulator(
+        waveAType,
+        waveBType,
+        waveAPulseWidth,
+        waveBPulseWidth,
+        lfoAFrequency,
+        toNormalizedPhase(lfoAPhaseOffset),
+        lfoBFrequency,
+        toNormalizedPhase(lfoBPhaseOffset),
+        nextLerp
+      )
+      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+    },
+    [
+      buildModTargetCommands,
+      lfoAFrequency,
+      lfoAPhaseOffset,
+      lfoBFrequency,
+      lfoBPhaseOffset,
+      scheduleLiveEmit,
+      setWaveLerp,
+      targetControls,
+      waveAPulseWidth,
+      waveAType,
+      waveBPulseWidth,
+      waveBType,
+    ]
+  )
+
   const applyPadMotion = useCallback(
     (
       target: ModTarget,
@@ -1004,7 +1053,7 @@ function App() {
       },
       speedMode?: 'coarse' | 'fine'
     ) => {
-      const spec = MOD_TARGET_SPECS[target]
+      const spec = getModTargetSpecForTuning(target, tuningLength)
       const bounds = host.getBoundingClientRect()
       const xRatio = clampNumber((clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
       const currentControl = targetControls[target]
@@ -1019,7 +1068,7 @@ function App() {
         const resolvedAmount = clampNumber(currentControl.amount, -amountLimit, amountLimit)
         updateTargetControl(target, { center: resolvedCenter, amount: resolvedAmount })
         scheduleLiveEmit([
-          buildCommandForTarget(
+          buildModTargetCommand(
             target,
             { ...currentControl, enabled: true, center: resolvedCenter, amount: resolvedAmount },
             baseMorphModulator
@@ -1042,10 +1091,10 @@ function App() {
       )
       updateTargetControl(target, { amount: nextAmount })
       scheduleLiveEmit([
-        buildCommandForTarget(target, { ...currentControl, enabled: true, amount: nextAmount }, baseMorphModulator),
+        buildModTargetCommand(target, { ...currentControl, enabled: true, amount: nextAmount }, baseMorphModulator),
       ])
     },
-    [baseMorphModulator, scheduleLiveEmit, targetControls, updateTargetControl]
+    [baseMorphModulator, buildModTargetCommand, scheduleLiveEmit, targetControls, tuningLength, updateTargetControl]
   )
 
   const getWaveHandlePosition = useCallback((frequency: number, phaseOffset: number) => {
@@ -1119,13 +1168,14 @@ function App() {
         toNormalizedPhase(nextBPhaseOffset),
         waveLerp
       )
-      scheduleLiveEmit(buildCommandLines(targetControls, liveBase))
+      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
     },
     [
       lfoAFrequency,
       lfoAPhaseOffset,
       lfoBFrequency,
       lfoBPhaseOffset,
+      buildModTargetCommands,
       scheduleLiveEmit,
       targetControls,
       waveAPulseWidth,
@@ -1176,13 +1226,14 @@ function App() {
         toNormalizedPhase(nextBPhaseOffset),
         waveLerp
       )
-      scheduleLiveEmit(buildCommandLines(targetControls, liveBase))
+      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
     },
     [
       lfoAFrequency,
       lfoAPhaseOffset,
       lfoBFrequency,
       lfoBPhaseOffset,
+      buildModTargetCommands,
       scheduleLiveEmit,
       targetControls,
       waveAPulseWidth,
@@ -1373,7 +1424,7 @@ function App() {
         waveBType={waveBType}
         selectWaveType={selectWaveType}
         waveLerp={waveLerp}
-        setWaveLerp={setWaveLerp}
+        onWaveLerpChange={handleWaveLerpChange}
         waveAPulseWidth={waveAPulseWidth}
         setWaveAPulseWidth={setWaveAPulseWidth}
         waveBPulseWidth={waveBPulseWidth}
@@ -1395,8 +1446,9 @@ function App() {
         padDragRef={padDragRef}
         applyPadMotion={applyPadMotion}
         scheduleLiveEmit={scheduleLiveEmit}
-        buildCommandForTarget={buildCommandForTarget}
+        buildCommandForTarget={buildModTargetCommand}
         baseMorphModulator={baseMorphModulator}
+        tuningLength={tuningLength}
         activeReferenceTab={activeReferenceTab}
         setActiveReferenceTab={setActiveReferenceTab}
         sessionReference={sessionReference}
