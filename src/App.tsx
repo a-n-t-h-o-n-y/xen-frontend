@@ -1010,25 +1010,35 @@ function App() {
       const currentControl = targetControls[target]
 
       if (mode === 'center') {
-        const nextCenterRaw =
-          dragStart && bounds.width > 0
-            ? dragStart.startCenter + ((clientX - dragStart.startClientX) / bounds.width) * (spec.max - spec.min)
-            : spec.min + xRatio * (spec.max - spec.min)
+        const nextCenterRaw = spec.min + xRatio * (spec.max - spec.min)
         const nextCenter = roundByStep(nextCenterRaw, spec.step)
         const resolvedCenter = clampNumber(nextCenter, spec.min, spec.max)
-        updateTargetControl(target, { center: resolvedCenter })
+        const maxPositiveSpan = spec.max - resolvedCenter
+        const maxNegativeSpan = resolvedCenter - spec.min
+        const amountLimit = Math.max(maxPositiveSpan, maxNegativeSpan)
+        const resolvedAmount = clampNumber(currentControl.amount, -amountLimit, amountLimit)
+        updateTargetControl(target, { center: resolvedCenter, amount: resolvedAmount })
         scheduleLiveEmit([
-          buildCommandForTarget(target, { ...currentControl, enabled: true, center: resolvedCenter }, baseMorphModulator),
+          buildCommandForTarget(
+            target,
+            { ...currentControl, enabled: true, center: resolvedCenter, amount: resolvedAmount },
+            baseMorphModulator
+          ),
         ])
         return
       }
 
       const deltaY = dragStart ? dragStart.startClientY - clientY : 0
       const sensitivityDivisor = speedMode === 'fine' ? 620 : 260
+      const targetRange = spec.max - spec.min
+      const amountCenter = clampNumber(dragStart?.startCenter ?? currentControl.center, spec.min, spec.max)
+      const maxPositiveSpan = spec.max - amountCenter
+      const maxNegativeSpan = amountCenter - spec.min
+      const amountLimit = Math.max(maxPositiveSpan, maxNegativeSpan)
       const nextAmount = clampNumber(
-        (dragStart?.startAmount ?? currentControl.amount) + deltaY / sensitivityDivisor,
-        -1,
-        1
+        (dragStart?.startAmount ?? currentControl.amount) + (deltaY / sensitivityDivisor) * targetRange,
+        -amountLimit,
+        amountLimit
       )
       updateTargetControl(target, { amount: nextAmount })
       scheduleLiveEmit([

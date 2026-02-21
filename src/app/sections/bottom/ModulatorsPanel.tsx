@@ -399,7 +399,7 @@ export function ModulatorsPanel({
             const clampedCenter = clampNumber(control.center, spec.min, spec.max)
             const maxPositiveSpan = spec.max - clampedCenter
             const maxNegativeSpan = clampedCenter - spec.min
-            const spanMagnitude = Math.min(maxPositiveSpan, maxNegativeSpan) * Math.abs(control.amount)
+            const spanMagnitude = clampNumber(Math.abs(control.amount), 0, Math.max(maxPositiveSpan, maxNegativeSpan))
             const isInverted = control.amount < 0
             const spanMin = clampNumber(clampedCenter - spanMagnitude, spec.min, spec.max)
             const spanMax = clampNumber(clampedCenter + spanMagnitude, spec.min, spec.max)

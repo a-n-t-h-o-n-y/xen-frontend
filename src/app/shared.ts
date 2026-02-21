@@ -1163,11 +1163,10 @@ export const createTargetModulator = (
   amount: number
 ): Modulator => {
   const clampedCenter = clampNumber(center, spec.min, spec.max)
-  const boundedAmount = clampNumber(amount, -1, 1)
   const maxPositiveSpan = spec.max - clampedCenter
   const maxNegativeSpan = clampedCenter - spec.min
-  const spanMagnitude = Math.min(maxPositiveSpan, maxNegativeSpan)
-  const signedSpan = spanMagnitude * boundedAmount
+  const amountLimit = Math.max(maxPositiveSpan, maxNegativeSpan)
+  const signedSpan = clampNumber(amount, -amountLimit, amountLimit)
 
   return {
     type: 'chain',
@@ -1799,4 +1798,3 @@ export const parsePositiveFloatInput = (value: string): number | null => {
   }
   return parsed
 }
-
