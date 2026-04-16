@@ -182,6 +182,13 @@ export function useBridgeSession({
                 transportRef.current.active = false
                 setPlayheadPhase(null)
               }
+
+              return
+            }
+
+            if (eventEnvelope.name === 'transport.stopped') {
+              transportRef.current.active = false
+              setPlayheadPhase(null)
             }
           } catch {
             // Keep footer status reserved for command responses only.
