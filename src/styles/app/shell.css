@@ -44,7 +44,12 @@
 
 .app {
   display: grid;
-  grid-template-rows: auto minmax(0, var(--sequencer-max-height)) auto minmax(0, 1fr);
+  grid-template-rows:
+    auto
+    minmax(0, var(--sequencer-max-height))
+    auto
+    auto
+    minmax(0, 1fr);
   gap: var(--space-3);
 
   min-height: 300px;

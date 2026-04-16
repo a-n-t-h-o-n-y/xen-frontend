@@ -11,6 +11,7 @@ import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { StatusSection } from './app/sections/StatusSection'
+import { SnapshotDebugPanel } from './app/sections/bottom/SnapshotDebugPanel'
 import {
   MAX_COMMAND_HISTORY,
   DEFAULT_TUNING_LENGTH,
@@ -44,6 +45,8 @@ import {
   mapPitchToScale,
   collectNotePitches,
   collectLeafCells,
+  getChildCells,
+  getSelectedElement,
   normalizePitch,
   isPathPrefix,
   getCellAtPath,
@@ -70,6 +73,9 @@ function App() {
   const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
   const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<UiStateSnapshot | null>(null)
+  const [rawSnapshotText, setRawSnapshotText] = useState('')
+  const [lastSnapshotSource, setLastSnapshotSource] = useState('')
+  const [snapshotParseError, setSnapshotParseError] = useState<string | null>(null)
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
   const [sequenceViewKeymap, setSequenceViewKeymap] = useState<Record<string, string>>({})
   const {
@@ -180,6 +186,9 @@ function App() {
     selectedMeasureIndexRef,
     lastSnapshotVersionRef,
     setSnapshot,
+    setRawSnapshotText,
+    setLastSnapshotSource,
+    setSnapshotParseError,
     setCurrentInputMode,
     setStatusMessage,
     setStatusLevel,
@@ -494,8 +503,9 @@ function App() {
       mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
 
     const selectedCell = selectedMeasure?.cell ?? null
+    const childCells = selectedCell ? getChildCells(selectedCell) : []
     const directCells =
-      selectedCell?.type === 'Sequence' ? selectedCell.cells : selectedCell ? [selectedCell] : []
+      selectedCell === null ? [] : childCells.length > 0 ? childCells : [selectedCell]
 
     const tuningRatios = getTuningRatios(snapshot.engine.tuning.intervals)
     const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
@@ -529,14 +539,17 @@ function App() {
     const selectionPath = snapshot.editor.selected.cell
     const resolvedSelectedCell =
       getCellAtPath(directCells, selectionPath) ?? (selectionPath.length === 0 ? selectedCell : null)
-    const selectedPitches = resolvedSelectedCell ? collectNotePitches(resolvedSelectedCell) : []
+    const resolvedSelectedElement = resolvedSelectedCell
+      ? getSelectedElement(resolvedSelectedCell, snapshot.editor.selected.element_index)
+      : null
+    const selectedPitches = resolvedSelectedElement ? collectNotePitches(resolvedSelectedElement) : []
     const mappedHighlights = new Set(
       selectedPitches.map((pitch) =>
         normalizePitch(mapPitch(normalizePitch(pitch, derivedTuningLength)), derivedTuningLength)
       )
     )
     const patternScopePath =
-      resolvedSelectedCell?.type === 'Sequence'
+      resolvedSelectedElement?.type === 'Sequence'
         ? selectionPath
         : selectionPath.length > 0
           ? selectionPath.slice(0, -1)
@@ -546,8 +559,8 @@ function App() {
     const patternScopeCells =
       patternScopePath.length === 0
         ? directCells
-        : patternScopeCell?.type === 'Sequence'
-          ? patternScopeCell.cells
+        : patternScopeCell
+          ? getChildCells(patternScopeCell)
           : []
     const scopeIndices = directLeafCells.map((leafCell) => {
       if (!isPathPrefix(patternScopePath, leafCell.path)) {
@@ -583,7 +596,7 @@ function App() {
       staffLineBandByPitch: staffLineBands,
       leafCells: directLeafCells,
       selectedLeafFlags: selectionFlags,
-      selectedCellMeta: getStatusCellMeta(resolvedSelectedCell),
+      selectedCellMeta: getStatusCellMeta(resolvedSelectedCell, resolvedSelectedElement),
       rulerRatios: tuningRatios,
       highlightedPitches: mappedHighlights,
     }
@@ -1390,6 +1403,13 @@ function App() {
         ratioToBottom={ratioToBottom}
         rulerRatios={rulerRatios}
         highlightedPitches={highlightedPitches}
+      />
+      <SnapshotDebugPanel
+        snapshot={snapshot}
+        rawSnapshotText={rawSnapshotText}
+        lastSnapshotSource={lastSnapshotSource}
+        snapshotParseError={snapshotParseError}
+        bridgeUnavailableMessage={bridgeUnavailableMessage}
       />
       <StatusSection
         currentInputMode={currentInputMode}

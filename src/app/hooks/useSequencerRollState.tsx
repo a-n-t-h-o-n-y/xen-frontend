@@ -4,11 +4,13 @@ import {
   TRANSPORT_SEQUENCE_COUNT,
   clampNumber,
   flattenMeasureToNoteIR,
+  getChildCells,
   getCellWeight,
   getErrorMessage,
   getLargestElement,
   getMeasureLoopQuarterNotes,
   getPatternIndices,
+  getPrimaryElement,
   getProjectedBgTriggerPhase,
   normalizePitch,
   parsePatternPrefix,
@@ -271,11 +273,14 @@ export function useSequencerRollState({
         const normalizedWeight = getCellWeight(cell.weight)
         const cellPath = [...parentPath, index]
         const cellKey = pathToKey(cellPath)
+        const primaryElement = getPrimaryElement(cell)
         const previousSibling = index > 0 ? siblings[index - 1] : null
+        const previousPrimaryElement = previousSibling ? getPrimaryElement(previousSibling) : null
         const hasSequenceBoundary =
-          index > 0 && (cell.type === 'Sequence' || previousSibling?.type === 'Sequence')
+          index > 0 &&
+          (primaryElement?.type === 'Sequence' || previousPrimaryElement?.type === 'Sequence')
 
-        if (cell.type === 'Sequence' && cell.cells.length > 0) {
+        if (primaryElement?.type === 'Sequence' && primaryElement.cells.length > 0) {
           return (
             <div
               key={`roll-segment-${cellKey}`}
@@ -288,7 +293,9 @@ export function useSequencerRollState({
                 } as CSSProperties
               }
             >
-              <div className="rollBranch">{renderCells(cell.cells, cellPath, sequenceDepth + 1)}</div>
+              <div className="rollBranch">
+                {renderCells(getChildCells(cell), cellPath, sequenceDepth + 1)}
+              </div>
             </div>
           )
         }
@@ -296,16 +303,22 @@ export function useSequencerRollState({
         const isSelected = selectedLeafPathKeySet.has(cellKey)
         const isSelectedStart = selectedLeafStartPathKeySet.has(cellKey)
         const isSelectedEnd = selectedLeafEndPathKeySet.has(cellKey)
-        const normalizedVelocity = cell.type === 'Note' ? clampNumber(cell.velocity, 0, 1) : 0
-        const normalizedDelay = cell.type === 'Note' ? clampNumber(cell.delay, 0, 1) : 0
-        const normalizedGate = cell.type === 'Note' ? clampNumber(cell.gate, 0, 1) : 0
+        const normalizedVelocity =
+          primaryElement?.type === 'Note' ? clampNumber(primaryElement.velocity, 0, 1) : 0
+        const normalizedDelay =
+          primaryElement?.type === 'Note' ? clampNumber(primaryElement.delay, 0, 1) : 0
+        const normalizedGate =
+          primaryElement?.type === 'Note' ? clampNumber(primaryElement.gate, 0, 1) : 0
         const normalizedPitch =
-          cell.type === 'Note' && tuningLength > 0
-            ? normalizePitch(cell.pitch, tuningLength)
-            : cell.type === 'Note'
-              ? Math.trunc(cell.pitch)
+          primaryElement?.type === 'Note' && tuningLength > 0
+            ? normalizePitch(primaryElement.pitch, tuningLength)
+            : primaryElement?.type === 'Note'
+              ? Math.trunc(primaryElement.pitch)
               : 0
-        const noteOctave = cell.type === 'Note' && tuningLength > 0 ? Math.floor(cell.pitch / tuningLength) : 0
+        const noteOctave =
+          primaryElement?.type === 'Note' && tuningLength > 0
+            ? Math.floor(primaryElement.pitch / tuningLength)
+            : 0
 
         return (
           <div
@@ -329,7 +342,7 @@ export function useSequencerRollState({
                     className={`rollRow ${(staffLineBandByPitch[pitch] ?? 0) === 0 ? 'rollRow-bandEven' : 'rollRow-bandOdd'}`}
                   >
                     <div className="rollRowLine" aria-hidden="true" />
-                    {cell.type === 'Note' && normalizedPitch === pitch ? (
+                    {primaryElement?.type === 'Note' && normalizedPitch === pitch ? (
                       <div
                         className={`rollNote${normalizedDelay > 0 ? ' rollNote-hasDelay' : ''}${normalizedGate < 1 ? ' rollNote-shortGate' : ''}`}
                         style={

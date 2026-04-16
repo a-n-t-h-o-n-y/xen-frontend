@@ -138,27 +138,25 @@ export type Envelope = {
   payload: EnvelopePayload
 }
 
-export type NoteCell = {
+export type NoteElement = {
   type: 'Note'
-  weight: number
   pitch: number
   velocity: number
   delay: number
   gate: number
 }
 
-export type RestCell = {
-  type: 'Rest'
-  weight: number
-}
-
-export type SequenceCell = {
+export type SequenceElement = {
   type: 'Sequence'
-  weight: number
   cells: Cell[]
 }
 
-export type Cell = NoteCell | RestCell | SequenceCell
+export type MusicElement = NoteElement | SequenceElement
+
+export type Cell = {
+  weight: number
+  elements: MusicElement[]
+}
 
 export type Measure = {
   cell: Cell
@@ -190,6 +188,7 @@ export type Scale = {
 }
 
 export type UiStateSnapshot = {
+  schema_version: 2
   snapshot_version: number
   engine: {
     sequence_bank: Measure[]
@@ -208,6 +207,7 @@ export type UiStateSnapshot = {
     selected: {
       measure: number
       cell: number[]
+      element_index: number | null
     }
     input_mode: InputMode
   }
@@ -1263,45 +1263,84 @@ export const normalizePitch = (pitch: number, tuningLength: number): number => {
   return modulo >= 0 ? modulo : modulo + tuningLength
 }
 
-export const parseCell = (value: unknown): Cell | null => {
-  const cell = asRecord(value)
-  if (!cell || typeof cell.type !== 'string' || typeof cell.weight !== 'number') {
+export const getPrimaryElement = (cell: Cell): MusicElement | null =>
+  cell.elements.find((element) => element.type === 'Sequence') ??
+  cell.elements.find((element) => element.type === 'Note') ??
+  null
+
+export const getSelectedElement = (
+  cell: Cell,
+  elementIndex: number | null | undefined
+): MusicElement | null => {
+  if (
+    typeof elementIndex === 'number' &&
+    Number.isInteger(elementIndex) &&
+    elementIndex >= 0 &&
+    elementIndex < cell.elements.length
+  ) {
+    return cell.elements[elementIndex] ?? null
+  }
+
+  return getPrimaryElement(cell)
+}
+
+export const getChildCells = (cell: Cell): Cell[] => {
+  const primaryElement = getPrimaryElement(cell)
+  return primaryElement?.type === 'Sequence' ? primaryElement.cells : []
+}
+
+export const parseMusicElement = (value: unknown): MusicElement | null => {
+  const element = asRecord(value)
+  if (!element || typeof element.type !== 'string') {
     return null
   }
 
   if (
-    cell.type === 'Note' &&
-    typeof cell.pitch === 'number' &&
-    typeof cell.velocity === 'number' &&
-    typeof cell.delay === 'number' &&
-    typeof cell.gate === 'number'
+    element.type === 'Note' &&
+    typeof element.pitch === 'number' &&
+    typeof element.velocity === 'number' &&
+    typeof element.delay === 'number' &&
+    typeof element.gate === 'number'
   ) {
     return {
       type: 'Note',
-      weight: cell.weight,
-      pitch: cell.pitch,
-      velocity: cell.velocity,
-      delay: cell.delay,
-      gate: cell.gate,
+      pitch: element.pitch,
+      velocity: element.velocity,
+      delay: element.delay,
+      gate: element.gate,
     }
   }
 
-  if (cell.type === 'Rest') {
-    return {
-      type: 'Rest',
-      weight: cell.weight,
+  if (element.type === 'Sequence' && Array.isArray(element.cells)) {
+    const cells = element.cells.map(parseCell)
+    if (cells.some((cell) => cell === null)) {
+      return null
     }
-  }
 
-  if (cell.type === 'Sequence' && Array.isArray(cell.cells)) {
     return {
       type: 'Sequence',
-      weight: cell.weight,
-      cells: cell.cells.map(parseCell).filter((item): item is Cell => item !== null),
+      cells: cells.filter((cell): cell is Cell => cell !== null),
     }
   }
 
   return null
+}
+
+export const parseCell = (value: unknown): Cell | null => {
+  const cell = asRecord(value)
+  if (!cell || typeof cell.weight !== 'number' || !Array.isArray(cell.elements)) {
+    return null
+  }
+
+  const elements = cell.elements.map(parseMusicElement)
+  if (elements.some((element) => element === null)) {
+    return null
+  }
+
+  return {
+    weight: cell.weight,
+    elements: elements.filter((element): element is MusicElement => element !== null),
+  }
 }
 
 export const parseMeasure = (value: unknown): Measure | null => {
@@ -1355,7 +1394,11 @@ export const parseScale = (value: unknown): Scale | null => {
 
 export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => {
   const snapshot = asRecord(value)
-  if (!snapshot || typeof snapshot.snapshot_version !== 'number') {
+  if (
+    !snapshot ||
+    snapshot.schema_version !== 2 ||
+    typeof snapshot.snapshot_version !== 'number'
+  ) {
     return null
   }
 
@@ -1376,7 +1419,8 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
     typeof engine.base_frequency !== 'number' ||
     (engine.scale_translate_direction !== 'up' && engine.scale_translate_direction !== 'down') ||
     typeof editor.input_mode !== 'string' ||
-    typeof selected.measure !== 'number'
+    typeof selected.measure !== 'number' ||
+    (selected.element_index !== null && typeof selected.element_index !== 'number')
   ) {
     return null
   }
@@ -1406,6 +1450,7 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
     : []
 
   return {
+    schema_version: 2,
     snapshot_version: snapshot.snapshot_version,
     engine: {
       sequence_bank: sequenceBank,
@@ -1424,6 +1469,7 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
       selected: {
         measure: selected.measure,
         cell: selectedCellPath,
+        element_index: selected.element_index,
       },
       input_mode: inputMode,
     },
@@ -1501,16 +1547,16 @@ export const mapPitchToScale = (
   return (validPitches[index] ?? normalizedPitch) + octaveShift * tuningLength
 }
 
-export const collectNotePitches = (cell: Cell): number[] => {
-  if (cell.type === 'Note') {
-    return [cell.pitch]
+export const collectNotePitches = (target: Cell | MusicElement): number[] => {
+  if ('elements' in target) {
+    return target.elements.flatMap(collectNotePitches)
   }
 
-  if (cell.type === 'Sequence') {
-    return cell.cells.flatMap(collectNotePitches)
+  if (target.type === 'Note') {
+    return [target.pitch]
   }
 
-  return []
+  return target.cells.flatMap(collectNotePitches)
 }
 
 export const getCellWeight = (weight: number): number => (weight > 0 ? weight : 1)
@@ -1523,46 +1569,47 @@ export const flattenMeasureToNoteIR = (measure: Measure, sequenceIndex: number):
       return
     }
 
-    if (cell.type === 'Rest') {
-      return
-    }
+    for (const element of cell.elements) {
+      if (element.type !== 'Note') {
+        continue
+      }
 
-    if (cell.type === 'Note') {
-      const noteDelay = clampNumber(cell.delay, 0, 1)
-      const noteGate = clampNumber(cell.gate, 0, 1)
+      const noteDelay = clampNumber(element.delay, 0, 1)
+      const noteGate = clampNumber(element.gate, 0, 1)
       const noteStart = segmentStart + noteDelay * segmentWidth
       const noteEnd = noteStart + Math.max(0, (1 - noteDelay) * noteGate * segmentWidth)
       const clampedStart = clampNumber(noteStart, 0, 1)
       const clampedEnd = clampNumber(noteEnd, 0, 1)
       const clampedWidth = clampedEnd - clampedStart
       if (clampedWidth <= 0) {
-        return
+        continue
       }
 
       noteSpans.push({
         sequenceIndex,
-        pitch: cell.pitch,
+        pitch: element.pitch,
         x: clampedStart,
         width: clampedWidth,
-        velocity: clampNumber(cell.velocity, 0, 1),
+        velocity: clampNumber(element.velocity, 0, 1),
       })
-      return
     }
 
-    if (cell.cells.length === 0) {
-      return
-    }
+    for (const element of cell.elements) {
+      if (element.type !== 'Sequence' || element.cells.length === 0) {
+        continue
+      }
 
-    const totalWeight = cell.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
-    if (totalWeight <= 0) {
-      return
-    }
+      const totalWeight = element.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
+      if (totalWeight <= 0) {
+        continue
+      }
 
-    let cursor = segmentStart
-    for (const child of cell.cells) {
-      const childWidth = (segmentWidth * getCellWeight(child.weight)) / totalWeight
-      walkCell(child, cursor, childWidth)
-      cursor += childWidth
+      let cursor = segmentStart
+      for (const child of element.cells) {
+        const childWidth = (segmentWidth * getCellWeight(child.weight)) / totalWeight
+        walkCell(child, cursor, childWidth)
+        cursor += childWidth
+      }
     }
   }
 
@@ -1673,13 +1720,9 @@ export const collectLeafCells = (cells: Cell[]): LeafCell[] => {
     groupCells.forEach((cell, index) => {
       const path = [...parentPath, index]
 
-      if (cell.type === 'Sequence') {
-        if (cell.cells.length === 0) {
-          result.push({ path })
-          return
-        }
-
-        walk(cell.cells, path)
+      const childCells = getChildCells(cell)
+      if (childCells.length > 0) {
+        walk(childCells, path)
         return
       }
 
@@ -1725,10 +1768,11 @@ export const getCellAtPath = (cells: Cell[], path: number[]): Cell | null => {
 
     currentCell = nextCell
     if (index < path.length - 1) {
-      if (nextCell.type !== 'Sequence') {
+      const childCells = getChildCells(nextCell)
+      if (childCells.length === 0) {
         return null
       }
-      currentCells = nextCell.cells
+      currentCells = childCells
     }
   }
 
@@ -1750,27 +1794,32 @@ export const formatMetaFixed2 = (value: number): string => {
   return value.toFixed(2)
 }
 
-export const getStatusCellMeta = (cell: Cell | null): StatusCellMetaItem[] => {
+export const getStatusCellMeta = (
+  cell: Cell | null,
+  selectedElement?: MusicElement | null
+): StatusCellMetaItem[] => {
   if (!cell) {
     return []
   }
 
-  if (cell.type === 'Sequence') {
+  const element = selectedElement ?? getPrimaryElement(cell)
+
+  if (!element) {
+    return [{ label: 'w', value: formatMetaNumber(cell.weight) }]
+  }
+
+  if (element.type === 'Sequence') {
     return [
-      { label: 'n', value: `${cell.cells.length}` },
+      { label: 'n', value: `${element.cells.length}` },
       { label: 'w', value: formatMetaNumber(cell.weight) },
     ]
   }
 
-  if (cell.type === 'Rest') {
-    return [{ label: 'w', value: formatMetaNumber(cell.weight) }]
-  }
-
   return [
-    { label: 'p', value: `${Math.trunc(cell.pitch)}` },
-    { label: 'd', value: formatMetaFixed2(cell.delay) },
-    { label: 'g', value: formatMetaFixed2(cell.gate) },
-    { label: 'v', value: formatMetaFixed2(cell.velocity) },
+    { label: 'p', value: `${Math.trunc(element.pitch)}` },
+    { label: 'd', value: formatMetaFixed2(element.delay) },
+    { label: 'g', value: formatMetaFixed2(element.gate) },
+    { label: 'v', value: formatMetaFixed2(element.velocity) },
     { label: 'w', value: formatMetaNumber(cell.weight) },
   ]
 }

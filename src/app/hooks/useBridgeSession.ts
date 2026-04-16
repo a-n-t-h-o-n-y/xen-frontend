@@ -38,6 +38,9 @@ type UseBridgeSessionArgs = {
   selectedMeasureIndexRef: MutableRefObject<number>
   lastSnapshotVersionRef: MutableRefObject<number>
   setSnapshot: Dispatch<SetStateAction<UiStateSnapshot | null>>
+  setRawSnapshotText: Dispatch<SetStateAction<string>>
+  setLastSnapshotSource: Dispatch<SetStateAction<string>>
+  setSnapshotParseError: Dispatch<SetStateAction<string | null>>
   setCurrentInputMode: Dispatch<SetStateAction<InputMode>>
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
@@ -57,6 +60,9 @@ export function useBridgeSession({
   selectedMeasureIndexRef,
   lastSnapshotVersionRef,
   setSnapshot,
+  setRawSnapshotText,
+  setLastSnapshotSource,
+  setSnapshotParseError,
   setCurrentInputMode,
   setStatusMessage,
   setStatusLevel,
@@ -93,11 +99,21 @@ export function useBridgeSession({
   )
 
   const applySnapshot = useCallback(
-    (rawSnapshot: unknown): number | null => {
+    (rawSnapshot: unknown, source: string): number | null => {
+      try {
+        setRawSnapshotText(JSON.stringify(rawSnapshot, null, 2))
+      } catch {
+        setRawSnapshotText(String(rawSnapshot))
+      }
+      setLastSnapshotSource(source)
+
       const parsedSnapshot = parseUiStateSnapshot(rawSnapshot)
       if (!parsedSnapshot) {
+        setSnapshotParseError('Snapshot parse failed: payload does not match the frontend v2 contract.')
         return null
       }
+
+      setSnapshotParseError(null)
 
       if (parsedSnapshot.snapshot_version <= lastSnapshotVersionRef.current) {
         return parsedSnapshot.snapshot_version
@@ -108,7 +124,14 @@ export function useBridgeSession({
       setCurrentInputMode(parsedSnapshot.editor.input_mode)
       return parsedSnapshot.snapshot_version
     },
-    [lastSnapshotVersionRef, setCurrentInputMode, setSnapshot]
+    [
+      lastSnapshotVersionRef,
+      setCurrentInputMode,
+      setLastSnapshotSource,
+      setRawSnapshotText,
+      setSnapshot,
+      setSnapshotParseError,
+    ]
   )
 
   const executeBackendCommand = useCallback(
@@ -120,7 +143,7 @@ export function useBridgeSession({
       }
 
       const commandSnapshot = getCommandSnapshot(response.payload)
-      applySnapshot(commandSnapshot)
+      applySnapshot(commandSnapshot, `command.execute:${command}`)
       const commandStatus = getCommandStatus(response.payload)
 
       if (commandStatus && commandStatus.level !== 'debug') {
@@ -144,7 +167,7 @@ export function useBridgeSession({
             }
 
             if (eventEnvelope.name === 'state.changed') {
-              applySnapshot(eventEnvelope.payload)
+              applySnapshot(eventEnvelope.payload, 'event:state.changed')
               return
             }
 
@@ -318,7 +341,7 @@ export function useBridgeSession({
 
         const helloResponse = await sendBridgeRequest('session.hello', {
           protocol: BRIDGE_PROTOCOL,
-          snapshot_schema_version: 1,
+          snapshot_schema_version: 2,
           frontend_app: FRONTEND_APP,
           frontend_version: FRONTEND_VERSION,
         })
@@ -339,7 +362,7 @@ export function useBridgeSession({
           throw new Error(stateError)
         }
 
-        applySnapshot(stateResponse.payload)
+        applySnapshot(stateResponse.payload, 'response:state.get')
 
         const keymapResponse = await sendBridgeRequest('keymap.get', {})
         const keymapError = getPayloadError(keymapResponse.payload)
@@ -371,7 +394,7 @@ export function useBridgeSession({
         }
 
         const welcomeSnapshot = getCommandSnapshot(welcomeResponse.payload)
-        applySnapshot(welcomeSnapshot)
+        applySnapshot(welcomeSnapshot, 'command.execute:welcome')
         const welcomeStatus = getCommandStatus(welcomeResponse.payload)
 
         if (isMounted) {

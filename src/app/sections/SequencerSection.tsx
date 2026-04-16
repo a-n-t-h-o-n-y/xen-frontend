@@ -101,7 +101,7 @@ export function SequencerSection({
             </div>
             <div className="rollIslands" aria-hidden="true">
               {renderRollCells(
-                rootCells.length > 0 ? rootCells : [{ type: 'Rest', weight: 1 }],
+                rootCells.length > 0 ? rootCells : [{ weight: 1, elements: [] }],
                 [],
                 0
               )}
