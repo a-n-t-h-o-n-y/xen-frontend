@@ -168,8 +168,23 @@ export type Scale = {
   mode: number
 }
 
+export type SelectionStep = {
+  kind: 'element' | 'cell'
+  index: number
+}
+
+export type SelectionPath = SelectionStep[]
+
+export type ResolvedSelection = {
+  cellPath: number[]
+  selectedCell: Cell | null
+  selectedElement: MusicElement | null
+  selectedElementIndex: number | null
+  selectedElementKind: SelectionStep['kind'] | null
+}
+
 export type UiStateSnapshot = {
-  schema_version: 3
+  schema_version: 4
   snapshot_version: number
   commit_id: number
   engine: {
@@ -186,8 +201,7 @@ export type UiStateSnapshot = {
   }
   editor: {
     selected: {
-      cell: number[]
-      element_index: number | null
+      path: SelectionPath
     }
     input_mode: InputMode
   }
@@ -1228,10 +1242,19 @@ export const normalizePitch = (pitch: number, tuningLength: number): number => {
   return modulo >= 0 ? modulo : modulo + tuningLength
 }
 
-export const getPrimaryElement = (cell: Cell): MusicElement | null =>
-  cell.elements.find((element) => element.type === 'Sequence') ??
-  cell.elements.find((element) => element.type === 'Note') ??
-  null
+export const getPrimaryElement = (cell: Cell): MusicElement | null => cell.elements[0] ?? null
+
+export const getSequenceElements = (
+  cell: Cell
+): Extract<MusicElement, { type: 'Sequence' }>[] =>
+  cell.elements.filter(
+    (element): element is Extract<MusicElement, { type: 'Sequence' }> => element.type === 'Sequence'
+  )
+
+export const getNoteElements = (cell: Cell): Extract<MusicElement, { type: 'Note' }>[] =>
+  cell.elements.filter(
+    (element): element is Extract<MusicElement, { type: 'Note' }> => element.type === 'Note'
+  )
 
 export const getSelectedElement = (
   cell: Cell,
@@ -1250,8 +1273,68 @@ export const getSelectedElement = (
 }
 
 export const getChildCells = (cell: Cell): Cell[] => {
-  const primaryElement = getPrimaryElement(cell)
-  return primaryElement?.type === 'Sequence' ? primaryElement.cells : []
+  return getSequenceElements(cell).flatMap((element) => element.cells)
+}
+
+const parseSelectionStep = (value: unknown): SelectionStep | null => {
+  const step = asRecord(value)
+  if (
+    !step ||
+    (step.kind !== 'element' && step.kind !== 'cell') ||
+    typeof step.index !== 'number' ||
+    !Number.isInteger(step.index) ||
+    step.index < 0
+  ) {
+    return null
+  }
+
+  return {
+    kind: step.kind,
+    index: step.index,
+  }
+}
+
+export const resolveSelectionPath = (
+  rootCell: Cell,
+  selectionPath: SelectionPath
+): ResolvedSelection => {
+  let currentCell = rootCell
+  let currentCellPath: number[] = []
+  let selectedElement: MusicElement | null = null
+  let selectedElementIndex: number | null = null
+  let selectedElementKind: SelectionStep['kind'] | null = null
+
+  for (const step of selectionPath) {
+    if (step.kind === 'element') {
+      if (step.index >= currentCell.elements.length) {
+        break
+      }
+
+      selectedElementIndex = step.index
+      selectedElement = currentCell.elements[step.index] ?? null
+      selectedElementKind = 'element'
+      continue
+    }
+
+    if (step.index >= 0 && selectedElement?.type === 'Sequence' && step.index < selectedElement.cells.length) {
+      currentCell = selectedElement.cells[step.index]
+      currentCellPath = [...currentCellPath, step.index]
+      selectedElement = null
+      selectedElementIndex = null
+      selectedElementKind = 'cell'
+      continue
+    }
+
+    break
+  }
+
+  return {
+    cellPath: currentCellPath,
+    selectedCell: currentCell,
+    selectedElement,
+    selectedElementIndex,
+    selectedElementKind,
+  }
 }
 
 export const parseMusicElement = (value: unknown): MusicElement | null => {
@@ -1361,7 +1444,7 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
   const snapshot = asRecord(value)
   if (
     !snapshot ||
-    snapshot.schema_version !== 3 ||
+    snapshot.schema_version !== 4 ||
     typeof snapshot.commit_id !== 'number' ||
     typeof snapshot.snapshot_version !== 'number'
   ) {
@@ -1385,8 +1468,7 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
     typeof engine.key !== 'number' ||
     typeof engine.base_frequency !== 'number' ||
     (engine.scale_translate_direction !== 'up' && engine.scale_translate_direction !== 'down') ||
-    typeof editor.input_mode !== 'string' ||
-    (selected.element_index !== null && typeof selected.element_index !== 'number')
+    typeof editor.input_mode !== 'string'
   ) {
     return null
   }
@@ -1407,12 +1489,20 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
     return null
   }
   const scale = parseScale(engine.scale)
-  const selectedCellPath = Array.isArray(selected.cell)
-    ? selected.cell.filter((item): item is number => typeof item === 'number')
-    : []
+  const selectedPath = Array.isArray(selected.path)
+    ? selected.path.map(parseSelectionStep)
+    : null
+  if (!selectedPath || selectedPath.some((step) => step === null)) {
+    return null
+  }
+  for (let index = 1; index < selectedPath.length; index += 1) {
+    if (selectedPath[index - 1]?.kind === selectedPath[index]?.kind) {
+      return null
+    }
+  }
 
   return {
-    schema_version: 3,
+    schema_version: 4,
     snapshot_version: snapshot.snapshot_version,
     commit_id: snapshot.commit_id,
     engine: {
@@ -1429,8 +1519,7 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
     },
     editor: {
       selected: {
-        cell: selectedCellPath,
-        element_index: selected.element_index,
+        path: selectedPath as SelectionPath,
       },
       input_mode: inputMode,
     },
@@ -1670,28 +1759,22 @@ export type TimeSignatureParts = {
   denominator: number
 }
 
-export const collectLeafCells = (cells: Cell[]): LeafCell[] => {
+export const collectLeafCells = (rootCell: Cell): LeafCell[] => {
   const result: LeafCell[] = []
 
-  const walk = (groupCells: Cell[], parentPath: number[]): void => {
-    if (groupCells.length === 0) {
+  const walk = (cell: Cell, path: number[]): void => {
+    const childCells = getChildCells(cell)
+    if (childCells.length === 0) {
+      result.push({ path })
       return
     }
 
-    groupCells.forEach((cell, index) => {
-      const path = [...parentPath, index]
-
-      const childCells = getChildCells(cell)
-      if (childCells.length > 0) {
-        walk(childCells, path)
-        return
-      }
-
-      result.push({ path })
+    childCells.forEach((childCell, index) => {
+      walk(childCell, [...path, index])
     })
   }
 
-  walk(cells, [])
+  walk(rootCell, [])
 
   return result
 }
@@ -1712,29 +1795,17 @@ export const isPathPrefix = (prefix: number[], path: number[]): boolean => {
 
 export const pathToKey = (path: number[]): string => path.join('.')
 
-export const getCellAtPath = (cells: Cell[], path: number[]): Cell | null => {
-  if (path.length === 0) {
-    return null
-  }
+export const getCellAtPath = (rootCell: Cell, path: number[]): Cell | null => {
+  let currentCell: Cell | null = rootCell
 
-  let currentCells = cells
-  let currentCell: Cell | null = null
-
-  for (let index = 0; index < path.length; index += 1) {
-    const segment = path[index]
-    const nextCell = currentCells[segment]
+  for (const segment of path) {
+    const childCells: Cell[] = currentCell ? getChildCells(currentCell) : []
+    const nextCell: Cell | undefined = childCells[segment]
     if (!nextCell) {
       return null
     }
 
     currentCell = nextCell
-    if (index < path.length - 1) {
-      const childCells = getChildCells(nextCell)
-      if (childCells.length === 0) {
-        return null
-      }
-      currentCells = childCells
-    }
   }
 
   return currentCell

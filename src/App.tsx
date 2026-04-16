@@ -49,6 +49,7 @@ import {
   isPathPrefix,
   getCellAtPath,
   getStatusCellMeta,
+  resolveSelectionPath,
 } from './app/shared'
 import type {
   MessageLevel,
@@ -62,6 +63,7 @@ import type {
   TargetControl,
   LeafCell,
   StatusCellMetaItem,
+  SelectionStep,
 } from './app/shared'
 function App() {
   const [currentInputMode, setCurrentInputMode] = useState<InputMode>('pitch')
@@ -411,7 +413,7 @@ function App() {
     tuningLength,
     patternScopeCellCount,
     leafPatternScopeIndices,
-    rootCells,
+    rootCell,
     measureNumerator,
     measureDenominator,
     timeSignature,
@@ -428,6 +430,9 @@ function App() {
     selectedCellMeta,
     rulerRatios,
     highlightedPitches,
+    selectedCellPath,
+    selectedElementIndex,
+    selectedElementKind,
   } = useMemo(() => {
     if (!snapshot) {
       const defaultStaffLineBand = Array.from(
@@ -438,7 +443,7 @@ function App() {
         tuningLength: DEFAULT_TUNING_LENGTH,
         patternScopeCellCount: 0,
         leafPatternScopeIndices: [] as number[],
-        rootCells: [] as Cell[],
+        rootCell: { weight: 1, elements: [] } as Cell,
         measureNumerator: 4,
         measureDenominator: 4,
         timeSignature: '4/4',
@@ -455,6 +460,9 @@ function App() {
         selectedCellMeta: [] as StatusCellMetaItem[],
         rulerRatios: getTuningRatios(Array.from({ length: DEFAULT_TUNING_LENGTH }, (_, i) => i * 100)),
         highlightedPitches: new Set<number>(),
+        selectedCellPath: [] as number[],
+        selectedElementIndex: null as number | null,
+        selectedElementKind: null as SelectionStep['kind'] | null,
       }
     }
 
@@ -470,8 +478,6 @@ function App() {
       mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
 
     const rootCell = measure.cell
-    const childCells = getChildCells(rootCell)
-    const directCells = childCells.length > 0 ? childCells : [rootCell]
 
     const tuningRatios = getTuningRatios(snapshot.engine.tuning.intervals)
     const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
@@ -499,33 +505,28 @@ function App() {
     const signature = `${measure.time_signature.numerator}/${measure.time_signature.denominator}`
     const selectedNumerator = measure.time_signature.numerator
     const selectedDenominator = measure.time_signature.denominator
-    const directLeafCells = collectLeafCells(directCells)
-    const selectionPath = snapshot.editor.selected.cell
-    const resolvedSelectedCell =
-      getCellAtPath(directCells, selectionPath) ?? (selectionPath.length === 0 ? rootCell : null)
-    const resolvedSelectedElement = resolvedSelectedCell
-      ? getSelectedElement(resolvedSelectedCell, snapshot.editor.selected.element_index)
-      : null
-    const selectedPitches = resolvedSelectedElement ? collectNotePitches(resolvedSelectedElement) : []
+    const directLeafCells = collectLeafCells(rootCell)
+    const selection = resolveSelectionPath(rootCell, snapshot.editor.selected.path)
+    const selectedCellPath = selection.cellPath
+    const resolvedSelectedCell = selection.selectedCell
+    const resolvedSelectedElement = selection.selectedElement
+    const selectedPitchSource = resolvedSelectedElement ?? resolvedSelectedCell ?? rootCell
+    const selectedPitches = collectNotePitches(selectedPitchSource)
     const mappedHighlights = new Set(
       selectedPitches.map((pitch) =>
         normalizePitch(mapPitch(normalizePitch(pitch, derivedTuningLength)), derivedTuningLength)
       )
     )
+    const selectedElementForScope =
+      resolvedSelectedElement ?? getSelectedElement(resolvedSelectedCell ?? rootCell, null)
     const patternScopePath =
-      resolvedSelectedElement?.type === 'Sequence'
-        ? selectionPath
-        : selectionPath.length > 0
-          ? selectionPath.slice(0, -1)
+      selectedElementForScope?.type === 'Sequence'
+        ? selectedCellPath
+        : selectedCellPath.length > 0
+          ? selectedCellPath.slice(0, -1)
           : []
-    const patternScopeCell =
-      patternScopePath.length === 0 ? null : getCellAtPath(directCells, patternScopePath)
-    const patternScopeCells =
-      patternScopePath.length === 0
-        ? directCells
-        : patternScopeCell
-          ? getChildCells(patternScopeCell)
-          : []
+    const patternScopeCell = getCellAtPath(rootCell, patternScopePath)
+    const patternScopeCells = patternScopeCell ? getChildCells(patternScopeCell) : []
     const scopeIndices = directLeafCells.map((leafCell) => {
       if (!isPathPrefix(patternScopePath, leafCell.path)) {
         return -1
@@ -533,14 +534,14 @@ function App() {
       return leafCell.path[patternScopePath.length] ?? -1
     })
     const selectionFlags = directLeafCells.map((leafCell) =>
-      isPathPrefix(selectionPath, leafCell.path)
+      isPathPrefix(selectedCellPath, leafCell.path)
     )
 
     return {
       tuningLength: derivedTuningLength,
       patternScopeCellCount: patternScopeCells.length,
       leafPatternScopeIndices: scopeIndices,
-      rootCells: directCells,
+      rootCell,
       measureNumerator: selectedNumerator,
       measureDenominator: selectedDenominator,
       timeSignature: signature,
@@ -557,6 +558,9 @@ function App() {
       selectedCellMeta: getStatusCellMeta(resolvedSelectedCell, resolvedSelectedElement),
       rulerRatios: tuningRatios,
       highlightedPitches: mappedHighlights,
+      selectedCellPath,
+      selectedElementIndex: selection.selectedElementIndex,
+      selectedElementKind: selection.selectedElementKind,
     }
   }, [snapshot])
 
@@ -616,12 +620,15 @@ function App() {
     backgroundOverlayStates,
     pitchRows,
     ratioToBottom,
-    renderRollCells,
+    renderRollCell,
   } = useSequencerRollState({
     tuningLength,
     commandText,
     isCommandMode,
     selectedLeafFlags,
+    selectedCellPath,
+    selectedElementIndex,
+    selectedElementKind,
     leafCells,
     leafPatternScopeIndices,
     patternScopeCellCount,
@@ -1322,8 +1329,8 @@ function App() {
         pitchRows={pitchRows}
         backgroundOverlayStates={backgroundOverlayStates}
         tuningLength={tuningLength}
-        renderRollCells={renderRollCells}
-        rootCells={rootCells}
+        renderRollCell={renderRollCell}
+        rootCell={rootCell}
         playheadPhase={playheadPhase}
         ratioToBottom={ratioToBottom}
         rulerRatios={rulerRatios}

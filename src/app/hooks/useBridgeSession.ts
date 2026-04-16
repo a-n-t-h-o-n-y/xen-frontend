@@ -101,7 +101,7 @@ export function useBridgeSession({
 
       const parsedSnapshot = parseUiStateSnapshot(rawSnapshot)
       if (!parsedSnapshot) {
-        setSnapshotParseError('Snapshot parse failed: payload does not match the frontend v3 contract.')
+        setSnapshotParseError('Snapshot parse failed: payload does not match the frontend v4 contract.')
         return null
       }
 
@@ -197,7 +197,7 @@ export function useBridgeSession({
 
         const helloResponse = await sendBridgeRequest('session.hello', {
           protocol: BRIDGE_PROTOCOL,
-          snapshot_schema_version: 3,
+          snapshot_schema_version: 4,
           frontend_app: FRONTEND_APP,
           frontend_version: FRONTEND_VERSION,
         })

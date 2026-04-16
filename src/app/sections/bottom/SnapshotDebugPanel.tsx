@@ -17,7 +17,8 @@ export function SnapshotDebugPanel({
   bridgeUnavailableMessage,
 }: SnapshotDebugPanelProps) {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
-  const selectionPath = snapshot?.editor.selected.cell.join(' > ') ?? ''
+  const selectionPath =
+    snapshot?.editor.selected.path.map((step) => `${step.kind}:${step.index}`).join(' > ') ?? ''
   const rootMeasure = snapshot?.engine.measure ?? null
   const selectedCellElements = rootMeasure?.cell.elements.length ?? 0
   const displayedSnapshotText = rawSnapshotText || '{\n  "status": "Waiting for backend snapshot..."\n}'
@@ -70,7 +71,7 @@ export function SnapshotDebugPanel({
             ) : snapshot ? (
               <>
                 <p className="snapshotDebugMessage">
-                  {`schema ${snapshot.schema_version} | snapshot ${snapshot.snapshot_version} | commit ${snapshot.commit_id} | selection ${selectionPath || '(root)'} | element_index ${snapshot.editor.selected.element_index ?? 'null'}`}
+                  {`schema ${snapshot.schema_version} | snapshot ${snapshot.snapshot_version} | commit ${snapshot.commit_id} | selection ${selectionPath || '(root)'}`}
                 </p>
                 <p className="snapshotDebugMessage">
                   {`measure ${snapshot.engine.measure.time_signature.numerator}/${snapshot.engine.measure.time_signature.denominator} | root_elements ${selectedCellElements} | input_mode ${snapshot.editor.input_mode}`}

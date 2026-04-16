@@ -89,6 +89,18 @@
   min-width: 0;
 }
 
+.rollSegment-selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px rgb(245 196 90 / 42%),
+    0 0 12px 2px rgb(245 196 90 / 18%);
+  pointer-events: none;
+  z-index: 24;
+}
+
 .rollPlayhead {
   position: absolute;
   top: 4px;
@@ -256,6 +268,13 @@
   min-height: 4px;
   background: var(--seq-note);
   z-index: 2;
+}
+
+.rollCellNote-selected {
+  box-shadow:
+    0 0 0 1px rgb(245 196 90 / 88%),
+    0 0 10px 1px rgb(245 196 90 / 42%);
+  z-index: 4;
 }
 
 .rollNoteOctave {

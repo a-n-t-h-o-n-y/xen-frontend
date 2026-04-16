@@ -11,8 +11,8 @@ type SequencerSectionProps = {
   pitchRows: number[]
   backgroundOverlayStates: BgOverlayState[]
   tuningLength: number
-  renderRollCells: (cells: Cell[], path: number[], depth: number) => ReactNode
-  rootCells: Cell[]
+  renderRollCell: (cell: Cell, path: number[], depth: number) => ReactNode
+  rootCell: Cell
   playheadPhase: number | null
   ratioToBottom: (ratio: number) => number
   rulerRatios: number[]
@@ -24,8 +24,8 @@ export function SequencerSection({
   pitchRows,
   backgroundOverlayStates,
   tuningLength,
-  renderRollCells,
-  rootCells,
+  renderRollCell,
+  rootCell,
   playheadPhase,
   ratioToBottom,
   rulerRatios,
@@ -100,11 +100,7 @@ export function SequencerSection({
               ))}
             </div>
             <div className="rollIslands" aria-hidden="true">
-              {renderRollCells(
-                rootCells.length > 0 ? rootCells : [{ weight: 1, elements: [] }],
-                [],
-                0
-              )}
+              {renderRollCell(rootCell, [], 0)}
             </div>
             {playheadPhase !== null ? (
               <div
