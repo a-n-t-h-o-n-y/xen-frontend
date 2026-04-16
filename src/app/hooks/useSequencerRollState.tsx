@@ -1,42 +1,18 @@
 import { type CSSProperties, useCallback, useMemo } from 'react'
 import {
   REFERENCE_RATIOS,
-  TRANSPORT_SEQUENCE_COUNT,
   clampNumber,
-  flattenMeasureToNoteIR,
-  getChildCells,
   getCellWeight,
-  getErrorMessage,
   getLargestElement,
-  getMeasureLoopQuarterNotes,
   getPatternIndices,
   getPrimaryElement,
-  getProjectedBgTriggerPhase,
   normalizePitch,
   parsePatternPrefix,
   pathToKey,
-  windowBackgroundNotes,
 } from '../shared'
-import type {
-  BgOverlayState,
-  Cell,
-  LeafCell,
-  Measure,
-  MessageLevel,
-  NoteSpanIR,
-  SyncedTransportPhases,
-  UiStateSnapshot,
-} from '../shared'
+import type { BgOverlayState, Cell, LeafCell } from '../shared'
 
 type UseSequencerRollStateArgs = {
-  snapshot: UiStateSnapshot | null
-  selectedMeasure: Measure | null
-  selectedLoopQuarterNotes: number
-  selectedMeasureIndex: number
-  sequenceBank: Measure[]
-  syncedTransportPhases: SyncedTransportPhases
-  activeSequenceFlags: boolean[]
-  tuningLength: number
   commandText: string
   isCommandMode: boolean
   selectedLeafFlags: boolean[]
@@ -44,21 +20,10 @@ type UseSequencerRollStateArgs = {
   leafPatternScopeIndices: number[]
   patternScopeCellCount: number
   staffLineBandByPitch: number[]
-  bridgeUnavailableMessage: string | null
-  executeBackendCommand: (command: string) => Promise<void>
-  setStatusMessage: (value: string) => void
-  setStatusLevel: (value: MessageLevel) => void
+  tuningLength: number
 }
 
 export function useSequencerRollState({
-  snapshot,
-  selectedMeasure,
-  selectedLoopQuarterNotes,
-  selectedMeasureIndex,
-  sequenceBank,
-  syncedTransportPhases,
-  activeSequenceFlags,
-  tuningLength,
   commandText,
   isCommandMode,
   selectedLeafFlags,
@@ -66,82 +31,9 @@ export function useSequencerRollState({
   leafPatternScopeIndices,
   patternScopeCellCount,
   staffLineBandByPitch,
-  bridgeUnavailableMessage,
-  executeBackendCommand,
-  setStatusMessage,
-  setStatusLevel,
+  tuningLength,
 }: UseSequencerRollStateArgs) {
-  const flattenedNoteIrBySequence = useMemo(() => {
-    const flattened = Array.from({ length: TRANSPORT_SEQUENCE_COUNT }, () => [] as NoteSpanIR[])
-    const boundedLength = Math.min(sequenceBank.length, TRANSPORT_SEQUENCE_COUNT)
-    for (let index = 0; index < boundedLength; index += 1) {
-      const measure = sequenceBank[index]
-      if (!measure) {
-        continue
-      }
-      flattened[index] = flattenMeasureToNoteIR(measure, index)
-    }
-    return flattened
-  }, [sequenceBank])
-
-  const backgroundOverlayStates = useMemo((): BgOverlayState[] => {
-    if (!snapshot || !selectedMeasure || selectedLoopQuarterNotes <= 0) {
-      return []
-    }
-
-    if (!activeSequenceFlags[selectedMeasureIndex]) {
-      return []
-    }
-
-    const selectedPhase = syncedTransportPhases.unwrapped[selectedMeasureIndex] ?? 0
-    const overlays: BgOverlayState[] = []
-
-    for (let sequenceIndex = 0; sequenceIndex < TRANSPORT_SEQUENCE_COUNT; sequenceIndex += 1) {
-      if (sequenceIndex === selectedMeasureIndex || !activeSequenceFlags[sequenceIndex]) {
-        continue
-      }
-
-      const bgMeasure = sequenceBank[sequenceIndex]
-      if (!bgMeasure) {
-        continue
-      }
-
-      const bgLoopQuarterNotes = getMeasureLoopQuarterNotes(bgMeasure)
-      if (bgLoopQuarterNotes <= 0) {
-        continue
-      }
-
-      const ratioFgToBg = selectedLoopQuarterNotes / bgLoopQuarterNotes
-      const bgPhase = syncedTransportPhases.unwrapped[sequenceIndex] ?? 0
-      const projectedNotes = windowBackgroundNotes(
-        flattenedNoteIrBySequence[sequenceIndex] ?? [],
-        ratioFgToBg,
-        selectedPhase,
-        bgPhase
-      )
-      const triggerPhase = getProjectedBgTriggerPhase(ratioFgToBg, selectedPhase, bgPhase)
-      if (projectedNotes.length === 0 && triggerPhase === null) {
-        continue
-      }
-
-      overlays.push({
-        sequenceIndex,
-        notes: projectedNotes,
-        triggerPhase,
-      })
-    }
-
-    return overlays
-  }, [
-    activeSequenceFlags,
-    flattenedNoteIrBySequence,
-    selectedLoopQuarterNotes,
-    selectedMeasure,
-    selectedMeasureIndex,
-    sequenceBank,
-    snapshot,
-    syncedTransportPhases,
-  ])
+  const backgroundOverlayStates = useMemo((): BgOverlayState[] => [], [])
 
   const pitchRows = useMemo(
     () => Array.from({ length: tuningLength }, (_, index) => tuningLength - 1 - index),
@@ -163,30 +55,6 @@ export function useSequencerRollState({
       return bottom * 100
     },
     [rulerOffset]
-  )
-
-  const selectSequenceFromBank = useCallback(
-    (sequenceIndex: number): void => {
-      if (bridgeUnavailableMessage !== null) {
-        return
-      }
-
-      void executeBackendCommand(`select sequence ${sequenceIndex}`).catch((error: unknown) => {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-      })
-    },
-    [bridgeUnavailableMessage, executeBackendCommand, setStatusLevel, setStatusMessage]
-  )
-
-  const sequenceBankCells = useMemo(
-    () =>
-      Array.from({ length: TRANSPORT_SEQUENCE_COUNT }, (_, index) => {
-        const row = 4 - Math.floor(index / 4)
-        const column = (index % 4) + 1
-        return { index, row, column }
-      }),
-    []
   )
 
   const displayedLeafFlags = useMemo(() => {
@@ -267,14 +135,12 @@ export function useSequencerRollState({
         return []
       }
 
-      const siblings = cells
-
-      return siblings.map((cell, index) => {
+      return cells.map((cell, index) => {
         const normalizedWeight = getCellWeight(cell.weight)
         const cellPath = [...parentPath, index]
         const cellKey = pathToKey(cellPath)
         const primaryElement = getPrimaryElement(cell)
-        const previousSibling = index > 0 ? siblings[index - 1] : null
+        const previousSibling = index > 0 ? cells[index - 1] : null
         const previousPrimaryElement = previousSibling ? getPrimaryElement(previousSibling) : null
         const hasSequenceBoundary =
           index > 0 &&
@@ -294,7 +160,7 @@ export function useSequencerRollState({
               }
             >
               <div className="rollBranch">
-                {renderCells(getChildCells(cell), cellPath, sequenceDepth + 1)}
+                {renderCells(primaryElement.cells, cellPath, sequenceDepth + 1)}
               </div>
             </div>
           )
@@ -381,8 +247,6 @@ export function useSequencerRollState({
     backgroundOverlayStates,
     pitchRows,
     ratioToBottom,
-    selectSequenceFromBank,
-    sequenceBankCells,
     renderRollCells,
   }
 }

@@ -18,10 +18,8 @@ export function SnapshotDebugPanel({
 }: SnapshotDebugPanelProps) {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const selectionPath = snapshot?.editor.selected.cell.join(' > ') ?? ''
-  const selectedMeasure = snapshot
-    ? snapshot.engine.sequence_bank[snapshot.editor.selected.measure] ?? null
-    : null
-  const selectedCellElements = selectedMeasure?.cell.elements.length ?? 0
+  const rootMeasure = snapshot?.engine.measure ?? null
+  const selectedCellElements = rootMeasure?.cell.elements.length ?? 0
   const displayedSnapshotText = rawSnapshotText || '{\n  "status": "Waiting for backend snapshot..."\n}'
 
   useEffect(() => {
@@ -72,10 +70,10 @@ export function SnapshotDebugPanel({
             ) : snapshot ? (
               <>
                 <p className="snapshotDebugMessage">
-                  {`schema ${snapshot.schema_version} | snapshot ${snapshot.snapshot_version} | measure ${snapshot.editor.selected.measure} | selection ${selectionPath || '(root)'} | element_index ${snapshot.editor.selected.element_index ?? 'null'}`}
+                  {`schema ${snapshot.schema_version} | snapshot ${snapshot.snapshot_version} | commit ${snapshot.commit_id} | selection ${selectionPath || '(root)'} | element_index ${snapshot.editor.selected.element_index ?? 'null'}`}
                 </p>
                 <p className="snapshotDebugMessage">
-                  {`sequence_bank ${snapshot.engine.sequence_bank.length} | sequence_names ${snapshot.engine.sequence_names.length} | selected_root_elements ${selectedCellElements}`}
+                  {`measure ${snapshot.engine.measure.time_signature.numerator}/${snapshot.engine.measure.time_signature.denominator} | root_elements ${selectedCellElements} | input_mode ${snapshot.editor.input_mode}`}
                 </p>
               </>
             ) : (

@@ -16,7 +16,6 @@ import {
   normalizePhase,
   parseUiStateSnapshot,
   parseWireEnvelope,
-  toSequenceIndex,
 } from '../shared'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
@@ -27,7 +26,6 @@ import type {
   MessageLevel,
   SequenceViewKeymap,
   SessionReference,
-  SyncedTransportPhases,
   TransportState,
   UiStateSnapshot,
 } from '../shared'
@@ -35,7 +33,6 @@ import type {
 type UseBridgeSessionArgs = {
   eventTokenRef: MutableRefObject<unknown>
   transportRef: MutableRefObject<TransportState>
-  selectedMeasureIndexRef: MutableRefObject<number>
   lastSnapshotVersionRef: MutableRefObject<number>
   setSnapshot: Dispatch<SetStateAction<UiStateSnapshot | null>>
   setRawSnapshotText: Dispatch<SetStateAction<string>>
@@ -49,15 +46,12 @@ type UseBridgeSessionArgs = {
   setSequenceViewKeymap: Dispatch<SetStateAction<SequenceViewKeymap>>
   setLibraryLoading: Dispatch<SetStateAction<boolean>>
   setLibrarySnapshot: Dispatch<SetStateAction<LibrarySnapshot>>
-  setActiveSequenceFlags: Dispatch<SetStateAction<boolean[]>>
   setPlayheadPhase: Dispatch<SetStateAction<number | null>>
-  setSyncedTransportPhases: Dispatch<SetStateAction<SyncedTransportPhases>>
 }
 
 export function useBridgeSession({
   eventTokenRef,
   transportRef,
-  selectedMeasureIndexRef,
   lastSnapshotVersionRef,
   setSnapshot,
   setRawSnapshotText,
@@ -71,9 +65,7 @@ export function useBridgeSession({
   setSequenceViewKeymap,
   setLibraryLoading,
   setLibrarySnapshot,
-  setActiveSequenceFlags,
   setPlayheadPhase,
-  setSyncedTransportPhases,
 }: UseBridgeSessionArgs) {
   const sendBridgeRequest = useCallback(
     async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
@@ -109,7 +101,7 @@ export function useBridgeSession({
 
       const parsedSnapshot = parseUiStateSnapshot(rawSnapshot)
       if (!parsedSnapshot) {
-        setSnapshotParseError('Snapshot parse failed: payload does not match the frontend v2 contract.')
+        setSnapshotParseError('Snapshot parse failed: payload does not match the frontend v3 contract.')
         return null
       }
 
@@ -171,166 +163,23 @@ export function useBridgeSession({
               return
             }
 
-            const payload = asRecord(eventEnvelope.payload)
-            if (!payload) {
-              return
-            }
-
-            if (eventEnvelope.name === 'transport.trigger.noteOn') {
-              const sequenceIndex = toSequenceIndex(payload.sequence_index)
-              if (sequenceIndex === null) {
-                return
-              }
-
-              transportRef.current.active[sequenceIndex] = true
-              setActiveSequenceFlags((previous) => {
-                if (previous[sequenceIndex]) {
-                  return previous
-                }
-                const next = [...previous]
-                next[sequenceIndex] = true
-                return next
-              })
-              if (sequenceIndex === selectedMeasureIndexRef.current) {
-                setPlayheadPhase(transportRef.current.phase[sequenceIndex] ?? 0)
-              }
-              return
-            }
-
-            if (eventEnvelope.name === 'transport.trigger.noteOff') {
-              const sequenceIndex = toSequenceIndex(payload.sequence_index)
-              if (sequenceIndex === null) {
-                return
-              }
-
-              transportRef.current.active[sequenceIndex] = false
-              setActiveSequenceFlags((previous) => {
-                if (!previous[sequenceIndex]) {
-                  return previous
-                }
-                const next = [...previous]
-                next[sequenceIndex] = false
-                return next
-              })
-              transportRef.current.phase[sequenceIndex] = 0
-              setSyncedTransportPhases((previous) => {
-                if (
-                  (previous.wrapped[sequenceIndex] ?? 0) === 0 &&
-                  (previous.unwrapped[sequenceIndex] ?? 0) === 0
-                ) {
-                  return previous
-                }
-                const nextWrapped = [...previous.wrapped]
-                const nextUnwrapped = [...previous.unwrapped]
-                nextWrapped[sequenceIndex] = 0
-                nextUnwrapped[sequenceIndex] = 0
-                return {
-                  wrapped: nextWrapped,
-                  unwrapped: nextUnwrapped,
-                }
-              })
-              if (sequenceIndex === selectedMeasureIndexRef.current) {
-                setPlayheadPhase(null)
-              }
-              return
-            }
-
             if (eventEnvelope.name === 'transport.phase.sync') {
+              const payload = asRecord(eventEnvelope.payload)
+              if (!payload) {
+                return
+              }
+
               if (typeof payload.bpm === 'number' && Number.isFinite(payload.bpm) && payload.bpm > 0) {
                 transportRef.current.bpm = payload.bpm
               }
 
-              const phases = Array.isArray(payload.phases) ? payload.phases : []
-              setSyncedTransportPhases((previous) => {
-                const nextWrapped = [...previous.wrapped]
-                const nextUnwrapped = [...previous.unwrapped]
-                let changed = false
-                for (const rawPhaseEntry of phases) {
-                  const phaseEntry = asRecord(rawPhaseEntry)
-                  if (!phaseEntry) {
-                    continue
-                  }
-
-                  const sequenceIndex = toSequenceIndex(phaseEntry.sequence_index)
-                  if (sequenceIndex === null) {
-                    continue
-                  }
-
-                  const phase = phaseEntry.phase
-                  if (typeof phase !== 'number' || !Number.isFinite(phase)) {
-                    continue
-                  }
-
-                  const normalizedPhase = normalizePhase(phase)
-                  const previousWrapped = previous.wrapped[sequenceIndex] ?? 0
-                  const previousUnwrapped = previous.unwrapped[sequenceIndex] ?? 0
-                  let delta = normalizedPhase - previousWrapped
-                  if (delta > 0.5) {
-                    delta -= 1
-                  } else if (delta < -0.5) {
-                    delta += 1
-                  }
-                  const nextUnwrappedPhase = previousUnwrapped + delta
-
-                  if (
-                    nextWrapped[sequenceIndex] === normalizedPhase &&
-                    nextUnwrapped[sequenceIndex] === nextUnwrappedPhase
-                  ) {
-                    continue
-                  }
-                  nextWrapped[sequenceIndex] = normalizedPhase
-                  nextUnwrapped[sequenceIndex] = nextUnwrappedPhase
-                  changed = true
-                }
-
-                return changed
-                  ? {
-                      wrapped: nextWrapped,
-                      unwrapped: nextUnwrapped,
-                    }
-                  : previous
-              })
-              const syncedActiveSequenceIndices = new Set<number>()
-              for (const rawPhaseEntry of phases) {
-                const phaseEntry = asRecord(rawPhaseEntry)
-                if (!phaseEntry) {
-                  continue
-                }
-
-                const sequenceIndex = toSequenceIndex(phaseEntry.sequence_index)
-                if (sequenceIndex === null) {
-                  continue
-                }
-
-                const phase = phaseEntry.phase
-                if (typeof phase !== 'number' || !Number.isFinite(phase)) {
-                  continue
-                }
-
-                const normalizedPhase = normalizePhase(phase)
-                transportRef.current.phase[sequenceIndex] = normalizedPhase
-                transportRef.current.active[sequenceIndex] = true
-                syncedActiveSequenceIndices.add(sequenceIndex)
-              }
-
-              if (syncedActiveSequenceIndices.size > 0) {
-                setActiveSequenceFlags((previous) => {
-                  let changed = false
-                  const next = [...previous]
-                  syncedActiveSequenceIndices.forEach((sequenceIndex) => {
-                    if (!next[sequenceIndex]) {
-                      next[sequenceIndex] = true
-                      changed = true
-                    }
-                  })
-                  return changed ? next : previous
-                })
-              }
-
-              const selectedIndex = selectedMeasureIndexRef.current
-              if (transportRef.current.active[selectedIndex]) {
-                setPlayheadPhase(transportRef.current.phase[selectedIndex] ?? 0)
+              if (typeof payload.phase === 'number' && Number.isFinite(payload.phase)) {
+                const normalizedPhase = normalizePhase(payload.phase)
+                transportRef.current.phase = normalizedPhase
+                transportRef.current.active = true
+                setPlayheadPhase(normalizedPhase)
               } else {
+                transportRef.current.active = false
                 setPlayheadPhase(null)
               }
             }
@@ -341,7 +190,7 @@ export function useBridgeSession({
 
         const helloResponse = await sendBridgeRequest('session.hello', {
           protocol: BRIDGE_PROTOCOL,
-          snapshot_schema_version: 2,
+          snapshot_schema_version: 3,
           frontend_app: FRONTEND_APP,
           frontend_version: FRONTEND_VERSION,
         })
@@ -397,11 +246,9 @@ export function useBridgeSession({
         applySnapshot(welcomeSnapshot, 'command.execute:welcome')
         const welcomeStatus = getCommandStatus(welcomeResponse.payload)
 
-        if (isMounted) {
-          if (welcomeStatus && welcomeStatus.level !== 'debug') {
-            setStatusMessage(welcomeStatus.message)
-            setStatusLevel(welcomeStatus.level)
-          }
+        if (isMounted && welcomeStatus && welcomeStatus.level !== 'debug') {
+          setStatusMessage(welcomeStatus.message)
+          setStatusLevel(welcomeStatus.level)
         }
       } catch (error) {
         if (isMounted) {
@@ -426,9 +273,7 @@ export function useBridgeSession({
   }, [
     applySnapshot,
     eventTokenRef,
-    selectedMeasureIndexRef,
     sendBridgeRequest,
-    setActiveSequenceFlags,
     setBridgeUnavailableMessage,
     setLibraryLoading,
     setLibrarySnapshot,
@@ -437,7 +282,6 @@ export function useBridgeSession({
     setSessionReference,
     setStatusLevel,
     setStatusMessage,
-    setSyncedTransportPhases,
     transportRef,
   ])
 

@@ -15,7 +15,6 @@ import { SnapshotDebugPanel } from './app/sections/bottom/SnapshotDebugPanel'
 import {
   MAX_COMMAND_HISTORY,
   DEFAULT_TUNING_LENGTH,
-  TRANSPORT_SEQUENCE_COUNT,
   LFO_PHASE_OFFSET_MIN,
   LFO_PHASE_OFFSET_MAX,
   clampNumber,
@@ -25,7 +24,6 @@ import {
   ratioToFrequency,
   createTransportState,
   getErrorMessage,
-  getMeasureLoopQuarterNotes,
   getLibrarySnapshot,
   getPayloadError,
   getCommandSuffix,
@@ -57,10 +55,8 @@ import type {
   TranslateDirection,
   InputMode,
   Cell,
-  Measure,
   UiStateSnapshot,
   TransportState,
-  SyncedTransportPhases,
   ModTarget,
   WaveType,
   TargetControl,
@@ -98,7 +94,6 @@ function App() {
   const timeSignatureInputRef = useRef<HTMLInputElement>(null)
   const keyInputRef = useRef<HTMLInputElement>(null)
   const baseFrequencyInputRef = useRef<HTMLInputElement>(null)
-  const sequenceNameInputRef = useRef<HTMLInputElement>(null)
   const scaleMenuRef = useRef<HTMLDivElement | null>(null)
   const lastSnapshotVersionRef = useRef<number>(-1)
   const completionRequestVersionRef = useRef(0)
@@ -107,16 +102,8 @@ function App() {
     null
   )
   const transportRef = useRef<TransportState>(createTransportState())
-  const selectedMeasureIndexRef = useRef(0)
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
-  const [syncedTransportPhases, setSyncedTransportPhases] = useState<SyncedTransportPhases>({
-    wrapped: Array(TRANSPORT_SEQUENCE_COUNT).fill(0),
-    unwrapped: Array(TRANSPORT_SEQUENCE_COUNT).fill(0),
-  })
-  const [activeSequenceFlags, setActiveSequenceFlags] = useState<boolean[]>(
-    Array(TRANSPORT_SEQUENCE_COUNT).fill(false)
-  )
   const {
     activeReferenceTab,
     setActiveReferenceTab,
@@ -126,9 +113,9 @@ function App() {
     tuningSearch,
     setTuningSearch,
     tuningSearchInputRef,
-    sequenceSearch,
-    setSequenceSearch,
-    sequenceSearchInputRef,
+    measureSearch,
+    setMeasureSearch,
+    measureSearchInputRef,
     tuningSortMode,
     setTuningSortMode,
     activeLibraryTab,
@@ -142,7 +129,7 @@ function App() {
     sequenceViewReferenceBindings,
     filteredReferenceCommands,
     tuningHierarchyRows,
-    sequenceHierarchyRows,
+    measureHierarchyRows,
   } = useLibraryPanelState()
   const {
     modulatorInstances,
@@ -183,7 +170,6 @@ function App() {
   const { sendBridgeRequest, executeBackendCommand } = useBridgeSession({
     eventTokenRef,
     transportRef,
-    selectedMeasureIndexRef,
     lastSnapshotVersionRef,
     setSnapshot,
     setRawSnapshotText,
@@ -197,9 +183,7 @@ function App() {
     setSequenceViewKeymap,
     setLibraryLoading,
     setLibrarySnapshot,
-    setActiveSequenceFlags,
     setPlayheadPhase,
-    setSyncedTransportPhases,
   })
 
   useEffect(() => {
@@ -425,17 +409,11 @@ function App() {
 
   const {
     tuningLength,
-    sequenceBank,
-    selectedMeasure,
-    selectedLoopQuarterNotes,
-    sequenceCount,
     patternScopeCellCount,
     leafPatternScopeIndices,
     rootCells,
-    selectedMeasureIndex,
-    selectedMeasureNumerator,
-    selectedMeasureDenominator,
-    selectedMeasureName,
+    measureNumerator,
+    measureDenominator,
     timeSignature,
     scaleName,
     scaleMode,
@@ -458,17 +436,11 @@ function App() {
       )
       return {
         tuningLength: DEFAULT_TUNING_LENGTH,
-        sequenceBank: [] as Measure[],
-        selectedMeasure: null as Measure | null,
-        selectedLoopQuarterNotes: 4,
-        sequenceCount: TRANSPORT_SEQUENCE_COUNT,
         patternScopeCellCount: 0,
         leafPatternScopeIndices: [] as number[],
         rootCells: [] as Cell[],
-        selectedMeasureIndex: 0,
-        selectedMeasureNumerator: 4,
-        selectedMeasureDenominator: 4,
-        selectedMeasureName: 'Init Test',
+        measureNumerator: 4,
+        measureDenominator: 4,
         timeSignature: '4/4',
         scaleName: 'major diatonic',
         scaleMode: 3,
@@ -488,12 +460,7 @@ function App() {
 
     const rawTuningLength = snapshot.engine.tuning.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
-    const selectedIndex = Math.max(
-      0,
-      Math.min(snapshot.editor.selected.measure, snapshot.engine.sequence_bank.length - 1)
-    )
-    const selectedMeasure = snapshot.engine.sequence_bank[selectedIndex] ?? null
-    const sequenceName = snapshot.engine.sequence_names[selectedIndex] ?? `Sequence ${selectedIndex}`
+    const measure = snapshot.engine.measure
     const scaleValidPitches = snapshot.engine.scale
       ? generateValidPitches(snapshot.engine.scale, derivedTuningLength)
       : []
@@ -502,10 +469,9 @@ function App() {
     const mapPitch = (pitch: number): number =>
       mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
 
-    const selectedCell = selectedMeasure?.cell ?? null
-    const childCells = selectedCell ? getChildCells(selectedCell) : []
-    const directCells =
-      selectedCell === null ? [] : childCells.length > 0 ? childCells : [selectedCell]
+    const rootCell = measure.cell
+    const childCells = getChildCells(rootCell)
+    const directCells = childCells.length > 0 ? childCells : [rootCell]
 
     const tuningRatios = getTuningRatios(snapshot.engine.tuning.intervals)
     const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
@@ -530,15 +496,13 @@ function App() {
       }
     }
 
-    const signature = selectedMeasure?.time_signature
-      ? `${selectedMeasure.time_signature.numerator}/${selectedMeasure.time_signature.denominator}`
-      : '4/4'
-    const selectedNumerator = selectedMeasure?.time_signature?.numerator ?? 4
-    const selectedDenominator = selectedMeasure?.time_signature?.denominator ?? 4
+    const signature = `${measure.time_signature.numerator}/${measure.time_signature.denominator}`
+    const selectedNumerator = measure.time_signature.numerator
+    const selectedDenominator = measure.time_signature.denominator
     const directLeafCells = collectLeafCells(directCells)
     const selectionPath = snapshot.editor.selected.cell
     const resolvedSelectedCell =
-      getCellAtPath(directCells, selectionPath) ?? (selectionPath.length === 0 ? selectedCell : null)
+      getCellAtPath(directCells, selectionPath) ?? (selectionPath.length === 0 ? rootCell : null)
     const resolvedSelectedElement = resolvedSelectedCell
       ? getSelectedElement(resolvedSelectedCell, snapshot.editor.selected.element_index)
       : null
@@ -574,17 +538,11 @@ function App() {
 
     return {
       tuningLength: derivedTuningLength,
-      sequenceBank: snapshot.engine.sequence_bank,
-      selectedMeasure,
-      selectedLoopQuarterNotes: getMeasureLoopQuarterNotes(selectedMeasure),
-      sequenceCount: snapshot.engine.sequence_bank.length,
       patternScopeCellCount: patternScopeCells.length,
       leafPatternScopeIndices: scopeIndices,
       rootCells: directCells,
-      selectedMeasureIndex: selectedIndex,
-      selectedMeasureNumerator: selectedNumerator,
-      selectedMeasureDenominator: selectedDenominator,
-      selectedMeasureName: sequenceName,
+      measureNumerator: selectedNumerator,
+      measureDenominator: selectedDenominator,
       timeSignature: signature,
       scaleName: snapshot.engine.scale?.name ?? 'chromatic',
       scaleMode: snapshot.engine.scale?.mode ?? 0,
@@ -612,22 +570,16 @@ function App() {
     isBaseFrequencyEditing,
     baseFrequencyDraft,
     setBaseFrequencyDraft,
-    isSequenceNameEditing,
-    sequenceNameDraft,
-    setSequenceNameDraft,
     isScaleUpdating,
     commitTimeSignature,
     commitKey,
     commitBaseFrequency,
-    commitSequenceName,
     beginTimeSignatureEdit,
     cancelTimeSignatureEdit,
     beginKeyEdit,
     cancelKeyEdit,
     beginBaseFrequencyEdit,
     cancelBaseFrequencyEdit,
-    beginSequenceNameEdit,
-    cancelSequenceNameEdit,
     applyTimeSignatureScale,
     scaleOptions,
     modeOptions,
@@ -639,8 +591,6 @@ function App() {
     timeSignature,
     keyDisplay,
     baseFrequency,
-    selectedMeasureName,
-    selectedMeasureIndex,
     scaleName,
     scaleMode,
     scaleSize,
@@ -652,15 +602,12 @@ function App() {
     timeSignatureInputRef,
     keyInputRef,
     baseFrequencyInputRef,
-    sequenceNameInputRef,
   })
 
   useTransportPlayhead({
-    selectedMeasureIndex,
-    selectedMeasureNumerator,
-    selectedMeasureDenominator,
+    measureNumerator,
+    measureDenominator,
     transportRef,
-    selectedMeasureIndexRef,
     selectedTimeSignatureRef,
     setPlayheadPhase,
   })
@@ -669,17 +616,8 @@ function App() {
     backgroundOverlayStates,
     pitchRows,
     ratioToBottom,
-    selectSequenceFromBank,
-    sequenceBankCells,
     renderRollCells,
   } = useSequencerRollState({
-    snapshot,
-    selectedMeasure,
-    selectedLoopQuarterNotes,
-    selectedMeasureIndex,
-    sequenceBank,
-    syncedTransportPhases,
-    activeSequenceFlags,
     tuningLength,
     commandText,
     isCommandMode,
@@ -688,10 +626,6 @@ function App() {
     leafPatternScopeIndices,
     patternScopeCellCount,
     staffLineBandByPitch,
-    bridgeUnavailableMessage,
-    executeBackendCommand,
-    setStatusMessage,
-    setStatusLevel,
   })
 
   const currentInputModeLetter = currentInputMode.charAt(0).toUpperCase()
@@ -1382,15 +1316,6 @@ function App() {
         scaleMode={scaleMode}
         applyModeSelection={applyModeSelection}
         tuningName={tuningName}
-        selectedMeasureIndex={selectedMeasureIndex}
-        isSequenceNameEditing={isSequenceNameEditing}
-        sequenceNameInputRef={sequenceNameInputRef}
-        sequenceNameDraft={sequenceNameDraft}
-        setSequenceNameDraft={setSequenceNameDraft}
-        commitSequenceName={commitSequenceName}
-        cancelSequenceNameEdit={cancelSequenceNameEdit}
-        beginSequenceNameEdit={beginSequenceNameEdit}
-        selectedMeasureName={selectedMeasureName}
       />
       <SequencerSection
         bridgeUnavailableMessage={bridgeUnavailableMessage}
@@ -1430,11 +1355,6 @@ function App() {
         selectedCellMeta={selectedCellMeta}
       />
       <BottomModulesSection
-        sequenceBankCells={sequenceBankCells}
-        selectedMeasureIndex={selectedMeasureIndex}
-        activeSequenceFlags={activeSequenceFlags}
-        sequenceCount={sequenceCount}
-        selectSequenceFromBank={selectSequenceFromBank}
         activeModulatorTab={activeModulatorTab}
         setOpenWaveMenu={setOpenWaveMenu}
         setActiveModulatorTab={setActiveModulatorTab}
@@ -1490,10 +1410,10 @@ function App() {
         setTuningSortMode={setTuningSortMode}
         tuningHierarchyRows={tuningHierarchyRows}
         formatOctaveForDisplay={formatOctaveForDisplay}
-        sequenceSearchInputRef={sequenceSearchInputRef}
-        sequenceSearch={sequenceSearch}
-        setSequenceSearch={setSequenceSearch}
-        sequenceHierarchyRows={sequenceHierarchyRows}
+        measureSearchInputRef={measureSearchInputRef}
+        measureSearch={measureSearch}
+        setMeasureSearch={setMeasureSearch}
+        measureHierarchyRows={measureHierarchyRows}
       />
     </div>
   )

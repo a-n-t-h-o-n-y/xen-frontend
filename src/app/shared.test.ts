@@ -10,19 +10,17 @@ import {
 } from './shared'
 
 const createSnapshot = (cell: unknown, elementIndex: number | null) => ({
-  schema_version: 2,
+  schema_version: 3,
   snapshot_version: 7,
+  commit_id: 1,
   engine: {
-    sequence_bank: [
-      {
-        cell,
-        time_signature: {
-          numerator: 4,
-          denominator: 4,
-        },
+    measure: {
+      cell,
+      time_signature: {
+        numerator: 4,
+        denominator: 4,
       },
-    ],
-    sequence_names: ['Sequence 0'],
+    },
     tuning: {
       intervals: [0, 100, 200, 300],
       octave: 1200,
@@ -35,7 +33,6 @@ const createSnapshot = (cell: unknown, elementIndex: number | null) => ({
   },
   editor: {
     selected: {
-      measure: 0,
       cell: [],
       element_index: elementIndex,
     },
@@ -44,7 +41,7 @@ const createSnapshot = (cell: unknown, elementIndex: number | null) => ({
 })
 
 describe('parseUiStateSnapshot', () => {
-  it('parses a v2 note-only cell and accepts null element_index', () => {
+  it('parses a v3 note-only cell and accepts null element_index', () => {
     const snapshot = createSnapshot(
       {
         weight: 1,
@@ -56,16 +53,16 @@ describe('parseUiStateSnapshot', () => {
     const parsed = parseUiStateSnapshot(snapshot)
 
     expect(parsed).not.toBeNull()
-    expect(parsed?.schema_version).toBe(2)
+    expect(parsed?.schema_version).toBe(3)
     expect(parsed?.editor.selected.element_index).toBeNull()
 
-    const cell = parsed?.engine.sequence_bank[0]?.cell
+    const cell = parsed?.engine.measure.cell
     expect(cell).toBeDefined()
     expect(cell ? collectNotePitches(cell) : []).toEqual([7])
     expect(cell ? getPrimaryElement(cell)?.type : null).toBe('Note')
   })
 
-  it('parses a v2 sequence-only cell and exposes its child cells', () => {
+  it('parses a v3 sequence-only cell and exposes its child cells', () => {
     const snapshot = createSnapshot(
       {
         weight: 1,
@@ -85,7 +82,7 @@ describe('parseUiStateSnapshot', () => {
     )
 
     const parsed = parseUiStateSnapshot(snapshot)
-    const rootCell = parsed?.engine.sequence_bank[0]?.cell
+    const rootCell = parsed?.engine.measure.cell
 
     expect(parsed).not.toBeNull()
     expect(rootCell ? getPrimaryElement(rootCell)?.type : null).toBe('Sequence')
@@ -103,7 +100,7 @@ describe('parseUiStateSnapshot', () => {
     )
 
     const parsed = parseUiStateSnapshot(snapshot)
-    const cell = parsed?.engine.sequence_bank[0]?.cell
+    const cell = parsed?.engine.measure.cell
 
     expect(parsed).not.toBeNull()
     expect(cell ? getPrimaryElement(cell) : null).toBeNull()
@@ -132,7 +129,7 @@ describe('parseUiStateSnapshot', () => {
     )
 
     const parsed = parseUiStateSnapshot(snapshot)
-    const measure = parsed?.engine.sequence_bank[0]
+    const measure = parsed?.engine.measure
     const cell = measure?.cell
     const selectedElement = cell ? getSelectedElement(cell, parsed?.editor.selected.element_index) : null
 
@@ -151,7 +148,7 @@ describe('parseUiStateSnapshot', () => {
     ])
   })
 
-  it('rejects snapshots with a non-v2 schema version', () => {
+  it('rejects snapshots with a non-v3 schema version', () => {
     const snapshot = {
       ...createSnapshot(
         {
@@ -160,7 +157,7 @@ describe('parseUiStateSnapshot', () => {
         },
         null
       ),
-      schema_version: 1,
+      schema_version: 2,
     }
 
     expect(parseUiStateSnapshot(snapshot)).toBeNull()

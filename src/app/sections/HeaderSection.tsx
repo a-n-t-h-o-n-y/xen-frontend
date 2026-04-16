@@ -41,15 +41,6 @@ type HeaderSectionProps = {
   scaleMode: number
   applyModeSelection: (modeIndex: number) => Promise<void>
   tuningName: string
-  selectedMeasureIndex: number
-  isSequenceNameEditing: boolean
-  sequenceNameInputRef: { current: HTMLInputElement | null }
-  sequenceNameDraft: string
-  setSequenceNameDraft: Dispatch<SetStateAction<string>>
-  commitSequenceName: (value: string) => Promise<unknown>
-  cancelSequenceNameEdit: () => void
-  beginSequenceNameEdit: () => void
-  selectedMeasureName: string
 }
 
 export function HeaderSection({
@@ -92,15 +83,6 @@ export function HeaderSection({
   scaleMode,
   applyModeSelection,
   tuningName,
-  selectedMeasureIndex,
-  isSequenceNameEditing,
-  sequenceNameInputRef,
-  sequenceNameDraft,
-  setSequenceNameDraft,
-  commitSequenceName,
-  cancelSequenceNameEdit,
-  beginSequenceNameEdit,
-  selectedMeasureName,
 }: HeaderSectionProps) {
   return (
     <header className="header">
@@ -339,54 +321,6 @@ export function HeaderSection({
           <div className="headerField">
             <span className="fieldLabel">Tuning</span>
             <span className="fieldValue mono">{tuningName}</span>
-          </div>
-        </div>
-      </div>
-      <div className="headerGroup">
-        <div className="headerGrid">
-          <div className="headerField headerField-sequenceName">
-            <span className="fieldLabel">Sequence Name</span>
-            <div className="sequenceNameControl">
-              <span className="sequenceNameIndex mono">{`${selectedMeasureIndex}:`}</span>
-              <div className="headerEditableValueWide sequenceNameValue">
-                {isSequenceNameEditing ? (
-                  <input
-                    ref={sequenceNameInputRef}
-                    className="headerEditableInput fieldValue"
-                    type="text"
-                    value={sequenceNameDraft}
-                    onChange={(event) => setSequenceNameDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        void commitSequenceName(sequenceNameDraft)
-                        return
-                      }
-                      if (event.key === 'Escape') {
-                        event.preventDefault()
-                        cancelSequenceNameEdit()
-                      }
-                    }}
-                    onBlur={cancelSequenceNameEdit}
-                    spellCheck={false}
-                    autoCapitalize="off"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    aria-label="Edit sequence name"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="headerEditableDisplay fieldValue"
-                    onClick={beginSequenceNameEdit}
-                    disabled={bridgeUnavailableMessage !== null}
-                    aria-label={`Sequence ${selectedMeasureIndex}: ${selectedMeasureName}. Click to edit`}
-                  >
-                    {selectedMeasureName}
-                  </button>
-                )}
-              </div>
-            </div>
           </div>
         </div>
       </div>

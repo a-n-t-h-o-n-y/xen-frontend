@@ -2,8 +2,8 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { LibraryHierarchyRow, LibrarySnapshot, TuningSortMode } from '../../shared'
 
 type LibraryPanelProps = {
-  activeLibraryTab: 'tunings' | 'sequences' | 'scales' | 'chords'
-  setActiveLibraryTab: Dispatch<SetStateAction<'tunings' | 'sequences' | 'scales' | 'chords'>>
+  activeLibraryTab: 'tunings' | 'measures' | 'scales' | 'chords'
+  setActiveLibraryTab: Dispatch<SetStateAction<'tunings' | 'measures' | 'scales' | 'chords'>>
   librarySnapshot: LibrarySnapshot
   runLibraryCommand: (command: string) => Promise<unknown>
   quoteCommandArg: (value: string) => string
@@ -14,10 +14,10 @@ type LibraryPanelProps = {
   setTuningSortMode: Dispatch<SetStateAction<TuningSortMode>>
   tuningHierarchyRows: LibraryHierarchyRow[]
   formatOctaveForDisplay: (value: number) => string
-  sequenceSearchInputRef: { current: HTMLInputElement | null }
-  sequenceSearch: string
-  setSequenceSearch: Dispatch<SetStateAction<string>>
-  sequenceHierarchyRows: LibraryHierarchyRow[]
+  measureSearchInputRef: { current: HTMLInputElement | null }
+  measureSearch: string
+  setMeasureSearch: Dispatch<SetStateAction<string>>
+  measureHierarchyRows: LibraryHierarchyRow[]
 }
 
 export function LibraryPanel({
@@ -33,10 +33,10 @@ export function LibraryPanel({
   setTuningSortMode,
   tuningHierarchyRows,
   formatOctaveForDisplay,
-  sequenceSearchInputRef,
-  sequenceSearch,
-  setSequenceSearch,
-  sequenceHierarchyRows,
+  measureSearchInputRef,
+  measureSearch,
+  setMeasureSearch,
+  measureHierarchyRows,
 }: LibraryPanelProps) {
   return (
     <article className="bottomModule bottomModule-rowItem bottomModule-library">
@@ -54,12 +54,12 @@ export function LibraryPanel({
           </button>
           <button
             type="button"
-            className={`libraryTab${activeLibraryTab === 'sequences' ? ' libraryTab-active' : ''}`}
+            className={`libraryTab${activeLibraryTab === 'measures' ? ' libraryTab-active' : ''}`}
             role="tab"
-            aria-selected={activeLibraryTab === 'sequences'}
-            onClick={() => setActiveLibraryTab('sequences')}
+            aria-selected={activeLibraryTab === 'measures'}
+            onClick={() => setActiveLibraryTab('measures')}
           >
-            Sequences
+            Measures
           </button>
           <button
             type="button"
@@ -220,37 +220,37 @@ export function LibraryPanel({
           </>
         ) : null}
 
-        {activeLibraryTab === 'sequences' ? (
+        {activeLibraryTab === 'measures' ? (
           <>
             <div className="referenceCommandSearchField">
               <input
-                ref={sequenceSearchInputRef}
+                ref={measureSearchInputRef}
                 type="search"
                 className="referenceCommandSearchInput mono"
-                value={sequenceSearch}
-                onChange={(event) => setSequenceSearch(event.target.value)}
-                placeholder="Search sequence stem..."
-                aria-label="Search sequences by stem"
+                value={measureSearch}
+                onChange={(event) => setMeasureSearch(event.target.value)}
+                placeholder="Search measure stem..."
+                aria-label="Search measures by stem"
               />
-              {sequenceSearch.length > 0 ? (
+              {measureSearch.length > 0 ? (
                 <button
                   type="button"
                   className="referenceCommandSearchClear"
-                  aria-label="Clear sequence search"
+                  aria-label="Clear measure search"
                   onMouseDown={(event) => {
                     event.preventDefault()
                   }}
                   onClick={() => {
-                    setSequenceSearch('')
-                    sequenceSearchInputRef.current?.focus()
+                    setMeasureSearch('')
+                    measureSearchInputRef.current?.focus()
                   }}
                 >
                   x
                 </button>
               ) : null}
             </div>
-            {sequenceHierarchyRows.length > 0 ? (
-              sequenceHierarchyRows.map((row) => {
+            {measureHierarchyRows.length > 0 ? (
+              measureHierarchyRows.map((row) => {
                 if (row.kind === 'directory') {
                   return (
                     <div
@@ -266,13 +266,13 @@ export function LibraryPanel({
                   )
                 }
 
-                const sequenceBank = row.entry
-                if (!sequenceBank) {
+                const measure = row.entry
+                if (!measure) {
                   return null
                 }
-                const stemParts = sequenceBank.stem.split('/').filter((part) => part.length > 0)
-                const sequenceNameLeaf = stemParts[stemParts.length - 1] || row.label
-                const sequenceFolderPath = stemParts.slice(0, -1).join('/')
+                const stemParts = measure.stem.split('/').filter((part) => part.length > 0)
+                const measureNameLeaf = stemParts[stemParts.length - 1] || row.label
+                const measureFolderPath = stemParts.slice(0, -1).join('/')
                 return (
                   <button
                     key={row.key}
@@ -281,23 +281,23 @@ export function LibraryPanel({
                     style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
                     onClick={() => {
                       void runLibraryCommand(
-                        sequenceBank.command || `load sequenceBank ${quoteCommandArg(sequenceBank.name)}`
+                        measure.command || `load measure ${quoteCommandArg(measure.name)}`
                       )
                     }}
                   >
                     <span className="libraryItemName mono">
-                      {sequenceFolderPath ? (
-                        <span className="libraryItemPathPrefix">{`${sequenceFolderPath}/`}</span>
+                      {measureFolderPath ? (
+                        <span className="libraryItemPathPrefix">{`${measureFolderPath}/`}</span>
                       ) : null}
-                      <span className="libraryItemPathLeaf">{sequenceNameLeaf}</span>
+                      <span className="libraryItemPathLeaf">{measureNameLeaf}</span>
                     </span>
-                    <span className="libraryItemMeta mono">{sequenceBank.relativePath || sequenceBank.path}</span>
+                    <span className="libraryItemMeta mono">{measure.relativePath || measure.path}</span>
                   </button>
                 )
               })
             ) : (
               <p className="libraryPlaceholder">
-                {sequenceSearch.trim() ? 'No sequences match that search.' : 'No saved sequences found.'}
+                {measureSearch.trim() ? 'No measures match that search.' : 'No saved measures found.'}
               </p>
             )}
           </>

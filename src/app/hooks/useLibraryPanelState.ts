@@ -13,7 +13,7 @@ const createInitialLibrarySnapshot = (): LibrarySnapshot => ({
     sequences: '',
     tunings: '',
   },
-  sequenceBanks: [],
+  measures: [],
   tunings: [],
   scales: [],
   chords: [],
@@ -40,11 +40,11 @@ export function useLibraryPanelState() {
 
   const [tuningSearch, setTuningSearch] = useState('')
   const tuningSearchInputRef = useRef<HTMLInputElement>(null)
-  const [sequenceSearch, setSequenceSearch] = useState('')
-  const sequenceSearchInputRef = useRef<HTMLInputElement>(null)
+  const [measureSearch, setMeasureSearch] = useState('')
+  const measureSearchInputRef = useRef<HTMLInputElement>(null)
 
   const [tuningSortMode, setTuningSortMode] = useState<TuningSortMode>('name')
-  const [activeLibraryTab, setActiveLibraryTab] = useState<'tunings' | 'sequences' | 'scales' | 'chords'>(
+  const [activeLibraryTab, setActiveLibraryTab] = useState<'tunings' | 'measures' | 'scales' | 'chords'>(
     'tunings'
   )
 
@@ -113,16 +113,14 @@ export function useLibraryPanelState() {
     return getHierarchyRows(sortedTunings, { sortByName: false })
   }, [librarySnapshot.tunings, tuningSearch, tuningSortMode])
 
-  const sequenceHierarchyRows = useMemo<LibraryHierarchyRow[]>(() => {
-    const query = sequenceSearch.trim().toLowerCase()
-    const sequenceBanks =
+  const measureHierarchyRows = useMemo<LibraryHierarchyRow[]>(() => {
+    const query = measureSearch.trim().toLowerCase()
+    const measures =
       query.length === 0
-        ? librarySnapshot.sequenceBanks
-        : librarySnapshot.sequenceBanks.filter((sequenceBank) =>
-            sequenceBank.stem.toLowerCase().includes(query)
-          )
-    return getHierarchyRows(sequenceBanks)
-  }, [librarySnapshot.sequenceBanks, sequenceSearch])
+        ? librarySnapshot.measures
+        : librarySnapshot.measures.filter((measure) => measure.stem.toLowerCase().includes(query))
+    return getHierarchyRows(measures)
+  }, [librarySnapshot.measures, measureSearch])
 
   return {
     activeReferenceTab,
@@ -133,9 +131,9 @@ export function useLibraryPanelState() {
     tuningSearch,
     setTuningSearch,
     tuningSearchInputRef,
-    sequenceSearch,
-    setSequenceSearch,
-    sequenceSearchInputRef,
+    measureSearch,
+    setMeasureSearch,
+    measureSearchInputRef,
     tuningSortMode,
     setTuningSortMode,
     activeLibraryTab,
@@ -149,6 +147,6 @@ export function useLibraryPanelState() {
     sequenceViewReferenceBindings,
     filteredReferenceCommands,
     tuningHierarchyRows,
-    sequenceHierarchyRows,
+    measureHierarchyRows,
   }
 }

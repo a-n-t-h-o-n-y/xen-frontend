@@ -15,8 +15,6 @@ type UseHeaderEditingArgs = {
   timeSignature: string
   keyDisplay: number
   baseFrequency: number
-  selectedMeasureName: string
-  selectedMeasureIndex: number
   scaleName: string
   scaleMode: number
   scaleSize: number
@@ -28,7 +26,6 @@ type UseHeaderEditingArgs = {
   timeSignatureInputRef: MutableRefObject<HTMLInputElement | null>
   keyInputRef: MutableRefObject<HTMLInputElement | null>
   baseFrequencyInputRef: MutableRefObject<HTMLInputElement | null>
-  sequenceNameInputRef: MutableRefObject<HTMLInputElement | null>
 }
 
 export function useHeaderEditing({
@@ -36,8 +33,6 @@ export function useHeaderEditing({
   timeSignature,
   keyDisplay,
   baseFrequency,
-  selectedMeasureName,
-  selectedMeasureIndex,
   scaleName,
   scaleMode,
   scaleSize,
@@ -49,7 +44,6 @@ export function useHeaderEditing({
   timeSignatureInputRef,
   keyInputRef,
   baseFrequencyInputRef,
-  sequenceNameInputRef,
 }: UseHeaderEditingArgs) {
   const [isTimeSignatureEditing, setIsTimeSignatureEditing] = useState(false)
   const [timeSignatureDraft, setTimeSignatureDraft] = useState('4/4')
@@ -57,8 +51,6 @@ export function useHeaderEditing({
   const [keyDraft, setKeyDraft] = useState('0')
   const [isBaseFrequencyEditing, setIsBaseFrequencyEditing] = useState(false)
   const [baseFrequencyDraft, setBaseFrequencyDraft] = useState('440')
-  const [isSequenceNameEditing, setIsSequenceNameEditing] = useState(false)
-  const [sequenceNameDraft, setSequenceNameDraft] = useState('')
   const [isScaleUpdating, setIsScaleUpdating] = useState(false)
 
   useEffect(() => {
@@ -118,25 +110,6 @@ export function useHeaderEditing({
     input.select()
   }, [baseFrequencyInputRef, isBaseFrequencyEditing])
 
-  useEffect(() => {
-    if (isSequenceNameEditing) {
-      return
-    }
-    setSequenceNameDraft(selectedMeasureName)
-  }, [isSequenceNameEditing, selectedMeasureName])
-
-  useEffect(() => {
-    if (!isSequenceNameEditing) {
-      return
-    }
-    const input = sequenceNameInputRef.current
-    if (!input) {
-      return
-    }
-    input.focus()
-    input.select()
-  }, [isSequenceNameEditing, sequenceNameInputRef])
-
   const commitTimeSignature = useCallback(
     async (value: string): Promise<boolean> => {
       if (bridgeUnavailableMessage !== null) {
@@ -154,7 +127,7 @@ export function useHeaderEditing({
 
       const normalized = formatTimeSignature(parsed)
       try {
-        await executeBackendCommand(`set sequence timeSignature ${normalized}`)
+        await executeBackendCommand(`set measure timeSignature ${normalized}`)
         setIsTimeSignatureEditing(false)
         return true
       } catch (error) {
@@ -228,43 +201,6 @@ export function useHeaderEditing({
     [baseFrequency, bridgeUnavailableMessage, executeBackendCommand, setStatusLevel, setStatusMessage]
   )
 
-  const commitSequenceName = useCallback(
-    async (value: string): Promise<boolean> => {
-      if (bridgeUnavailableMessage !== null) {
-        return false
-      }
-
-      const normalized = value.trim()
-      if (!normalized) {
-        setStatusMessage('Sequence name cannot be empty.')
-        setStatusLevel('warning')
-        setSequenceNameDraft(selectedMeasureName)
-        setIsSequenceNameEditing(false)
-        return false
-      }
-
-      try {
-        await executeBackendCommand(`set sequence name ${quoteCommandArg(normalized)} ${selectedMeasureIndex}`)
-        setIsSequenceNameEditing(false)
-        return true
-      } catch (error) {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-        setSequenceNameDraft(selectedMeasureName)
-        setIsSequenceNameEditing(false)
-        return false
-      }
-    },
-    [
-      bridgeUnavailableMessage,
-      executeBackendCommand,
-      selectedMeasureIndex,
-      selectedMeasureName,
-      setStatusLevel,
-      setStatusMessage,
-    ]
-  )
-
   const beginTimeSignatureEdit = useCallback((): void => {
     setTimeSignatureDraft(timeSignature)
     setIsTimeSignatureEditing(true)
@@ -295,45 +231,26 @@ export function useHeaderEditing({
     setIsBaseFrequencyEditing(false)
   }, [baseFrequency])
 
-  const beginSequenceNameEdit = useCallback((): void => {
-    setSequenceNameDraft(selectedMeasureName)
-    setIsSequenceNameEditing(true)
-  }, [selectedMeasureName])
-
-  const cancelSequenceNameEdit = useCallback((): void => {
-    setSequenceNameDraft(selectedMeasureName)
-    setIsSequenceNameEditing(false)
-  }, [selectedMeasureName])
-
   const applyTimeSignatureScale = useCallback(
     (mode: 'half' | 'double'): void => {
       if (bridgeUnavailableMessage !== null || isTimeSignatureEditing) {
         return
       }
 
-      const parsed = parseTimeSignatureInput(timeSignature)
-      if (!parsed) {
-        return
-      }
-
-      const next =
-        mode === 'double'
-          ? formatTimeSignature({
-              numerator: parsed.numerator * 2,
-              denominator: parsed.denominator,
-            })
-          : parsed.numerator > 1
-            ? formatTimeSignature({
-                numerator: Math.max(1, Math.round(parsed.numerator / 2)),
-                denominator: parsed.denominator,
-              })
-            : formatTimeSignature({
-                numerator: 1,
-                denominator: parsed.denominator * 2,
-              })
-      void commitTimeSignature(next)
+      void executeBackendCommand(`${mode === 'double' ? 'double' : 'halve'} measure timeSignature`).catch(
+        (error) => {
+          setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+          setStatusLevel('error')
+        }
+      )
     },
-    [bridgeUnavailableMessage, commitTimeSignature, isTimeSignatureEditing, timeSignature]
+    [
+      bridgeUnavailableMessage,
+      executeBackendCommand,
+      isTimeSignatureEditing,
+      setStatusLevel,
+      setStatusMessage,
+    ]
   )
 
   const scaleOptions = useMemo(() => {
@@ -435,22 +352,16 @@ export function useHeaderEditing({
     isBaseFrequencyEditing,
     baseFrequencyDraft,
     setBaseFrequencyDraft,
-    isSequenceNameEditing,
-    sequenceNameDraft,
-    setSequenceNameDraft,
     isScaleUpdating,
     commitTimeSignature,
     commitKey,
     commitBaseFrequency,
-    commitSequenceName,
     beginTimeSignatureEdit,
     cancelTimeSignatureEdit,
     beginKeyEdit,
     cancelKeyEdit,
     beginBaseFrequencyEdit,
     cancelBaseFrequencyEdit,
-    beginSequenceNameEdit,
-    cancelSequenceNameEdit,
     applyTimeSignatureScale,
     scaleOptions,
     modeOptions,

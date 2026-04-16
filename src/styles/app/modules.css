@@ -185,7 +185,7 @@
 
 .bottomModuleRow {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   gap: var(--space-3);
 }
@@ -948,6 +948,19 @@
   height: auto;
   max-height: none;
   overflow: hidden;
+  padding: 0;
+}
+
+.bottomModule-debug > .snapshotDebugSummaryToggle {
+  padding: var(--space-3);
+}
+
+.bottomModule-debug[open] {
+  padding: var(--space-3);
+}
+
+.bottomModule-debug[open] > .snapshotDebugSummaryToggle {
+  padding: 0;
 }
 
 .snapshotDebugBadges {

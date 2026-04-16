@@ -2,10 +2,8 @@ import type { ComponentProps } from 'react'
 import { LibraryPanel } from './bottom/LibraryPanel'
 import { ModulatorsPanel } from './bottom/ModulatorsPanel'
 import { ReferencePanel } from './bottom/ReferencePanel'
-import { SequenceBankPanel } from './bottom/SequenceBankPanel'
 
-type BottomModulesSectionProps = ComponentProps<typeof SequenceBankPanel> &
-  ComponentProps<typeof ModulatorsPanel> &
+type BottomModulesSectionProps = ComponentProps<typeof ModulatorsPanel> &
   ComponentProps<typeof ReferencePanel> &
   ComponentProps<typeof LibraryPanel>
 
@@ -13,13 +11,6 @@ export function BottomModulesSection(props: BottomModulesSectionProps) {
   return (
     <section className="bottomModules" aria-label="Temporary module area">
       <div className="bottomModuleRow">
-        <SequenceBankPanel
-          sequenceBankCells={props.sequenceBankCells}
-          selectedMeasureIndex={props.selectedMeasureIndex}
-          activeSequenceFlags={props.activeSequenceFlags}
-          sequenceCount={props.sequenceCount}
-          selectSequenceFromBank={props.selectSequenceFromBank}
-        />
         <ModulatorsPanel
           activeModulatorTab={props.activeModulatorTab}
           setOpenWaveMenu={props.setOpenWaveMenu}
@@ -80,10 +71,10 @@ export function BottomModulesSection(props: BottomModulesSectionProps) {
           setTuningSortMode={props.setTuningSortMode}
           tuningHierarchyRows={props.tuningHierarchyRows}
           formatOctaveForDisplay={props.formatOctaveForDisplay}
-          sequenceSearchInputRef={props.sequenceSearchInputRef}
-          sequenceSearch={props.sequenceSearch}
-          setSequenceSearch={props.setSequenceSearch}
-          sequenceHierarchyRows={props.sequenceHierarchyRows}
+          measureSearchInputRef={props.measureSearchInputRef}
+          measureSearch={props.measureSearch}
+          setMeasureSearch={props.setMeasureSearch}
+          measureHierarchyRows={props.measureHierarchyRows}
         />
       </div>
     </section>

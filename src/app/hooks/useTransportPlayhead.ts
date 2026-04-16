@@ -3,21 +3,17 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { TransportState } from '../shared'
 
 type UseTransportPlayheadArgs = {
-  selectedMeasureIndex: number
-  selectedMeasureNumerator: number
-  selectedMeasureDenominator: number
+  measureNumerator: number
+  measureDenominator: number
   transportRef: MutableRefObject<TransportState>
-  selectedMeasureIndexRef: MutableRefObject<number>
   selectedTimeSignatureRef: MutableRefObject<{ numerator: number; denominator: number }>
   setPlayheadPhase: Dispatch<SetStateAction<number | null>>
 }
 
 export function useTransportPlayhead({
-  selectedMeasureIndex,
-  selectedMeasureNumerator,
-  selectedMeasureDenominator,
+  measureNumerator,
+  measureDenominator,
   transportRef,
-  selectedMeasureIndexRef,
   selectedTimeSignatureRef,
   setPlayheadPhase,
 }: UseTransportPlayheadArgs) {
@@ -25,23 +21,20 @@ export function useTransportPlayhead({
   const lastAnimationFrameMsRef = useRef<number | null>(null)
 
   useEffect(() => {
-    selectedMeasureIndexRef.current = selectedMeasureIndex
     selectedTimeSignatureRef.current = {
-      numerator: selectedMeasureNumerator,
-      denominator: selectedMeasureDenominator,
+      numerator: measureNumerator,
+      denominator: measureDenominator,
     }
 
-    if (transportRef.current.active[selectedMeasureIndex]) {
-      setPlayheadPhase(transportRef.current.phase[selectedMeasureIndex] ?? 0)
+    if (transportRef.current.active) {
+      setPlayheadPhase(transportRef.current.phase)
       return
     }
 
     setPlayheadPhase(null)
   }, [
-    selectedMeasureDenominator,
-    selectedMeasureIndex,
-    selectedMeasureIndexRef,
-    selectedMeasureNumerator,
+    measureDenominator,
+    measureNumerator,
     selectedTimeSignatureRef,
     setPlayheadPhase,
     transportRef,
@@ -56,11 +49,10 @@ export function useTransportPlayhead({
       const dtSec = Math.max(0, (frameTimeMs - (lastAnimationFrameMsRef.current ?? frameTimeMs)) / 1000)
       lastAnimationFrameMsRef.current = frameTimeMs
 
-      const selectedIndex = selectedMeasureIndexRef.current
       const { numerator, denominator } = selectedTimeSignatureRef.current
       const transport = transportRef.current
 
-      if (!transport.active[selectedIndex] || transport.bpm <= 0 || numerator <= 0 || denominator <= 0) {
+      if (!transport.active || transport.bpm <= 0 || numerator <= 0 || denominator <= 0) {
         setPlayheadPhase((previous) => (previous === null ? previous : null))
         animationFrameRef.current = requestAnimationFrame(tick)
         return
@@ -74,8 +66,8 @@ export function useTransportPlayhead({
         return
       }
 
-      const nextPhase = (transport.phase[selectedIndex] + dtSec / loopSec) % 1
-      transport.phase[selectedIndex] = nextPhase
+      const nextPhase = (transport.phase + dtSec / loopSec) % 1
+      transport.phase = nextPhase
       setPlayheadPhase(nextPhase)
       animationFrameRef.current = requestAnimationFrame(tick)
     }
@@ -88,5 +80,5 @@ export function useTransportPlayhead({
       }
       lastAnimationFrameMsRef.current = null
     }
-  }, [selectedMeasureIndexRef, selectedTimeSignatureRef, setPlayheadPhase, transportRef])
+  }, [selectedTimeSignatureRef, setPlayheadPhase, transportRef])
 }

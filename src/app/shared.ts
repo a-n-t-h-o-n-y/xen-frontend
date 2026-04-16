@@ -4,26 +4,7 @@ export const FRONTEND_APP = 'xen-frontend-skeleton'
 export const FRONTEND_VERSION = '0.2.0'
 export const MAX_COMMAND_HISTORY = 100
 export const DEFAULT_TUNING_LENGTH = 12
-export const TRANSPORT_SEQUENCE_COUNT = 16
 export const DEFAULT_TRANSPORT_BPM = 120
-export const BG_SEQUENCE_COLORS = [
-  '245 158 11',
-  '14 165 233',
-  '244 63 94',
-  '34 197 94',
-  '168 85 247',
-  '249 115 22',
-  '236 72 153',
-  '45 212 191',
-  '251 191 36',
-  '96 165 250',
-  '251 113 133',
-  '74 222 128',
-  '196 181 253',
-  '251 146 60',
-  '244 114 182',
-  '94 234 212',
-]
 
 export const isApplePlatform = (): boolean => {
   if (typeof navigator === 'undefined') {
@@ -113,7 +94,7 @@ export type LibrarySnapshot = {
     sequences: string
     tunings: string
   }
-  sequenceBanks: LibraryCommandEntry[]
+  measures: LibraryCommandEntry[]
   tunings: LibraryCommandEntry[]
   scales: LibraryScaleEntry[]
   chords: LibraryChordEntry[]
@@ -188,11 +169,11 @@ export type Scale = {
 }
 
 export type UiStateSnapshot = {
-  schema_version: 2
+  schema_version: 3
   snapshot_version: number
+  commit_id: number
   engine: {
-    sequence_bank: Measure[]
-    sequence_names: string[]
+    measure: Measure
     tuning: {
       intervals: number[]
       octave: number
@@ -205,7 +186,6 @@ export type UiStateSnapshot = {
   }
   editor: {
     selected: {
-      measure: number
       cell: number[]
       element_index: number | null
     }
@@ -214,14 +194,9 @@ export type UiStateSnapshot = {
 }
 
 export type TransportState = {
-  active: boolean[]
-  phase: number[]
+  active: boolean
+  phase: number
   bpm: number
-}
-
-export type SyncedTransportPhases = {
-  wrapped: number[]
-  unwrapped: number[]
 }
 
 export type ModTarget = 'pitch' | 'velocity' | 'delay' | 'gate' | 'weights'
@@ -419,8 +394,8 @@ export const getMeasureLoopQuarterNotes = (measure: Measure | null): number => {
   return numerator * (4 / denominator)
 }
 
-export const getSequenceOverlayColor = (sequenceIndex: number, alpha: number): string =>
-  `rgb(${BG_SEQUENCE_COLORS[sequenceIndex % BG_SEQUENCE_COLORS.length]} / ${clampNumber(alpha, 0, 1)})`
+export const getSequenceOverlayColor = (_sequenceIndex: number, alpha: number): string =>
+  `rgb(245 196 90 / ${clampNumber(alpha, 0, 1)})`
 
 export const frequencyToRatio = (frequency: number): number => {
   const clamped = clampNumber(frequency, LFO_FREQUENCY_MIN, LFO_FREQUENCY_MAX)
@@ -515,8 +490,8 @@ export const createRequestId = (): string => {
 }
 
 export const createTransportState = (): TransportState => ({
-  active: Array(TRANSPORT_SEQUENCE_COUNT).fill(false),
-  phase: Array(TRANSPORT_SEQUENCE_COUNT).fill(0),
+  active: false,
+  phase: 0,
   bpm: DEFAULT_TRANSPORT_BPM,
 })
 
@@ -817,7 +792,7 @@ export const getLibrarySnapshot = (payload: EnvelopePayload): LibrarySnapshot =>
       sequences: typeof paths?.sequences === 'string' ? paths.sequences : '',
       tunings: typeof paths?.tunings === 'string' ? paths.tunings : '',
     },
-    sequenceBanks: parseLibraryCommandEntries(payload.sequence_banks ?? payload.sequenceBanks),
+    measures: parseLibraryCommandEntries(payload.measures),
     tunings: parseLibraryCommandEntries(payload.tunings),
     scales: parseLibraryScaleEntries(payload.scales),
     chords: parseLibraryChordEntries(payload.chords),
@@ -1240,16 +1215,6 @@ export const asRecord = (value: unknown): Record<string, unknown> | null => {
   return value as Record<string, unknown>
 }
 
-export const toSequenceIndex = (value: unknown): number | null => {
-  if (typeof value !== 'number' || !Number.isInteger(value)) {
-    return null
-  }
-  if (value < 0 || value >= TRANSPORT_SEQUENCE_COUNT) {
-    return null
-  }
-  return value
-}
-
 export const toNumberArray = (value: unknown): number[] => {
   if (!Array.isArray(value)) {
     return []
@@ -1396,7 +1361,8 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
   const snapshot = asRecord(value)
   if (
     !snapshot ||
-    snapshot.schema_version !== 2 ||
+    snapshot.schema_version !== 3 ||
+    typeof snapshot.commit_id !== 'number' ||
     typeof snapshot.snapshot_version !== 'number'
   ) {
     return null
@@ -1413,13 +1379,13 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
   if (
     !tuning ||
     !selected ||
+    !engine.measure ||
     typeof tuning.octave !== 'number' ||
     typeof engine.tuning_name !== 'string' ||
     typeof engine.key !== 'number' ||
     typeof engine.base_frequency !== 'number' ||
     (engine.scale_translate_direction !== 'up' && engine.scale_translate_direction !== 'down') ||
     typeof editor.input_mode !== 'string' ||
-    typeof selected.measure !== 'number' ||
     (selected.element_index !== null && typeof selected.element_index !== 'number')
   ) {
     return null
@@ -1436,25 +1402,21 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
     return null
   }
 
-  const sequenceBank = Array.isArray(engine.sequence_bank)
-    ? engine.sequence_bank.map(parseMeasure).filter((item): item is Measure => item !== null)
-    : []
-
-  const sequenceNames = Array.isArray(engine.sequence_names)
-    ? engine.sequence_names.filter((item): item is string => typeof item === 'string')
-    : []
-
+  const measure = parseMeasure(engine.measure)
+  if (!measure) {
+    return null
+  }
   const scale = parseScale(engine.scale)
   const selectedCellPath = Array.isArray(selected.cell)
     ? selected.cell.filter((item): item is number => typeof item === 'number')
     : []
 
   return {
-    schema_version: 2,
+    schema_version: 3,
     snapshot_version: snapshot.snapshot_version,
+    commit_id: snapshot.commit_id,
     engine: {
-      sequence_bank: sequenceBank,
-      sequence_names: sequenceNames,
+      measure,
       tuning: {
         intervals: toNumberArray(tuning.intervals),
         octave: tuning.octave,
@@ -1467,7 +1429,6 @@ export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => 
     },
     editor: {
       selected: {
-        measure: selected.measure,
         cell: selectedCellPath,
         element_index: selected.element_index,
       },
