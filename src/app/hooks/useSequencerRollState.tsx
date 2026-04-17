@@ -1,47 +1,41 @@
-import { type CSSProperties, useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   REFERENCE_RATIOS,
   clampNumber,
-  getChildCells,
   getCellWeight,
   getLargestElement,
-  getPatternIndices,
   normalizePitch,
-  parsePatternPrefix,
-  pathToKey,
+  resolveSelectionPath,
 } from '../shared'
-import type { BgOverlayState, Cell, LeafCell, SelectionStep } from '../shared'
+import type { BgOverlayState, Cell, SelectionPath } from '../shared'
 
-type IndexedNoteElement = {
-  element: Extract<Cell['elements'][number], { type: 'Note' }>
-  elementIndex: number
+type RollNoteSpan = {
+  x: number
+  width: number
+  pitch: number
+  velocity: number
+  isGlowing: boolean
+  hasDelay: boolean
+  shortGate: boolean
+  octaveLabel: string | null
+}
+
+type RollSelectionSpan = {
+  x: number
+  width: number
+  tone: 'selected' | 'sequenceEven' | 'sequenceOdd'
+  hasRightDivider: boolean
 }
 
 type UseSequencerRollStateArgs = {
-  commandText: string
-  isCommandMode: boolean
-  selectedCellPath: number[]
-  selectedElementIndex: number | null
-  selectedElementKind: SelectionStep['kind'] | null
-  selectedLeafFlags: boolean[]
-  leafCells: LeafCell[]
-  leafPatternScopeIndices: number[]
-  patternScopeCellCount: number
-  staffLineBandByPitch: number[]
+  rootCell: Cell
+  selectionPath: SelectionPath
   tuningLength: number
 }
 
 export function useSequencerRollState({
-  commandText,
-  isCommandMode,
-  selectedCellPath,
-  selectedElementIndex,
-  selectedElementKind,
-  selectedLeafFlags,
-  leafCells,
-  leafPatternScopeIndices,
-  patternScopeCellCount,
-  staffLineBandByPitch,
+  rootCell,
+  selectionPath,
   tuningLength,
 }: UseSequencerRollStateArgs) {
   const backgroundOverlayStates = useMemo((): BgOverlayState[] => [], [])
@@ -68,217 +62,187 @@ export function useSequencerRollState({
     [rulerOffset]
   )
 
-  const selectedCellPathKey = useMemo(() => pathToKey(selectedCellPath), [selectedCellPath])
+  const flattenRollNotes = useCallback(
+    (cell: Cell, selection: ReturnType<typeof resolveSelectionPath>): RollNoteSpan[] => {
+      const noteSpans: RollNoteSpan[] = []
+      const selectedElement = selection.selectedElement
+      const selectedElementKind = selection.selectedElementKind
 
-  const displayedLeafFlags = useMemo(() => {
-    if (!isCommandMode) {
-      return selectedLeafFlags
-    }
+      const walkCell = (
+        currentCell: Cell,
+        segmentStart: number,
+        segmentWidth: number,
+        glowSubtree: boolean
+      ): void => {
+        if (segmentWidth <= 0) {
+          return
+        }
 
-    const pattern = parsePatternPrefix(commandText)
-    if (!pattern) {
-      return selectedLeafFlags
-    }
-
-    const matchingIndices = getPatternIndices(patternScopeCellCount, pattern)
-    return leafCells.map((_, index) => matchingIndices.has(leafPatternScopeIndices[index] ?? -1))
-  }, [
-    commandText,
-    isCommandMode,
-    leafCells,
-    leafPatternScopeIndices,
-    patternScopeCellCount,
-    selectedLeafFlags,
-  ])
-
-  const selectedLeafPathKeySet = useMemo(() => {
-    const selectedKeys = new Set<string>()
-    displayedLeafFlags.forEach((isSelected, index) => {
-      if (!isSelected) {
-        return
-      }
-
-      const leafPath = leafCells[index]?.path
-      if (!leafPath) {
-        return
-      }
-
-      selectedKeys.add(pathToKey(leafPath))
-    })
-    return selectedKeys
-  }, [displayedLeafFlags, leafCells])
-
-  const selectedLeafStartPathKeySet = useMemo(() => {
-    const selectedStartKeys = new Set<string>()
-    displayedLeafFlags.forEach((isSelected, index) => {
-      if (!isSelected || (displayedLeafFlags[index - 1] ?? false)) {
-        return
-      }
-
-      const leafPath = leafCells[index]?.path
-      if (!leafPath) {
-        return
-      }
-
-      selectedStartKeys.add(pathToKey(leafPath))
-    })
-    return selectedStartKeys
-  }, [displayedLeafFlags, leafCells])
-
-  const selectedLeafEndPathKeySet = useMemo(() => {
-    const selectedEndKeys = new Set<string>()
-    displayedLeafFlags.forEach((isSelected, index) => {
-      if (!isSelected || (displayedLeafFlags[index + 1] ?? false)) {
-        return
-      }
-
-      const leafPath = leafCells[index]?.path
-      if (!leafPath) {
-        return
-      }
-
-      selectedEndKeys.add(pathToKey(leafPath))
-    })
-    return selectedEndKeys
-  }, [displayedLeafFlags, leafCells])
-
-  const renderRollCell = useCallback(
-    function renderCell(
-      cell: Cell,
-      cellPath: number[],
-      sequenceDepth: number,
-      previousSibling: Cell | null = null
-    ) {
-      const normalizedWeight = getCellWeight(cell.weight)
-      const cellKey = pathToKey(cellPath)
-      const childCells = getChildCells(cell)
-      const hasChildCells = childCells.length > 0
-      const isSelectedCell = selectedCellPathKey === cellKey
-      const noteElements = cell.elements
-        .map((element, elementIndex) => ({ element, elementIndex }))
-        .filter((entry): entry is IndexedNoteElement => entry.element.type === 'Note')
-      const previousSiblingHasChildren = previousSibling ? getChildCells(previousSibling).length > 0 : false
-      const hasSequenceBoundary = previousSibling !== null && (hasChildCells || previousSiblingHasChildren)
-
-      const renderedNotes =
-        tuningLength > 0
-          ? noteElements.map((noteElement, noteIndex) => {
-              const normalizedVelocity = clampNumber(noteElement.element.velocity, 0, 1)
-              const normalizedDelay = clampNumber(noteElement.element.delay, 0, 1)
-              const normalizedGate = clampNumber(noteElement.element.gate, 0, 1)
-              const normalizedPitch = normalizePitch(noteElement.element.pitch, tuningLength)
-              const rowFromTop = tuningLength - 1 - normalizedPitch
-              const rowHeightPercent = 100 / Math.max(tuningLength, 1)
-              const noteHeightPercent = rowHeightPercent * 0.76
-              const noteTopPercent =
-                rowFromTop * rowHeightPercent + (rowHeightPercent - noteHeightPercent) / 2
-              const noteOctave = Math.floor(noteElement.element.pitch / tuningLength)
-              const isSelectedNote =
-                isSelectedCell &&
-                selectedElementKind === 'element' &&
-                selectedElementIndex === noteElement.elementIndex
-
-              return (
-                <div
-                  key={`roll-segment-${cellKey}-note-${noteIndex}`}
-                  className={`rollCellNote${normalizedDelay > 0 ? ' rollNote-hasDelay' : ''}${normalizedGate < 1 ? ' rollNote-shortGate' : ''}${isSelectedNote ? ' rollCellNote-selected' : ''}`}
-                  style={
-                    {
-                      left: `${normalizedDelay * 100}%`,
-                      width: `max(${(1 - normalizedDelay) * normalizedGate * 100}%, 4px)`,
-                      top: `${noteTopPercent}%`,
-                      height: `${noteHeightPercent}%`,
-                      background: `rgb(241 245 249 / ${0.18 + normalizedVelocity * 0.72})`,
-                    } as CSSProperties
-                  }
-                  aria-hidden="true"
-                >
-                  {noteOctave !== 0 ? (
-                    <span className="rollNoteOctave mono">
-                      {noteOctave > 0 ? `+${noteOctave}` : noteOctave}
-                    </span>
-                  ) : null}
-                </div>
-              )
-            })
-          : []
-
-      const isSelected = selectedLeafPathKeySet.has(cellKey)
-      const isSelectedStart = selectedLeafStartPathKeySet.has(cellKey)
-      const isSelectedEnd = selectedLeafEndPathKeySet.has(cellKey)
-
-      return (
-        <div
-          key={`roll-segment-${cellKey}`}
-          className={`rollSegment${hasSequenceBoundary ? ' rollSegment-sequenceBoundary' : ''}${isSelectedCell ? ' rollSegment-selected' : ''}`}
-          style={
-            {
-              flexGrow: normalizedWeight,
-              flexBasis: 0,
-              '--roll-sequence-boundary-depth': sequenceDepth,
-            } as CSSProperties
+        for (const element of currentCell.elements) {
+          if (element.type !== 'Note') {
+            continue
           }
-        >
-          {renderedNotes.length > 0 ? (
-            <div className="rollCellNoteLayer" aria-hidden="true">
-              {renderedNotes}
-            </div>
-          ) : null}
-          {hasChildCells ? (
-            <div className="rollBranch">
-              {childCells.map((childCell, index) =>
-                renderCell(
-                  childCell,
-                  [...cellPath, index],
-                  sequenceDepth + 1,
-                  index > 0 ? childCells[index - 1] ?? null : null
-                )
-              )}
-            </div>
-          ) : (
-            <div
-              className={`rollIsland${isSelected ? ' rollIsland-selected' : ''}${isSelectedStart ? ' rollIsland-selectedStart' : ''}${isSelectedEnd ? ' rollIsland-selectedEnd' : ''}`}
-            >
-              <div className="rollIslandGrid">
-                {pitchRows.map((pitch) => (
-                  <div
-                    key={`roll-island-${cellKey}-row-${pitch}`}
-                    className={`rollRow ${(staffLineBandByPitch[pitch] ?? 0) === 0 ? 'rollRow-bandEven' : 'rollRow-bandOdd'}`}
-                  >
-                    <div className="rollRowLine" aria-hidden="true" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )
+
+          const normalizedVelocity = clampNumber(element.velocity, 0, 1)
+          const normalizedDelay = clampNumber(element.delay, 0, 1)
+          const normalizedGate = clampNumber(element.gate, 0, 1)
+          const noteStart = segmentStart + normalizedDelay * segmentWidth
+          const noteWidth = Math.max(0, (1 - normalizedDelay) * normalizedGate * segmentWidth)
+          const clampedStart = clampNumber(noteStart, 0, 1)
+          const clampedEnd = clampNumber(noteStart + noteWidth, 0, 1)
+          const clampedWidth = clampedEnd - clampedStart
+          if (clampedWidth <= 0) {
+            continue
+          }
+
+          const noteOctave = tuningLength > 0 ? Math.floor(element.pitch / tuningLength) : 0
+
+          noteSpans.push({
+            x: clampedStart,
+            width: clampedWidth,
+            pitch: normalizePitch(element.pitch, tuningLength),
+            velocity: normalizedVelocity,
+            isGlowing:
+              glowSubtree ||
+              (selectedElementKind === 'element' &&
+                selectedElement?.type === 'Note' &&
+                element === selectedElement),
+            hasDelay: normalizedDelay > 0,
+            shortGate: normalizedGate < 1,
+            octaveLabel: noteOctave === 0 ? null : noteOctave > 0 ? `+${noteOctave}` : `${noteOctave}`,
+          })
+        }
+
+        for (const element of currentCell.elements) {
+          if (element.type !== 'Sequence' || element.cells.length === 0) {
+            continue
+          }
+
+          const totalWeight = element.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
+          if (totalWeight <= 0) {
+            continue
+          }
+
+          let cursor = segmentStart
+          for (const child of element.cells) {
+            const childWidth = (segmentWidth * getCellWeight(child.weight)) / totalWeight
+            walkCell(
+              child,
+              cursor,
+              childWidth,
+              glowSubtree ||
+                (selectedElementKind === 'element' &&
+                  selectedElement?.type === 'Sequence' &&
+                  element === selectedElement)
+            )
+            cursor += childWidth
+          }
+        }
+      }
+
+      walkCell(cell, 0, 1, false)
+      return noteSpans
     },
-    [
-      pitchRows,
-      selectedCellPathKey,
-      selectedElementIndex,
-      selectedElementKind,
-      selectedLeafEndPathKeySet,
-      selectedLeafPathKeySet,
-      selectedLeafStartPathKeySet,
-      staffLineBandByPitch,
-      tuningLength,
-    ]
+    [tuningLength]
   )
 
-  const renderRootRollCell = useCallback(
-    (cell: Cell, path: number[], sequenceDepth: number) => {
-      const rootPath = path.length === 0 ? [] : path
-      return renderRollCell(cell, rootPath, sequenceDepth)
-    },
-    [renderRollCell]
+  const resolvedSelection = useMemo(
+    () => resolveSelectionPath(rootCell, selectionPath),
+    [rootCell, selectionPath]
   )
+
+  const rollNotes = useMemo(
+    () => flattenRollNotes(rootCell, resolvedSelection),
+    [flattenRollNotes, resolvedSelection, rootCell]
+  )
+
+  const selectionSpans = useMemo((): RollSelectionSpan[] => {
+    let currentCell = rootCell
+    let currentStart = 0
+    let currentWidth = 1
+    let selectedElement: Cell['elements'][number] | null = null
+    let selectedElementKind: 'element' | 'cell' | null = null
+
+    for (const step of selectionPath) {
+      if (step.kind === 'element') {
+        if (step.index >= currentCell.elements.length) {
+          break
+        }
+
+        selectedElement = currentCell.elements[step.index] ?? null
+        selectedElementKind = 'element'
+        continue
+      }
+
+      if (selectedElement?.type !== 'Sequence' || step.index >= selectedElement.cells.length) {
+        break
+      }
+
+      const totalWeight = selectedElement.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
+      if (totalWeight <= 0) {
+        break
+      }
+
+      let cursor = currentStart
+      let nextCell: Cell | null = null
+      let nextStart = currentStart
+      let nextWidth = currentWidth
+
+      selectedElement.cells.forEach((child, index) => {
+        const childWidth = (currentWidth * getCellWeight(child.weight)) / totalWeight
+        if (index === step.index) {
+          nextCell = child
+          nextStart = cursor
+          nextWidth = childWidth
+        }
+        cursor += childWidth
+      })
+
+      if (!nextCell) {
+        break
+      }
+
+      currentCell = nextCell
+      currentStart = nextStart
+      currentWidth = nextWidth
+      selectedElement = null
+      selectedElementKind = 'cell'
+    }
+
+    const spans: RollSelectionSpan[] = [
+      {
+        x: currentStart,
+        width: currentWidth,
+        tone: 'selected',
+        hasRightDivider: false,
+      },
+    ]
+
+    if (selectedElementKind === 'element' && selectedElement?.type === 'Sequence') {
+      const totalWeight = selectedElement.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
+      if (totalWeight > 0) {
+        let cursor = currentStart
+        selectedElement.cells.forEach((child, index) => {
+          const childWidth = (currentWidth * getCellWeight(child.weight)) / totalWeight
+          spans.push({
+            x: cursor,
+            width: childWidth,
+            tone: index % 2 === 0 ? 'sequenceEven' : 'sequenceOdd',
+            hasRightDivider: index < selectedElement.cells.length - 1,
+          })
+          cursor += childWidth
+        })
+      }
+    }
+
+    return spans.filter((span) => span.width > 0)
+  }, [rootCell, selectionPath])
 
   return {
     backgroundOverlayStates,
     pitchRows,
     ratioToBottom,
-    renderRollCell: renderRootRollCell,
+    rollNotes,
+    selectionSpans,
   }
 }

@@ -411,8 +411,6 @@ function App() {
 
   const {
     tuningLength,
-    patternScopeCellCount,
-    leafPatternScopeIndices,
     rootCell,
     measureNumerator,
     measureDenominator,
@@ -425,14 +423,9 @@ function App() {
     keyDisplay,
     baseFrequency,
     staffLineBandByPitch,
-    leafCells,
-    selectedLeafFlags,
     selectedCellMeta,
     rulerRatios,
     highlightedPitches,
-    selectedCellPath,
-    selectedElementIndex,
-    selectedElementKind,
   } = useMemo(() => {
     if (!snapshot) {
       const defaultStaffLineBand = Array.from(
@@ -620,19 +613,12 @@ function App() {
     backgroundOverlayStates,
     pitchRows,
     ratioToBottom,
-    renderRollCell,
+    rollNotes,
+    selectionSpans,
   } = useSequencerRollState({
+    rootCell,
+    selectionPath: snapshot?.editor.selected.path ?? [],
     tuningLength,
-    commandText,
-    isCommandMode,
-    selectedLeafFlags,
-    selectedCellPath,
-    selectedElementIndex,
-    selectedElementKind,
-    leafCells,
-    leafPatternScopeIndices,
-    patternScopeCellCount,
-    staffLineBandByPitch,
   })
 
   const currentInputModeLetter = currentInputMode.charAt(0).toUpperCase()
@@ -1327,10 +1313,11 @@ function App() {
       <SequencerSection
         bridgeUnavailableMessage={bridgeUnavailableMessage}
         pitchRows={pitchRows}
+        staffLineBandByPitch={staffLineBandByPitch}
         backgroundOverlayStates={backgroundOverlayStates}
+        selectionSpans={selectionSpans}
         tuningLength={tuningLength}
-        renderRollCell={renderRollCell}
-        rootCell={rootCell}
+        rollNotes={rollNotes}
         playheadPhase={playheadPhase}
         ratioToBottom={ratioToBottom}
         rulerRatios={rulerRatios}

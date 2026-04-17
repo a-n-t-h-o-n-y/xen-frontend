@@ -1,18 +1,33 @@
-import type { CSSProperties, ReactNode } from 'react'
-import {
-  REFERENCE_RATIOS,
-  getSequenceOverlayColor,
-  normalizePitch,
-} from '../shared'
-import type { BgOverlayState, Cell } from '../shared'
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { REFERENCE_RATIOS } from '../shared'
+import type { BgOverlayState } from '../shared'
+
+type RollNoteSpan = {
+  x: number
+  width: number
+  pitch: number
+  velocity: number
+  isGlowing: boolean
+  hasDelay: boolean
+  shortGate: boolean
+  octaveLabel: string | null
+}
+
+type RollSelectionSpan = {
+  x: number
+  width: number
+  tone: 'selected' | 'sequenceEven' | 'sequenceOdd'
+  hasRightDivider: boolean
+}
 
 type SequencerSectionProps = {
   bridgeUnavailableMessage: string | null
   pitchRows: number[]
+  staffLineBandByPitch: number[]
   backgroundOverlayStates: BgOverlayState[]
+  selectionSpans: RollSelectionSpan[]
   tuningLength: number
-  renderRollCell: (cell: Cell, path: number[], depth: number) => ReactNode
-  rootCell: Cell
+  rollNotes: RollNoteSpan[]
   playheadPhase: number | null
   ratioToBottom: (ratio: number) => number
   rulerRatios: number[]
@@ -22,15 +37,62 @@ type SequencerSectionProps = {
 export function SequencerSection({
   bridgeUnavailableMessage,
   pitchRows,
-  backgroundOverlayStates,
+  staffLineBandByPitch,
+  backgroundOverlayStates: _backgroundOverlayStates,
+  selectionSpans,
   tuningLength,
-  renderRollCell,
-  rootCell,
+  rollNotes,
   playheadPhase,
   ratioToBottom,
   rulerRatios,
-  highlightedPitches,
+  highlightedPitches: _highlightedPitches,
 }: SequencerSectionProps) {
+  void [_backgroundOverlayStates, _highlightedPitches]
+  const pianoRollRef = useRef<HTMLDivElement | null>(null)
+  const [pianoRollHeight, setPianoRollHeight] = useState(0)
+
+  useLayoutEffect(() => {
+    const element = pianoRollRef.current
+    if (!element) {
+      return
+    }
+
+    const updateHeight = (): void => {
+      setPianoRollHeight(element.clientHeight)
+    }
+
+    updateHeight()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateHeight)
+      return () => {
+        window.removeEventListener('resize', updateHeight)
+      }
+    }
+
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(element)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
+  const rollRowMetrics = useMemo(() => {
+    if (pianoRollHeight <= 0 || tuningLength <= 0) {
+      return null
+    }
+
+    const rowHeight = Math.floor(pianoRollHeight / tuningLength)
+    const lastRowHeight = pianoRollHeight - rowHeight * (tuningLength - 1)
+
+    return {
+      rowHeight,
+      lastRowHeight,
+      gridTemplateRows: `${Array.from({ length: Math.max(tuningLength - 1, 0) }, () => `${rowHeight}px`).join(' ')}${tuningLength > 1 ? ' ' : ''}${lastRowHeight}px`,
+    }
+  }, [pianoRollHeight, tuningLength])
+
   return (
     <main className="sequencer">
       {bridgeUnavailableMessage ? (
@@ -51,56 +113,71 @@ export function SequencerSection({
             ))}
           </aside>
 
-          <div className="pianoRoll" role="img" aria-label="Single octave piano roll">
-            <div className="rollBackgroundOverlay" aria-hidden="true">
-              {backgroundOverlayStates.map((overlay) => (
+          <div className="pianoRoll" ref={pianoRollRef} role="img" aria-label="Single octave piano roll">
+            <div
+              className="rollGrid"
+              aria-hidden="true"
+              style={rollRowMetrics ? { gridTemplateRows: rollRowMetrics.gridTemplateRows } : undefined}
+            >
+              {pitchRows.map((pitch) => (
                 <div
-                  key={`roll-bg-overlay-${overlay.sequenceIndex}`}
-                  className="rollBackgroundLayer"
-                  aria-hidden="true"
-                >
-                  {overlay.notes.map((note, noteIndex) => {
-                    const normalizedPitch = normalizePitch(note.pitch, tuningLength)
-                    const rowFromTop = tuningLength - 1 - normalizedPitch
-                    const rowHeightPercent = 100 / Math.max(tuningLength, 1)
-                    const rowTopPercent = rowFromTop * rowHeightPercent
-                    const bgNoteHeightPercent = rowHeightPercent * 0.76
-                    const bgNoteTopPercent = rowTopPercent + (rowHeightPercent - bgNoteHeightPercent) / 2
-                    const noteAlpha = 0.06 + note.velocity * 0.14
-
-                    return (
-                      <div
-                        key={`roll-bg-note-${overlay.sequenceIndex}-${noteIndex}`}
-                        className="rollBgNote"
-                        style={
-                          {
-                            left: `calc(${note.x * 100}% + 4px)`,
-                            width: `max(calc(${note.width * 100}% - 9px), 1px)`,
-                            top: `${bgNoteTopPercent}%`,
-                            height: `${bgNoteHeightPercent}%`,
-                            background: getSequenceOverlayColor(overlay.sequenceIndex, noteAlpha),
-                            borderColor: getSequenceOverlayColor(overlay.sequenceIndex, 0.24),
-                          } as CSSProperties
-                        }
-                      />
-                    )
-                  })}
-                  {overlay.triggerPhase !== null ? (
-                    <div
-                      className="rollBgTrigger"
-                      style={
-                        {
-                          left: `${overlay.triggerPhase * 100}%`,
-                          background: getSequenceOverlayColor(overlay.sequenceIndex, 0.64),
-                        } as CSSProperties
-                      }
-                    />
-                  ) : null}
-                </div>
+                  key={`roll-row-${pitch}`}
+                  className={`rollRow ${(staffLineBandByPitch[pitch] ?? 0) === 0 ? 'rollRow-bandEven' : 'rollRow-bandOdd'}`}
+                />
               ))}
             </div>
-            <div className="rollIslands" aria-hidden="true">
-              {renderRollCell(rootCell, [], 0)}
+            {selectionSpans.length > 1 ? (
+              <div className="rollCellDividerLayer" aria-hidden="true">
+                <span
+                  className="rollCellDivider rollCellDivider-edge"
+                  style={{ left: `${selectionSpans[0].x * 100}%` }}
+                />
+                {selectionSpans.map((span, index) =>
+                  span.hasRightDivider ? (
+                    <span
+                      key={`roll-divider-${index}`}
+                      className="rollCellDivider"
+                      style={{ left: `${(span.x + span.width) * 100}%` }}
+                    />
+                  ) : null
+                )}
+                <span
+                  className="rollCellDivider rollCellDivider-edge"
+                  style={{
+                    left: `${(selectionSpans[selectionSpans.length - 1].x + selectionSpans[selectionSpans.length - 1].width) * 100}%`,
+                  }}
+                />
+              </div>
+            ) : null}
+            <div className="rollNoteLayer" aria-hidden="true">
+              {rollNotes.map((note, noteIndex) => {
+                const rowFromTop = tuningLength - 1 - note.pitch
+                const isBottomRow = rowFromTop === tuningLength - 1
+                const rowHeightPx = rollRowMetrics?.rowHeight ?? 0
+                const lastRowHeightPx = rollRowMetrics?.lastRowHeight ?? 0
+                const rowTopPx = rollRowMetrics ? rowFromTop * rowHeightPx : 0
+                const rowHeight = isBottomRow ? lastRowHeightPx : Math.max(0, rowHeightPx - 1)
+
+                return (
+                  <div
+                    key={`roll-note-${noteIndex}`}
+                    className="rollCellNote"
+                    style={
+                      {
+                        left: `${note.x * 100}%`,
+                        width: `${note.width * 100}%`,
+                        top: `${rowTopPx}px`,
+                        height: `${rowHeight}px`,
+                        background: `rgb(241 245 249 / ${0.18 + note.velocity * 0.72})`,
+                      } as CSSProperties
+                    }
+                  >
+                    {note.octaveLabel ? (
+                      <span className="rollNoteOctave mono">{note.octaveLabel}</span>
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
             {playheadPhase !== null ? (
               <div
@@ -123,7 +200,7 @@ export function SequencerSection({
             {rulerRatios.map((ratio, index) => (
               <span
                 key={`tuning-mark-${index}`}
-                className={`rulerMark rulerMark-tuning${highlightedPitches.has(index) ? ' rulerMark-active' : ''}`}
+                className={`rulerMark rulerMark-tuning${_highlightedPitches.has(index) ? ' rulerMark-active' : ''}`}
                 style={{ bottom: `${ratioToBottom(ratio)}%` }}
               />
             ))}
