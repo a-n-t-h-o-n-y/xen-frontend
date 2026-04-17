@@ -20,18 +20,12 @@ type RollSelectionSpan = {
   hasRightDivider: boolean
 }
 
-type RollDividerSpan = {
-  x: number
-  width: number
-  hasRightDivider: boolean
-}
-
 type SequencerSectionProps = {
   bridgeUnavailableMessage: string | null
   pitchRows: number[]
   staffLineBandByPitch: number[]
   backgroundOverlayStates: BgOverlayState[]
-  parentSelectionSpans: RollDividerSpan[]
+  sequenceDividerPositions: number[]
   selectionSpans: RollSelectionSpan[]
   tuningLength: number
   rollNotes: RollNoteSpan[]
@@ -53,7 +47,7 @@ export function SequencerSection({
   pitchRows,
   staffLineBandByPitch,
   backgroundOverlayStates: _backgroundOverlayStates,
-  parentSelectionSpans,
+  sequenceDividerPositions,
   selectionSpans,
   tuningLength,
   rollNotes,
@@ -146,50 +140,15 @@ export function SequencerSection({
                 />
               ))}
             </div>
-            {selectionSpans.length > 1 ? (
+            {sequenceDividerPositions.length > 0 ? (
               <div className="rollCellDividerLayer" aria-hidden="true">
-                <span
-                  className="rollCellDivider rollCellDivider-edge"
-                  style={{ left: `${selectionSpans[0].x * 100}%` }}
-                />
-                {selectionSpans.map((span, index) =>
-                  span.hasRightDivider ? (
-                    <span
-                      key={`roll-divider-${index}`}
-                      className="rollCellDivider"
-                      style={{ left: `${(span.x + span.width) * 100}%` }}
-                    />
-                  ) : null
-                )}
-                <span
-                  className="rollCellDivider rollCellDivider-edge"
-                  style={{
-                    left: `${(selectionSpans[selectionSpans.length - 1].x + selectionSpans[selectionSpans.length - 1].width) * 100}%`,
-                  }}
-                />
-              </div>
-            ) : null}
-            {parentSelectionSpans.length > 1 ? (
-              <div className="rollCellDividerLayer rollCellDividerLayer-parent" aria-hidden="true">
-                <span
-                  className="rollCellDivider rollCellDivider-edge rollCellDivider-parent"
-                  style={{ left: `${parentSelectionSpans[0].x * 100}%` }}
-                />
-                {parentSelectionSpans.map((span, index) =>
-                  span.hasRightDivider ? (
-                    <span
-                      key={`roll-parent-divider-${index}`}
-                      className="rollCellDivider rollCellDivider-parent"
-                      style={{ left: `${(span.x + span.width) * 100}%` }}
-                    />
-                  ) : null
-                )}
-                <span
-                  className="rollCellDivider rollCellDivider-edge rollCellDivider-parent"
-                  style={{
-                    left: `${(parentSelectionSpans[parentSelectionSpans.length - 1].x + parentSelectionSpans[parentSelectionSpans.length - 1].width) * 100}%`,
-                  }}
-                />
+                {sequenceDividerPositions.map((position, index) => (
+                  <span
+                    key={`roll-divider-${index}`}
+                    className="rollCellDivider"
+                    style={{ left: `${position * 100}%` }}
+                  />
+                ))}
               </div>
             ) : null}
             {selectedOutline ? (
@@ -222,8 +181,8 @@ export function SequencerSection({
                     className="rollCellNote"
                     style={
                       {
-                        left: `${note.x * 100}%`,
-                        width: `${note.width * 100}%`,
+                        left: `calc(${note.x * 100}% + 1px)`,
+                        width: `calc(${note.width * 100}% - 1px)`,
                         top: `${rowTopPx}px`,
                         height: `${rowHeight}px`,
                         zIndex: noteZIndex,

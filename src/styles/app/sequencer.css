@@ -94,14 +94,6 @@
   background: var(--seq-divider-line);
 }
 
-.rollCellDivider-parent {
-  background: rgb(255 255 255 / 8%);
-}
-
-.rollCellDividerLayer-parent {
-  z-index: 2;
-}
-
 .rollSelectionLayer {
   position: absolute;
   inset: 0;

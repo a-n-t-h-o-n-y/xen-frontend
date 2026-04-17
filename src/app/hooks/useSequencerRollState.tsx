@@ -5,7 +5,6 @@ import {
   getCellWeight,
   getLargestElement,
   normalizePitch,
-  resolveSelectionPath,
 } from '../shared'
 import type { BgOverlayState, Cell, SelectionPath, SequenceElement } from '../shared'
 
@@ -27,10 +26,13 @@ type RollSelectionSpan = {
   hasRightDivider: boolean
 }
 
-type RollDividerSpan = {
-  x: number
-  width: number
-  hasRightDivider: boolean
+type SelectionTraversal = {
+  currentCell: Cell
+  currentStart: number
+  currentWidth: number
+  selectedElement: Cell['elements'][number] | null
+  selectedElementKind: 'element' | 'cell' | null
+  selectedCell: Cell | null
 }
 
 type UseSequencerRollStateArgs = {
@@ -68,8 +70,78 @@ export function useSequencerRollState({
     [rulerOffset]
   )
 
+  const resolveSelectionTraversal = useCallback(
+    (path: SelectionPath): SelectionTraversal => {
+      let currentCell = rootCell
+      let currentStart = 0
+      let currentWidth = 1
+      let selectedElement: Cell['elements'][number] | null = null
+      let selectedElementKind: 'element' | 'cell' | null = path.length === 0 ? 'cell' : null
+
+      for (const step of path) {
+        if (step.kind === 'element') {
+          if (step.index >= currentCell.elements.length) {
+            break
+          }
+
+          selectedElement = currentCell.elements[step.index] ?? null
+          selectedElementKind = 'element'
+          continue
+        }
+
+        if (selectedElement?.type !== 'Sequence' || step.index >= selectedElement.cells.length) {
+          break
+        }
+
+        const totalWeight = selectedElement.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
+        if (totalWeight <= 0) {
+          break
+        }
+
+        let cursor = currentStart
+        let nextCell: Cell | null = null
+        let nextStart = currentStart
+        let nextWidth = currentWidth
+
+        selectedElement.cells.forEach((child, index) => {
+          const childWidth = (currentWidth * getCellWeight(child.weight)) / totalWeight
+          if (index === step.index) {
+            nextCell = child
+            nextStart = cursor
+            nextWidth = childWidth
+          }
+          cursor += childWidth
+        })
+
+        if (!nextCell) {
+          break
+        }
+
+        currentCell = nextCell
+        currentStart = nextStart
+        currentWidth = nextWidth
+        selectedElement = null
+        selectedElementKind = 'cell'
+      }
+
+      if (path.length === 0) {
+        selectedElementKind = 'cell'
+      }
+
+      return {
+        currentCell,
+        currentStart,
+        currentWidth,
+        selectedElement,
+        selectedElementKind,
+        selectedCell: currentCell,
+      }
+    },
+    [rootCell]
+  )
+
   const flattenRollNotes = useCallback(
-    (cell: Cell, selection: ReturnType<typeof resolveSelectionPath>): RollNoteSpan[] => {
+    (cell: Cell, selection: SelectionTraversal): RollNoteSpan[] => {
       const noteSpans: RollNoteSpan[] = []
       const selectedElement = selection.selectedElement
       const selectedElementKind = selection.selectedElementKind
@@ -157,69 +229,18 @@ export function useSequencerRollState({
     [tuningLength]
   )
 
-  const resolvedSelection = useMemo(
-    () => resolveSelectionPath(rootCell, selectionPath),
-    [rootCell, selectionPath]
+  const selectionTraversal = useMemo(
+    () => resolveSelectionTraversal(selectionPath),
+    [resolveSelectionTraversal, selectionPath]
   )
 
   const rollNotes = useMemo(
-    () => flattenRollNotes(rootCell, resolvedSelection),
-    [flattenRollNotes, resolvedSelection, rootCell]
+    () => flattenRollNotes(rootCell, selectionTraversal),
+    [flattenRollNotes, rootCell, selectionTraversal]
   )
 
-  const resolveSelectionSpans = useCallback((path: SelectionPath): RollSelectionSpan[] => {
-    let currentCell = rootCell
-    let currentStart = 0
-    let currentWidth = 1
-    let selectedElement: Cell['elements'][number] | null = null
-    let selectedElementKind: 'element' | 'cell' | null = null
-
-    for (const step of path) {
-      if (step.kind === 'element') {
-        if (step.index >= currentCell.elements.length) {
-          break
-        }
-
-        selectedElement = currentCell.elements[step.index] ?? null
-        selectedElementKind = 'element'
-        continue
-      }
-
-      if (selectedElement?.type !== 'Sequence' || step.index >= selectedElement.cells.length) {
-        break
-      }
-
-      const totalWeight = selectedElement.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
-      if (totalWeight <= 0) {
-        break
-      }
-
-      let cursor = currentStart
-      let nextCell: Cell | null = null
-      let nextStart = currentStart
-      let nextWidth = currentWidth
-
-      selectedElement.cells.forEach((child, index) => {
-        const childWidth = (currentWidth * getCellWeight(child.weight)) / totalWeight
-        if (index === step.index) {
-          nextCell = child
-          nextStart = cursor
-          nextWidth = childWidth
-        }
-        cursor += childWidth
-      })
-
-      if (!nextCell) {
-        break
-      }
-
-      currentCell = nextCell
-      currentStart = nextStart
-      currentWidth = nextWidth
-      selectedElement = null
-      selectedElementKind = 'cell'
-    }
-
+  const resolveSelectionSpans = useCallback((selection: SelectionTraversal): RollSelectionSpan[] => {
+    const { currentStart, currentWidth, selectedElement, selectedElementKind } = selection
     const spans: RollSelectionSpan[] = [
       {
         x: currentStart,
@@ -247,129 +268,84 @@ export function useSequencerRollState({
     }
 
     return spans.filter((span) => span.width > 0)
-  }, [rootCell])
+  }, [])
 
-  const resolveDividerSpansForSequence = useCallback(
-    (sequence: SequenceElement, start: number, width: number): RollDividerSpan[] => {
-      const totalWeight = sequence.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
-      if (totalWeight <= 0) {
+  const collectSequenceDividerPositions = useCallback(
+    (selection: SelectionTraversal): number[] => {
+      const positions = new Set<string>()
+      const output: number[] = []
+
+      const addPosition = (position: number): void => {
+        const key = position.toFixed(6)
+        if (positions.has(key)) {
+          return
+        }
+        positions.add(key)
+        output.push(position)
+      }
+
+      const walkCell = (currentCell: Cell, currentStart: number, currentWidth: number): void => {
+        for (const element of currentCell.elements) {
+          if (element.type !== 'Sequence' || element.cells.length === 0) {
+            continue
+          }
+
+          walkSequence(element, currentStart, currentWidth)
+        }
+      }
+
+      const walkSequence = (currentSequence: SequenceElement, currentStart: number, currentWidth: number): void => {
+        addPosition(currentStart)
+
+        const totalWeight = currentSequence.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
+        if (totalWeight <= 0) {
+          addPosition(currentStart + currentWidth)
+          return
+        }
+
+        let cursor = currentStart
+        currentSequence.cells.forEach((childCell, index) => {
+          const childWidth = (currentWidth * getCellWeight(childCell.weight)) / totalWeight
+          if (index > 0) {
+            addPosition(cursor)
+          }
+
+          walkCell(childCell, cursor, childWidth)
+
+          cursor += childWidth
+        })
+
+        addPosition(currentStart + currentWidth)
+      }
+
+      if (selection.selectedElementKind === 'element' && selection.selectedElement?.type === 'Sequence') {
+        walkSequence(selection.selectedElement, selection.currentStart, selection.currentWidth)
+      } else if (selection.selectedElementKind === 'cell') {
+        walkCell(selection.currentCell, selection.currentStart, selection.currentWidth)
+      } else {
         return []
       }
 
-      const spans: RollDividerSpan[] = []
-      let cursor = start
-      sequence.cells.forEach((child, index) => {
-        const childWidth = (width * getCellWeight(child.weight)) / totalWeight
-        spans.push({
-          x: cursor,
-          width: childWidth,
-          hasRightDivider: index < sequence.cells.length - 1,
-        })
-        cursor += childWidth
-      })
-
-      return spans.filter((span) => span.width > 0)
+      return output.sort((a, b) => a - b)
     },
     []
   )
 
   const selectionSpans = useMemo(
-    () => resolveSelectionSpans(selectionPath),
-    [resolveSelectionSpans, selectionPath]
+    () => resolveSelectionSpans(selectionTraversal),
+    [resolveSelectionSpans, selectionTraversal]
   )
 
-  const parentSelectionSpans = useMemo(() => {
-    if (selectionPath.length === 0) {
-      return []
-    }
-
-    let currentCell = rootCell
-    let currentStart = 0
-    let currentWidth = 1
-    let selectedElement: Cell['elements'][number] | null = null
-    let selectedElementKind: 'element' | 'cell' | null = null
-    const sequenceContexts: Array<{
-      start: number
-      width: number
-      sequence: SequenceElement
-    }> = []
-
-    for (const step of selectionPath) {
-      if (step.kind === 'element') {
-        if (step.index >= currentCell.elements.length) {
-          break
-        }
-
-        selectedElement = currentCell.elements[step.index] ?? null
-        selectedElementKind = 'element'
-
-        if (selectedElement?.type === 'Sequence') {
-          sequenceContexts.push({
-            start: currentStart,
-            width: currentWidth,
-            sequence: selectedElement,
-          })
-        }
-        continue
-      }
-
-      if (selectedElement?.type !== 'Sequence' || step.index >= selectedElement.cells.length) {
-        break
-      }
-
-      const totalWeight = selectedElement.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
-      if (totalWeight <= 0) {
-        break
-      }
-
-      let cursor = currentStart
-      let nextCell: Cell | null = null
-      let nextStart = currentStart
-      let nextWidth = currentWidth
-
-      selectedElement.cells.forEach((child, index) => {
-        const childWidth = (currentWidth * getCellWeight(child.weight)) / totalWeight
-        if (index === step.index) {
-          nextCell = child
-          nextStart = cursor
-          nextWidth = childWidth
-        }
-        cursor += childWidth
-      })
-
-      if (!nextCell) {
-        break
-      }
-
-      currentCell = nextCell
-      currentStart = nextStart
-      currentWidth = nextWidth
-      selectedElement = null
-      selectedElementKind = 'cell'
-    }
-
-    const closestSequenceContext =
-      selectedElementKind === 'element' && selectedElement?.type === 'Sequence'
-        ? sequenceContexts.at(-2) ?? null
-        : sequenceContexts.at(-1) ?? null
-
-    if (!closestSequenceContext) {
-      return []
-    }
-
-    return resolveDividerSpansForSequence(
-      closestSequenceContext.sequence,
-      closestSequenceContext.start,
-      closestSequenceContext.width
-    )
-  }, [resolveDividerSpansForSequence, rootCell, selectionPath])
+  const sequenceDividerPositions = useMemo(() => {
+    return collectSequenceDividerPositions(selectionTraversal)
+  }, [collectSequenceDividerPositions, selectionTraversal])
 
   return {
     backgroundOverlayStates,
     pitchRows,
     ratioToBottom,
     rollNotes,
-    parentSelectionSpans,
+    sequenceDividerPositions,
     selectionSpans,
   }
 }
