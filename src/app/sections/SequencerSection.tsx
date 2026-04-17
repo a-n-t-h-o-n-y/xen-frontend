@@ -7,7 +7,7 @@ type RollNoteSpan = {
   width: number
   pitch: number
   velocity: number
-  isGlowing: boolean
+  isSelected: boolean
   hasDelay: boolean
   shortGate: boolean
   octaveLabel: string | null
@@ -20,11 +20,18 @@ type RollSelectionSpan = {
   hasRightDivider: boolean
 }
 
+type RollDividerSpan = {
+  x: number
+  width: number
+  hasRightDivider: boolean
+}
+
 type SequencerSectionProps = {
   bridgeUnavailableMessage: string | null
   pitchRows: number[]
   staffLineBandByPitch: number[]
   backgroundOverlayStates: BgOverlayState[]
+  parentSelectionSpans: RollDividerSpan[]
   selectionSpans: RollSelectionSpan[]
   tuningLength: number
   rollNotes: RollNoteSpan[]
@@ -34,11 +41,19 @@ type SequencerSectionProps = {
   highlightedPitches: Set<number>
 }
 
+function getNoteFillColor(velocity: number, opacity: number): string {
+  const normalizedVelocity = Math.max(0, Math.min(velocity, 1))
+  const tone = Math.round(182 + normalizedVelocity * 58)
+  const normalizedOpacity = Math.max(0, Math.min(opacity, 1))
+  return `rgb(${tone} ${tone} ${tone} / ${normalizedOpacity})`
+}
+
 export function SequencerSection({
   bridgeUnavailableMessage,
   pitchRows,
   staffLineBandByPitch,
   backgroundOverlayStates: _backgroundOverlayStates,
+  parentSelectionSpans,
   selectionSpans,
   tuningLength,
   rollNotes,
@@ -49,7 +64,7 @@ export function SequencerSection({
 }: SequencerSectionProps) {
   void [_backgroundOverlayStates, _highlightedPitches]
   const pianoRollRef = useRef<HTMLDivElement | null>(null)
-  const [pianoRollHeight, setPianoRollHeight] = useState(0)
+  const [pianoRollSize, setPianoRollSize] = useState({ width: 0, height: 0 })
 
   useLayoutEffect(() => {
     const element = pianoRollRef.current
@@ -58,7 +73,10 @@ export function SequencerSection({
     }
 
     const updateHeight = (): void => {
-      setPianoRollHeight(element.clientHeight)
+      setPianoRollSize({
+        width: Math.round(element.clientWidth),
+        height: Math.round(element.clientHeight),
+      })
     }
 
     updateHeight()
@@ -79,19 +97,21 @@ export function SequencerSection({
   }, [])
 
   const rollRowMetrics = useMemo(() => {
-    if (pianoRollHeight <= 0 || tuningLength <= 0) {
+    if (pianoRollSize.height <= 0 || tuningLength <= 0) {
       return null
     }
 
-    const rowHeight = Math.floor(pianoRollHeight / tuningLength)
-    const lastRowHeight = pianoRollHeight - rowHeight * (tuningLength - 1)
+    const rowHeight = Math.floor(pianoRollSize.height / tuningLength)
+    const lastRowHeight = pianoRollSize.height - rowHeight * (tuningLength - 1)
 
     return {
       rowHeight,
       lastRowHeight,
       gridTemplateRows: `${Array.from({ length: Math.max(tuningLength - 1, 0) }, () => `${rowHeight}px`).join(' ')}${tuningLength > 1 ? ' ' : ''}${lastRowHeight}px`,
     }
-  }, [pianoRollHeight, tuningLength])
+  }, [pianoRollSize.height, tuningLength])
+
+  const selectedOutline = selectionSpans.length > 0 ? selectionSpans[0] : null
 
   return (
     <main className="sequencer">
@@ -149,6 +169,42 @@ export function SequencerSection({
                 />
               </div>
             ) : null}
+            {parentSelectionSpans.length > 1 ? (
+              <div className="rollCellDividerLayer rollCellDividerLayer-parent" aria-hidden="true">
+                <span
+                  className="rollCellDivider rollCellDivider-edge rollCellDivider-parent"
+                  style={{ left: `${parentSelectionSpans[0].x * 100}%` }}
+                />
+                {parentSelectionSpans.map((span, index) =>
+                  span.hasRightDivider ? (
+                    <span
+                      key={`roll-parent-divider-${index}`}
+                      className="rollCellDivider rollCellDivider-parent"
+                      style={{ left: `${(span.x + span.width) * 100}%` }}
+                    />
+                  ) : null
+                )}
+                <span
+                  className="rollCellDivider rollCellDivider-edge rollCellDivider-parent"
+                  style={{
+                    left: `${(parentSelectionSpans[parentSelectionSpans.length - 1].x + parentSelectionSpans[parentSelectionSpans.length - 1].width) * 100}%`,
+                  }}
+                />
+              </div>
+            ) : null}
+            {selectedOutline ? (
+              <div className="rollSelectionOutlineLayer" aria-hidden="true">
+                <span
+                  className="rollSelectionOutline"
+                  style={
+                    {
+                      left: `${selectedOutline.x * 100}%`,
+                      width: `${selectedOutline.width * 100}%`,
+                    } as CSSProperties
+                  }
+                />
+              </div>
+            ) : null}
             <div className="rollNoteLayer" aria-hidden="true">
               {rollNotes.map((note, noteIndex) => {
                 const rowFromTop = tuningLength - 1 - note.pitch
@@ -157,6 +213,8 @@ export function SequencerSection({
                 const lastRowHeightPx = rollRowMetrics?.lastRowHeight ?? 0
                 const rowTopPx = rollRowMetrics ? rowFromTop * rowHeightPx : 0
                 const rowHeight = isBottomRow ? lastRowHeightPx : Math.max(0, rowHeightPx - 1)
+                const noteOpacity = note.isSelected ? 1 : 0.34
+                const noteZIndex = note.isSelected ? 4 : 2
 
                 return (
                   <div
@@ -168,7 +226,8 @@ export function SequencerSection({
                         width: `${note.width * 100}%`,
                         top: `${rowTopPx}px`,
                         height: `${rowHeight}px`,
-                        background: `rgb(241 245 249 / ${0.18 + note.velocity * 0.72})`,
+                        zIndex: noteZIndex,
+                        background: getNoteFillColor(note.velocity, noteOpacity),
                       } as CSSProperties
                     }
                   >

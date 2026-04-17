@@ -44,7 +44,7 @@
 
 .pianoRoll {
   position: relative;
-  border: 1px solid var(--seq-divider-line);
+  border: var(--seq-roll-border);
   border-radius: var(--radius-1);
   background: var(--seq-panel-bg);
   overflow: hidden;
@@ -60,7 +60,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 4;
+  z-index: 5;
 }
 
 .rollBackgroundLayer {
@@ -83,7 +83,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 2;
+  z-index: 3;
 }
 
 .rollCellDivider {
@@ -94,11 +94,26 @@
   background: var(--seq-divider-line);
 }
 
+.rollCellDivider-parent {
+  background: rgb(255 255 255 / 8%);
+}
+
+.rollCellDividerLayer-parent {
+  z-index: 2;
+}
+
 .rollSelectionLayer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 2;
+  z-index: 4;
+}
+
+.rollSelectionOutlineLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
 }
 
 .rollSelectionSpan {
@@ -131,11 +146,21 @@
   background: rgb(226 232 240 / 18%);
 }
 
+.rollSelectionOutline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 2px solid rgb(0 0 0 / 92%);
+  border-radius: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
 .rollNoteLayer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 3;
+  z-index: 6;
 }
 
 .rollPlayhead {

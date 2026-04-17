@@ -26,7 +26,8 @@
   --seq-playhead: rgb(255 255 255 / 76%);
   --seq-note: rgb(235 239 245 / 90%);
   --seq-note-text: rgb(13 18 25 / 94%);
-  --seq-divider-line: rgb(255 255 255 / 42%);
+  --seq-roll-border: 1px solid rgb(255 255 255 / 42%);
+  --seq-divider-line: rgb(255 255 255 / 12%);
   --seq-selection: rgb(245 196 90 / 48%);
   --seq-selection-soft: rgb(245 196 90 / 20%);
   --roll-island-gap: 5px;

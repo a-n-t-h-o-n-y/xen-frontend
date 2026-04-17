@@ -613,6 +613,7 @@ function App() {
     backgroundOverlayStates,
     pitchRows,
     ratioToBottom,
+    parentSelectionSpans,
     rollNotes,
     selectionSpans,
   } = useSequencerRollState({
@@ -1315,6 +1316,7 @@ function App() {
         pitchRows={pitchRows}
         staffLineBandByPitch={staffLineBandByPitch}
         backgroundOverlayStates={backgroundOverlayStates}
+        parentSelectionSpans={parentSelectionSpans}
         selectionSpans={selectionSpans}
         tuningLength={tuningLength}
         rollNotes={rollNotes}

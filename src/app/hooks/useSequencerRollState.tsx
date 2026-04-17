@@ -7,14 +7,14 @@ import {
   normalizePitch,
   resolveSelectionPath,
 } from '../shared'
-import type { BgOverlayState, Cell, SelectionPath } from '../shared'
+import type { BgOverlayState, Cell, SelectionPath, SequenceElement } from '../shared'
 
 type RollNoteSpan = {
   x: number
   width: number
   pitch: number
   velocity: number
-  isGlowing: boolean
+  isSelected: boolean
   hasDelay: boolean
   shortGate: boolean
   octaveLabel: string | null
@@ -24,6 +24,12 @@ type RollSelectionSpan = {
   x: number
   width: number
   tone: 'selected' | 'sequenceEven' | 'sequenceOdd'
+  hasRightDivider: boolean
+}
+
+type RollDividerSpan = {
+  x: number
+  width: number
   hasRightDivider: boolean
 }
 
@@ -67,16 +73,19 @@ export function useSequencerRollState({
       const noteSpans: RollNoteSpan[] = []
       const selectedElement = selection.selectedElement
       const selectedElementKind = selection.selectedElementKind
+      const selectedCell = selection.selectedCell
 
       const walkCell = (
         currentCell: Cell,
         segmentStart: number,
         segmentWidth: number,
-        glowSubtree: boolean
+        selectedSubtree: boolean
       ): void => {
         if (segmentWidth <= 0) {
           return
         }
+
+        const cellIsSelected = selectedElementKind === 'cell' && currentCell === selectedCell
 
         for (const element of currentCell.elements) {
           if (element.type !== 'Note') {
@@ -102,8 +111,9 @@ export function useSequencerRollState({
             width: clampedWidth,
             pitch: normalizePitch(element.pitch, tuningLength),
             velocity: normalizedVelocity,
-            isGlowing:
-              glowSubtree ||
+            isSelected:
+              selectedSubtree ||
+              cellIsSelected ||
               (selectedElementKind === 'element' &&
                 selectedElement?.type === 'Note' &&
                 element === selectedElement),
@@ -130,7 +140,8 @@ export function useSequencerRollState({
               child,
               cursor,
               childWidth,
-              glowSubtree ||
+              selectedSubtree ||
+                cellIsSelected ||
                 (selectedElementKind === 'element' &&
                   selectedElement?.type === 'Sequence' &&
                   element === selectedElement)
@@ -156,14 +167,14 @@ export function useSequencerRollState({
     [flattenRollNotes, resolvedSelection, rootCell]
   )
 
-  const selectionSpans = useMemo((): RollSelectionSpan[] => {
+  const resolveSelectionSpans = useCallback((path: SelectionPath): RollSelectionSpan[] => {
     let currentCell = rootCell
     let currentStart = 0
     let currentWidth = 1
     let selectedElement: Cell['elements'][number] | null = null
     let selectedElementKind: 'element' | 'cell' | null = null
 
-    for (const step of selectionPath) {
+    for (const step of path) {
       if (step.kind === 'element') {
         if (step.index >= currentCell.elements.length) {
           break
@@ -236,13 +247,129 @@ export function useSequencerRollState({
     }
 
     return spans.filter((span) => span.width > 0)
-  }, [rootCell, selectionPath])
+  }, [rootCell])
+
+  const resolveDividerSpansForSequence = useCallback(
+    (sequence: SequenceElement, start: number, width: number): RollDividerSpan[] => {
+      const totalWeight = sequence.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
+      if (totalWeight <= 0) {
+        return []
+      }
+
+      const spans: RollDividerSpan[] = []
+      let cursor = start
+      sequence.cells.forEach((child, index) => {
+        const childWidth = (width * getCellWeight(child.weight)) / totalWeight
+        spans.push({
+          x: cursor,
+          width: childWidth,
+          hasRightDivider: index < sequence.cells.length - 1,
+        })
+        cursor += childWidth
+      })
+
+      return spans.filter((span) => span.width > 0)
+    },
+    []
+  )
+
+  const selectionSpans = useMemo(
+    () => resolveSelectionSpans(selectionPath),
+    [resolveSelectionSpans, selectionPath]
+  )
+
+  const parentSelectionSpans = useMemo(() => {
+    if (selectionPath.length === 0) {
+      return []
+    }
+
+    let currentCell = rootCell
+    let currentStart = 0
+    let currentWidth = 1
+    let selectedElement: Cell['elements'][number] | null = null
+    let selectedElementKind: 'element' | 'cell' | null = null
+    const sequenceContexts: Array<{
+      start: number
+      width: number
+      sequence: SequenceElement
+    }> = []
+
+    for (const step of selectionPath) {
+      if (step.kind === 'element') {
+        if (step.index >= currentCell.elements.length) {
+          break
+        }
+
+        selectedElement = currentCell.elements[step.index] ?? null
+        selectedElementKind = 'element'
+
+        if (selectedElement?.type === 'Sequence') {
+          sequenceContexts.push({
+            start: currentStart,
+            width: currentWidth,
+            sequence: selectedElement,
+          })
+        }
+        continue
+      }
+
+      if (selectedElement?.type !== 'Sequence' || step.index >= selectedElement.cells.length) {
+        break
+      }
+
+      const totalWeight = selectedElement.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
+      if (totalWeight <= 0) {
+        break
+      }
+
+      let cursor = currentStart
+      let nextCell: Cell | null = null
+      let nextStart = currentStart
+      let nextWidth = currentWidth
+
+      selectedElement.cells.forEach((child, index) => {
+        const childWidth = (currentWidth * getCellWeight(child.weight)) / totalWeight
+        if (index === step.index) {
+          nextCell = child
+          nextStart = cursor
+          nextWidth = childWidth
+        }
+        cursor += childWidth
+      })
+
+      if (!nextCell) {
+        break
+      }
+
+      currentCell = nextCell
+      currentStart = nextStart
+      currentWidth = nextWidth
+      selectedElement = null
+      selectedElementKind = 'cell'
+    }
+
+    const closestSequenceContext =
+      selectedElementKind === 'element' && selectedElement?.type === 'Sequence'
+        ? sequenceContexts.at(-2) ?? null
+        : sequenceContexts.at(-1) ?? null
+
+    if (!closestSequenceContext) {
+      return []
+    }
+
+    return resolveDividerSpansForSequence(
+      closestSequenceContext.sequence,
+      closestSequenceContext.start,
+      closestSequenceContext.width
+    )
+  }, [resolveDividerSpansForSequence, rootCell, selectionPath])
 
   return {
     backgroundOverlayStates,
     pitchRows,
     ratioToBottom,
     rollNotes,
+    parentSelectionSpans,
     selectionSpans,
   }
 }
