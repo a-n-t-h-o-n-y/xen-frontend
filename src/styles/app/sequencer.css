@@ -142,7 +142,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  border: 2px solid rgb(0 0 0 / 92%);
+  border: 0;
   border-radius: 0;
   box-sizing: border-box;
   pointer-events: none;
@@ -243,7 +243,30 @@
   z-index: 2;
 }
 
+.rollCellNote-selected {
+  box-shadow: none;
+}
+
+.rollCellNote-selected::before,
+.rollCellNote-selected::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+.rollCellNote-selected::before {
+  inset: 0;
+  border: 2px solid rgb(207 251 255 / 95%);
+}
+
+.rollCellNote-selected::after {
+  inset: 2px;
+  border: 1px solid rgb(0 0 0 / 100%);
+}
+
 .rollNoteOctave {
+  position: relative;
+  z-index: 1;
   font-size: 0.82rem;
   font-weight: 700;
   line-height: 1;

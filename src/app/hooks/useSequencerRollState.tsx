@@ -30,6 +30,9 @@ type SelectionTraversal = {
   currentCell: Cell
   currentStart: number
   currentWidth: number
+  containingSequence: SequenceElement | null
+  containingSequenceStart: number
+  containingSequenceWidth: number
   selectedElement: Cell['elements'][number] | null
   selectedElementKind: 'element' | 'cell' | null
   selectedCell: Cell | null
@@ -75,6 +78,9 @@ export function useSequencerRollState({
       let currentCell = rootCell
       let currentStart = 0
       let currentWidth = 1
+      let containingSequence: SequenceElement | null = null
+      let containingSequenceStart = 0
+      let containingSequenceWidth = 1
       let selectedElement: Cell['elements'][number] | null = null
       let selectedElementKind: 'element' | 'cell' | null = path.length === 0 ? 'cell' : null
 
@@ -117,6 +123,9 @@ export function useSequencerRollState({
           break
         }
 
+        containingSequence = selectedElement
+        containingSequenceStart = currentStart
+        containingSequenceWidth = currentWidth
         currentCell = nextCell
         currentStart = nextStart
         currentWidth = nextWidth
@@ -132,6 +141,9 @@ export function useSequencerRollState({
         currentCell,
         currentStart,
         currentWidth,
+        containingSequence,
+        containingSequenceStart,
+        containingSequenceWidth,
         selectedElement,
         selectedElementKind,
         selectedCell: currentCell,
@@ -290,11 +302,16 @@ export function useSequencerRollState({
             continue
           }
 
-          walkSequence(element, currentStart, currentWidth)
+          walkSequence(element, currentStart, currentWidth, true)
         }
       }
 
-      const walkSequence = (currentSequence: SequenceElement, currentStart: number, currentWidth: number): void => {
+      const walkSequence = (
+        currentSequence: SequenceElement,
+        currentStart: number,
+        currentWidth: number,
+        includeChildSequences: boolean
+      ): void => {
         addPosition(currentStart)
 
         const totalWeight = currentSequence.cells.reduce((sum, child) => sum + getCellWeight(child.weight), 0)
@@ -310,7 +327,9 @@ export function useSequencerRollState({
             addPosition(cursor)
           }
 
-          walkCell(childCell, cursor, childWidth)
+          if (includeChildSequences) {
+            walkCell(childCell, cursor, childWidth)
+          }
 
           cursor += childWidth
         })
@@ -319,8 +338,19 @@ export function useSequencerRollState({
       }
 
       if (selection.selectedElementKind === 'element' && selection.selectedElement?.type === 'Sequence') {
-        walkSequence(selection.selectedElement, selection.currentStart, selection.currentWidth)
+        walkSequence(selection.selectedElement, selection.currentStart, selection.currentWidth, true)
+      } else if (selection.selectedElementKind === 'element' && selection.selectedElement?.type === 'Note') {
+        addPosition(selection.currentStart)
+        addPosition(selection.currentStart + selection.currentWidth)
       } else if (selection.selectedElementKind === 'cell') {
+        if (selection.containingSequence) {
+          walkSequence(
+            selection.containingSequence,
+            selection.containingSequenceStart,
+            selection.containingSequenceWidth,
+            false
+          )
+        }
         walkCell(selection.currentCell, selection.currentStart, selection.currentWidth)
       } else {
         return []

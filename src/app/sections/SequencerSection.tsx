@@ -35,11 +35,12 @@ type SequencerSectionProps = {
   highlightedPitches: Set<number>
 }
 
-function getNoteFillColor(velocity: number, opacity: number): string {
+function getNoteFillColor(velocity: number): string {
   const normalizedVelocity = Math.max(0, Math.min(velocity, 1))
-  const tone = Math.round(182 + normalizedVelocity * 58)
-  const normalizedOpacity = Math.max(0, Math.min(opacity, 1))
-  return `rgb(${tone} ${tone} ${tone} / ${normalizedOpacity})`
+  const red = Math.round(74 + normalizedVelocity * 48)
+  const green = Math.round(98 + normalizedVelocity * 40)
+  const blue = Math.round(146 + normalizedVelocity * 54)
+  return `rgb(${red} ${green} ${blue} / 1)`
 }
 
 export function SequencerSection({
@@ -172,13 +173,12 @@ export function SequencerSection({
                 const lastRowHeightPx = rollRowMetrics?.lastRowHeight ?? 0
                 const rowTopPx = rollRowMetrics ? rowFromTop * rowHeightPx : 0
                 const rowHeight = isBottomRow ? lastRowHeightPx : Math.max(0, rowHeightPx - 1)
-                const noteOpacity = note.isSelected ? 1 : 0.34
                 const noteZIndex = note.isSelected ? 4 : 2
 
                 return (
                   <div
                     key={`roll-note-${noteIndex}`}
-                    className="rollCellNote"
+                    className={`rollCellNote${note.isSelected ? ' rollCellNote-selected' : ''}`}
                     style={
                       {
                         left: `calc(${note.x * 100}% + 1px)`,
@@ -186,7 +186,7 @@ export function SequencerSection({
                         top: `${rowTopPx}px`,
                         height: `${rowHeight}px`,
                         zIndex: noteZIndex,
-                        background: getNoteFillColor(note.velocity, noteOpacity),
+                        background: getNoteFillColor(note.velocity),
                       } as CSSProperties
                     }
                   >
