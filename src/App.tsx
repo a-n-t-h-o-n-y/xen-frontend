@@ -611,6 +611,7 @@ function App() {
 
   const {
     backgroundOverlayStates,
+    cellMuteWindow,
     pitchRows,
     ratioToBottom,
     sequenceDividerPositions,
@@ -1316,6 +1317,7 @@ function App() {
         pitchRows={pitchRows}
         staffLineBandByPitch={staffLineBandByPitch}
         backgroundOverlayStates={backgroundOverlayStates}
+        cellMuteWindow={cellMuteWindow}
         sequenceDividerPositions={sequenceDividerPositions}
         selectionSpans={selectionSpans}
         tuningLength={tuningLength}

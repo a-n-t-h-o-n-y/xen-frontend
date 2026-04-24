@@ -91,7 +91,25 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--seq-divider-line);
+  background: rgb(255 255 255 / 22%);
+}
+
+.rollCellDivider-nested {
+  background: rgb(255 255 255 / 7%);
+}
+
+.rollCellMuteLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.rollCellMuteSpan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgb(8 12 18 / 34%);
 }
 
 .rollSelectionLayer {
@@ -257,7 +275,7 @@
 
 .rollCellNote-selected::before {
   inset: 0;
-  border: 2px solid rgb(207 251 255 / 95%);
+  border: 2px solid rgb(142 169 226 / 92%);
 }
 
 .rollCellNote-selected::after {

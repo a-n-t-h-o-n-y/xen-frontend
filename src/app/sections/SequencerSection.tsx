@@ -20,12 +20,23 @@ type RollSelectionSpan = {
   hasRightDivider: boolean
 }
 
+type RollCellMuteWindow = {
+  x: number
+  width: number
+}
+
+type RollSequenceDivider = {
+  x: number
+  depth: number
+}
+
 type SequencerSectionProps = {
   bridgeUnavailableMessage: string | null
   pitchRows: number[]
   staffLineBandByPitch: number[]
   backgroundOverlayStates: BgOverlayState[]
-  sequenceDividerPositions: number[]
+  cellMuteWindow: RollCellMuteWindow | null
+  sequenceDividerPositions: RollSequenceDivider[]
   selectionSpans: RollSelectionSpan[]
   tuningLength: number
   rollNotes: RollNoteSpan[]
@@ -48,6 +59,7 @@ export function SequencerSection({
   pitchRows,
   staffLineBandByPitch,
   backgroundOverlayStates: _backgroundOverlayStates,
+  cellMuteWindow,
   sequenceDividerPositions,
   selectionSpans,
   tuningLength,
@@ -143,13 +155,39 @@ export function SequencerSection({
             </div>
             {sequenceDividerPositions.length > 0 ? (
               <div className="rollCellDividerLayer" aria-hidden="true">
-                {sequenceDividerPositions.map((position, index) => (
+                {sequenceDividerPositions.map((divider, index) => (
                   <span
                     key={`roll-divider-${index}`}
-                    className="rollCellDivider"
-                    style={{ left: `${position * 100}%` }}
+                    className={`rollCellDivider${divider.depth > 0 ? ' rollCellDivider-nested' : ''}`}
+                    style={{ left: `${divider.x * 100}%` }}
                   />
                 ))}
+              </div>
+            ) : null}
+            {cellMuteWindow ? (
+              <div className="rollCellMuteLayer" aria-hidden="true">
+                {cellMuteWindow.x > 0 ? (
+                  <span
+                    className="rollCellMuteSpan"
+                    style={
+                      {
+                        left: 0,
+                        width: `${cellMuteWindow.x * 100}%`,
+                      } as CSSProperties
+                    }
+                  />
+                ) : null}
+                {cellMuteWindow.x + cellMuteWindow.width < 1 ? (
+                  <span
+                    className="rollCellMuteSpan"
+                    style={
+                      {
+                        left: `${(cellMuteWindow.x + cellMuteWindow.width) * 100}%`,
+                        right: 0,
+                      } as CSSProperties
+                    }
+                  />
+                ) : null}
               </div>
             ) : null}
             {selectedOutline ? (
