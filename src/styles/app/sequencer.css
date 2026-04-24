@@ -178,8 +178,8 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--seq-playhead);
-  box-shadow: 0 0 0 1px rgb(8 15 24 / 62%);
+  background: rgb(255 255 255 / 38%);
+  box-shadow: 0 0 0 1px rgb(8 15 24 / 28%);
   transform: translateX(-1px);
   pointer-events: none;
   z-index: 6;
@@ -275,7 +275,7 @@
 
 .rollCellNote-selected::before {
   inset: 0;
-  border: 2px solid rgb(142 169 226 / 92%);
+  border: 2px solid rgb(165 195 245 / 94%);
 }
 
 .rollCellNote-selected::after {
