@@ -9,7 +9,13 @@ type BottomModulesSectionProps = ComponentProps<typeof ModulatorsPanel> &
 
 export function BottomModulesSection(props: BottomModulesSectionProps) {
   return (
-    <section className="bottomModules" aria-label="Temporary module area">
+    <details className="bottomModules" aria-label="Module area">
+      <summary className="bottomModulesSummary">
+        <span className="bottomModulesSummaryTitle mono">Panels</span>
+        <span className="bottomModulesSummaryIcon mono" aria-hidden="true">
+          ▸
+        </span>
+      </summary>
       <div className="bottomModuleRow">
         <ModulatorsPanel
           activeModulatorTab={props.activeModulatorTab}
@@ -77,6 +83,6 @@ export function BottomModulesSection(props: BottomModulesSectionProps) {
           measureHierarchyRows={props.measureHierarchyRows}
         />
       </div>
-    </section>
+    </details>
   )
 }

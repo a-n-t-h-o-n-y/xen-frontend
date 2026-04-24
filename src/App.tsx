@@ -11,7 +11,6 @@ import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { StatusSection } from './app/sections/StatusSection'
-import { SnapshotDebugPanel } from './app/sections/bottom/SnapshotDebugPanel'
 import {
   MAX_COMMAND_HISTORY,
   DEFAULT_TUNING_LENGTH,
@@ -71,9 +70,6 @@ function App() {
   const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
   const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<UiStateSnapshot | null>(null)
-  const [rawSnapshotText, setRawSnapshotText] = useState('')
-  const [lastSnapshotSource, setLastSnapshotSource] = useState('')
-  const [snapshotParseError, setSnapshotParseError] = useState<string | null>(null)
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
   const [sequenceViewKeymap, setSequenceViewKeymap] = useState<Record<string, string>>({})
   const {
@@ -174,9 +170,6 @@ function App() {
     transportRef,
     lastSnapshotVersionRef,
     setSnapshot,
-    setRawSnapshotText,
-    setLastSnapshotSource,
-    setSnapshotParseError,
     setCurrentInputMode,
     setStatusMessage,
     setStatusLevel,
@@ -1326,13 +1319,6 @@ function App() {
         ratioToBottom={ratioToBottom}
         rulerRatios={rulerRatios}
         highlightedPitches={highlightedPitches}
-      />
-      <SnapshotDebugPanel
-        snapshot={snapshot}
-        rawSnapshotText={rawSnapshotText}
-        lastSnapshotSource={lastSnapshotSource}
-        snapshotParseError={snapshotParseError}
-        bridgeUnavailableMessage={bridgeUnavailableMessage}
       />
       <StatusSection
         currentInputMode={currentInputMode}

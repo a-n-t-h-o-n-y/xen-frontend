@@ -11,12 +11,12 @@
   --space-4: 1rem;
   --radius-1: 6px;
   --radius-2: 10px;
+  --bar-height: calc(1.25rem + (var(--space-2) * 2) + 2px);
   --border-subtle: 1px solid rgb(255 255 255 / 18%);
   --surface-1: #171a20;
   --surface-2: #1f232b;
   --text-primary: #f4f7fb;
   --text-secondary: #b8c0cc;
-  --sequencer-max-height: calc(24rem - 15px);
   --seq-shell-bg: #1a1d24;
   --seq-panel-bg: #242a33;
   --seq-border: 1px solid rgb(255 255 255 / 11%);
@@ -46,12 +46,7 @@
 
 .app {
   display: grid;
-  grid-template-rows:
-    auto
-    minmax(0, var(--sequencer-max-height))
-    auto
-    auto
-    minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: var(--space-3);
 
   min-height: 300px;

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { REFERENCE_RATIOS } from '../shared'
 import type { BgOverlayState } from '../shared'
 
@@ -70,53 +70,13 @@ export function SequencerSection({
   highlightedPitches: _highlightedPitches,
 }: SequencerSectionProps) {
   void [_backgroundOverlayStates, _highlightedPitches]
-  const pianoRollRef = useRef<HTMLDivElement | null>(null)
-  const [pianoRollSize, setPianoRollSize] = useState({ width: 0, height: 0 })
-
-  useLayoutEffect(() => {
-    const element = pianoRollRef.current
-    if (!element) {
-      return
-    }
-
-    const updateHeight = (): void => {
-      setPianoRollSize({
-        width: Math.round(element.clientWidth),
-        height: Math.round(element.clientHeight),
-      })
-    }
-
-    updateHeight()
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateHeight)
-      return () => {
-        window.removeEventListener('resize', updateHeight)
-      }
-    }
-
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(element)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [])
-
-  const rollRowMetrics = useMemo(() => {
-    if (pianoRollSize.height <= 0 || tuningLength <= 0) {
+  const rollRowTemplate = useMemo(() => {
+    if (tuningLength <= 0) {
       return null
     }
 
-    const rowHeight = Math.floor(pianoRollSize.height / tuningLength)
-    const lastRowHeight = pianoRollSize.height - rowHeight * (tuningLength - 1)
-
-    return {
-      rowHeight,
-      lastRowHeight,
-      gridTemplateRows: `${Array.from({ length: Math.max(tuningLength - 1, 0) }, () => `${rowHeight}px`).join(' ')}${tuningLength > 1 ? ' ' : ''}${lastRowHeight}px`,
-    }
-  }, [pianoRollSize.height, tuningLength])
+    return `repeat(${tuningLength}, minmax(0, 1fr))`
+  }, [tuningLength])
 
   const selectedOutline = selectionSpans.length > 0 ? selectionSpans[0] : null
 
@@ -140,11 +100,11 @@ export function SequencerSection({
             ))}
           </aside>
 
-          <div className="pianoRoll" ref={pianoRollRef} role="img" aria-label="Single octave piano roll">
+          <div className="pianoRoll" role="img" aria-label="Single octave piano roll">
             <div
               className="rollGrid"
               aria-hidden="true"
-              style={rollRowMetrics ? { gridTemplateRows: rollRowMetrics.gridTemplateRows } : undefined}
+              style={rollRowTemplate ? { gridTemplateRows: rollRowTemplate } : undefined}
             >
               {pitchRows.map((pitch) => (
                 <div
@@ -206,12 +166,8 @@ export function SequencerSection({
             <div className="rollNoteLayer" aria-hidden="true">
               {rollNotes.map((note, noteIndex) => {
                 const rowFromTop = tuningLength - 1 - note.pitch
-                const isBottomRow = rowFromTop === tuningLength - 1
-                const rowHeightPx = rollRowMetrics?.rowHeight ?? 0
-                const lastRowHeightPx = rollRowMetrics?.lastRowHeight ?? 0
-                const rowTopPx = rollRowMetrics ? rowFromTop * rowHeightPx : 0
-                const rowHeight = isBottomRow ? lastRowHeightPx : Math.max(0, rowHeightPx - 1)
                 const noteZIndex = note.isSelected ? 4 : 2
+                const rowHeightPercent = tuningLength > 0 ? 100 / tuningLength : 0
 
                 return (
                   <div
@@ -221,8 +177,8 @@ export function SequencerSection({
                       {
                         left: `calc(${note.x * 100}% + 1px)`,
                         width: `calc(${note.width * 100}% - 1px)`,
-                        top: `${rowTopPx}px`,
-                        height: `${rowHeight}px`,
+                        top: `${rowFromTop * rowHeightPercent}%`,
+                        height: `calc(${rowHeightPercent}% - 1px)`,
                         zIndex: noteZIndex,
                         background: getNoteFillColor(note.velocity),
                       } as CSSProperties
