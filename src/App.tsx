@@ -23,14 +23,9 @@ import {
   ratioToFrequency,
   createTransportState,
   getErrorMessage,
-  getLibrarySnapshot,
-  getPayloadError,
-  getCommandSuffix,
-  quoteCommandArg,
   formatOctaveForDisplay,
   parseKeyBinding,
   matchesBinding,
-  applyNumberParameter,
   sampleWaveShape,
   createMorphModulator,
   createTargetModulator,
@@ -48,14 +43,12 @@ import {
   isPathPrefix,
   getCellAtPath,
   getStatusCellMeta,
-  resolveSelectionPath,
 } from './app/shared'
 import type {
   MessageLevel,
   TranslateDirection,
-  InputMode,
   Cell,
-  UiStateSnapshot,
+  EditorState,
   TransportState,
   ModTarget,
   WaveType,
@@ -64,12 +57,25 @@ import type {
   StatusCellMetaItem,
   SelectionStep,
 } from './app/shared'
+import {
+  expandNumericPlaceholders,
+  routeKeymapAction,
+} from './app/domain/keymap'
+import {
+  moveSelection,
+  projectRootCell,
+  resolveSelection,
+} from './app/domain/selection'
+import type { ProjectSnapshot } from './app/domain/contracts'
 function App() {
-  const [currentInputMode, setCurrentInputMode] = useState<InputMode>('pitch')
+  const [editorState, setEditorState] = useState<EditorState>({
+    selection: { path: [] },
+    inputMode: 'pitch',
+  })
   const [statusMessage, setStatusMessage] = useState('')
   const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
   const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
-  const [snapshot, setSnapshot] = useState<UiStateSnapshot | null>(null)
+  const [projectSnapshot, setProjectSnapshot] = useState<ProjectSnapshot | null>(null)
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
   const [sequenceViewKeymap, setSequenceViewKeymap] = useState<Record<string, string>>({})
   const {
@@ -77,8 +83,6 @@ function App() {
     setIsCommandMode,
     commandText,
     setCommandText,
-    commandSuffix,
-    setCommandSuffix,
     commandHistory,
     setCommandHistory,
     historyIndex,
@@ -93,8 +97,9 @@ function App() {
   const keyInputRef = useRef<HTMLInputElement>(null)
   const baseFrequencyInputRef = useRef<HTMLInputElement>(null)
   const scaleMenuRef = useRef<HTMLDivElement | null>(null)
-  const lastSnapshotVersionRef = useRef<number>(-1)
-  const completionRequestVersionRef = useRef(0)
+  const projectRef = useRef<ProjectSnapshot | null>(null)
+  const editorStateRef = useRef<EditorState>(editorState)
+  const libraryRevisionRef = useRef(-1)
   const pendingNumberRef = useRef('')
   const lastShortcutCommandRef = useRef<{ command: 'copy' | 'cut' | 'paste'; at: number } | null>(
     null
@@ -165,12 +170,14 @@ function App() {
     isSwitchingModTabRef,
     modulatorInstancesRef,
   } = useModulatorPanelState()
-  const { sendBridgeRequest, executeBackendCommand } = useBridgeSession({
+  const { sendBridgeRequest, ingestLibrary, executeBackendCommand } = useBridgeSession({
     eventTokenRef,
     transportRef,
-    lastSnapshotVersionRef,
-    setSnapshot,
-    setCurrentInputMode,
+    projectRef,
+    editorStateRef,
+    libraryRevisionRef,
+    setProject: setProjectSnapshot,
+    setEditorState,
     setStatusMessage,
     setStatusLevel,
     setBridgeUnavailableMessage,
@@ -181,12 +188,15 @@ function App() {
     setPlayheadPhase,
   })
 
+  const installEditorState = useCallback((nextState: EditorState): void => {
+    editorStateRef.current = nextState
+    setEditorState(nextState)
+  }, [])
+
   useEffect(() => {
     if (!isCommandMode) {
-      setCommandSuffix('')
       return
     }
-
     const input = commandInputRef.current
     if (!input) {
       return
@@ -195,40 +205,7 @@ function App() {
     input.focus()
     const textLength = input.value.length
     input.setSelectionRange(textLength, textLength)
-  }, [isCommandMode, setCommandSuffix])
-
-  useEffect(() => {
-    if (!isCommandMode || bridgeUnavailableMessage !== null) {
-      setCommandSuffix('')
-      return
-    }
-
-    const currentVersion = completionRequestVersionRef.current + 1
-    completionRequestVersionRef.current = currentVersion
-
-    const loadSuffix = async (): Promise<void> => {
-      try {
-        const completionResponse = await sendBridgeRequest('command.completeText', {
-          partial: commandText,
-        })
-        const payloadError = getPayloadError(completionResponse.payload)
-        if (payloadError) {
-          throw new Error(payloadError)
-        }
-
-        const suffix = getCommandSuffix(completionResponse.payload) ?? ''
-        if (completionRequestVersionRef.current === currentVersion) {
-          setCommandSuffix(suffix)
-        }
-      } catch {
-        if (completionRequestVersionRef.current === currentVersion) {
-          setCommandSuffix('')
-        }
-      }
-    }
-
-    void loadSuffix()
-  }, [bridgeUnavailableMessage, commandText, isCommandMode, sendBridgeRequest, setCommandSuffix])
+  }, [isCommandMode])
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent): void => {
@@ -273,21 +250,53 @@ function App() {
           return false
         }
 
-        return matchesBinding(parsedBinding, event, currentInputMode)
+        return matchesBinding(parsedBinding, event, editorStateRef.current.inputMode)
       })
 
       if (matchedBinding) {
         event.preventDefault()
-        const command = applyNumberParameter(matchedBinding[1], pendingNumberRef.current)
-        const normalizedCommand = command.trim().toLowerCase()
-        if (normalizedCommand === 'copy' || normalizedCommand === 'cut' || normalizedCommand === 'paste') {
-          lastShortcutCommandRef.current = { command: normalizedCommand, at: Date.now() }
-        }
+        const command = expandNumericPlaceholders(matchedBinding[1], pendingNumberRef.current)
+        const actions = routeKeymapAction(command)
+        void (async () => {
+          try {
+            for (const action of actions) {
+              if (action.type === 'move') {
+                const project = projectRef.current
+                if (project) {
+                  const selection = moveSelection(
+                    projectRootCell(project),
+                    editorStateRef.current.selection,
+                    action.direction,
+                    action.amount
+                  )
+                  installEditorState({ ...editorStateRef.current, selection })
+                }
+                continue
+              }
+              if (action.type === 'inputMode') {
+                installEditorState({ ...editorStateRef.current, inputMode: action.inputMode })
+                continue
+              }
+
+              const normalizedCommand = action.command.trim().toLowerCase()
+              if (
+                normalizedCommand === 'copy' ||
+                normalizedCommand === 'cut' ||
+                normalizedCommand === 'paste'
+              ) {
+                lastShortcutCommandRef.current = {
+                  command: normalizedCommand,
+                  at: Date.now(),
+                }
+              }
+              await executeBackendCommand(action.command)
+            }
+          } catch (error) {
+            setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+            setStatusLevel('error')
+          }
+        })()
         pendingNumberRef.current = ''
-        void executeBackendCommand(command).catch((error: unknown) => {
-          setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-          setStatusLevel('error')
-        })
         return
       }
 
@@ -309,8 +318,8 @@ function App() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
   }, [
     bridgeUnavailableMessage,
-    currentInputMode,
     executeBackendCommand,
+    installEditorState,
     isCommandMode,
     openCommandMode,
     sequenceViewKeymap,
@@ -409,6 +418,7 @@ function App() {
     measureDenominator,
     timeSignature,
     scaleName,
+    scaleSourceId,
     scaleMode,
     scaleSize,
     scaleTranslateDirection,
@@ -420,7 +430,7 @@ function App() {
     rulerRatios,
     highlightedPitches,
   } = useMemo(() => {
-    if (!snapshot) {
+    if (!projectSnapshot) {
       const defaultStaffLineBand = Array.from(
         { length: DEFAULT_TUNING_LENGTH },
         (_, pitch) => (pitch % 2 === 0 ? 0 : 1)
@@ -434,6 +444,7 @@ function App() {
         measureDenominator: 4,
         timeSignature: '4/4',
         scaleName: 'major diatonic',
+        scaleSourceId: null as string | null,
         scaleMode: 3,
         scaleSize: 7,
         scaleTranslateDirection: 'up' as TranslateDirection,
@@ -452,22 +463,24 @@ function App() {
       }
     }
 
-    const rawTuningLength = snapshot.engine.tuning.intervals.length
+    const pitchState = projectSnapshot.project.pitch
+    const activeScale = pitchState.scale
+    const rawTuningLength = pitchState.tuning.definition.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
-    const measure = snapshot.engine.measure
-    const scaleValidPitches = snapshot.engine.scale
-      ? generateValidPitches(snapshot.engine.scale, derivedTuningLength)
+    const measure = projectSnapshot.project.measure
+    const scaleValidPitches = activeScale
+      ? generateValidPitches(activeScale.definition, derivedTuningLength)
       : []
-    const translateDirection = snapshot.engine.scale_translate_direction
+    const translateDirection = pitchState.translation_direction
 
     const mapPitch = (pitch: number): number =>
       mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
 
     const rootCell = measure.cell
 
-    const tuningRatios = getTuningRatios(snapshot.engine.tuning.intervals)
+    const tuningRatios = getTuningRatios(pitchState.tuning.definition.intervals)
     const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
-    const hasScale = snapshot.engine.scale !== null
+    const hasScale = activeScale !== null
     const staffLineBands: number[] = []
 
     if (hasScale) {
@@ -492,10 +505,10 @@ function App() {
     const selectedNumerator = measure.time_signature.numerator
     const selectedDenominator = measure.time_signature.denominator
     const directLeafCells = collectLeafCells(rootCell)
-    const selection = resolveSelectionPath(rootCell, snapshot.editor.selected.path)
-    const selectedCellPath = selection.cellPath
-    const resolvedSelectedCell = selection.selectedCell
-    const resolvedSelectedElement = selection.selectedElement
+    const selection = resolveSelection(rootCell, editorState.selection)
+    const selectedCellPath = selection?.cellPath ?? []
+    const resolvedSelectedCell = selection?.selectedCell ?? rootCell
+    const resolvedSelectedElement = selection?.selectedElement ?? null
     const selectedPitchSource = resolvedSelectedElement ?? resolvedSelectedCell ?? rootCell
     const selectedPitches = collectNotePitches(selectedPitchSource)
     const mappedHighlights = new Set(
@@ -531,13 +544,14 @@ function App() {
       measureNumerator: selectedNumerator,
       measureDenominator: selectedDenominator,
       timeSignature: signature,
-      scaleName: snapshot.engine.scale?.name ?? 'chromatic',
-      scaleMode: snapshot.engine.scale?.mode ?? 0,
-      scaleSize: snapshot.engine.scale?.intervals.length ?? 0,
-      scaleTranslateDirection: snapshot.engine.scale_translate_direction,
-      tuningName: snapshot.engine.tuning_name,
-      keyDisplay: snapshot.engine.key,
-      baseFrequency: snapshot.engine.base_frequency,
+      scaleName: activeScale?.definition.name ?? 'chromatic',
+      scaleSourceId: activeScale?.source_id ?? 'chromatic',
+      scaleMode: activeScale?.definition.mode ?? 0,
+      scaleSize: activeScale?.definition.intervals.length ?? 0,
+      scaleTranslateDirection: pitchState.translation_direction,
+      tuningName: pitchState.tuning.name,
+      keyDisplay: pitchState.transposition,
+      baseFrequency: pitchState.base_frequency,
       staffLineBandByPitch: staffLineBands,
       leafCells: directLeafCells,
       selectedLeafFlags: selectionFlags,
@@ -545,10 +559,10 @@ function App() {
       rulerRatios: tuningRatios,
       highlightedPitches: mappedHighlights,
       selectedCellPath,
-      selectedElementIndex: selection.selectedElementIndex,
-      selectedElementKind: selection.selectedElementKind,
+      selectedElementIndex: selection?.selectedElementIndex ?? null,
+      selectedElementKind: selection?.selectedElementKind ?? null,
     }
-  }, [snapshot])
+  }, [editorState.selection, projectSnapshot])
 
   const {
     isTimeSignatureEditing,
@@ -582,6 +596,7 @@ function App() {
     keyDisplay,
     baseFrequency,
     scaleName,
+    scaleSourceId,
     scaleMode,
     scaleSize,
     scaleTranslateDirection,
@@ -612,11 +627,11 @@ function App() {
     selectionSpans,
   } = useSequencerRollState({
     rootCell,
-    selectionPath: snapshot?.editor.selected.path ?? [],
+    selectionPath: editorState.selection.path,
     tuningLength,
   })
 
-  const currentInputModeLetter = currentInputMode.charAt(0).toUpperCase()
+  const currentInputModeLetter = editorState.inputMode.charAt(0).toUpperCase()
 
   const focusCommandBarWithText = useCallback(
     (commandTemplate: string): void => {
@@ -1201,12 +1216,7 @@ function App() {
     setLibraryLoading(true)
     try {
       const libraryResponse = await sendBridgeRequest('library.get', {})
-      const libraryError = getPayloadError(libraryResponse.payload)
-      if (libraryError) {
-        throw new Error(libraryError)
-      }
-      const parsedLibrary = getLibrarySnapshot(libraryResponse.payload)
-      setLibrarySnapshot(parsedLibrary)
+      ingestLibrary(libraryResponse.payload)
     } catch (error) {
       setStatusMessage(`Library refresh failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')
@@ -1218,7 +1228,7 @@ function App() {
     libraryLoading,
     sendBridgeRequest,
     setLibraryLoading,
-    setLibrarySnapshot,
+    ingestLibrary,
   ])
 
   const runLibraryCommand = useCallback(
@@ -1238,12 +1248,6 @@ function App() {
   )
 
   const previousLibraryTabRef = useRef(activeLibraryTab)
-
-  useEffect(() => {
-    if (isScaleUpdating) {
-      setOpenScaleMenu(false)
-    }
-  }, [isScaleUpdating])
 
   useEffect(() => {
     if (previousLibraryTabRef.current === activeLibraryTab) {
@@ -1321,7 +1325,7 @@ function App() {
         highlightedPitches={highlightedPitches}
       />
       <StatusSection
-        currentInputMode={currentInputMode}
+        currentInputMode={editorState.inputMode}
         currentInputModeLetter={currentInputModeLetter}
         isCommandMode={isCommandMode}
         submitCommand={submitCommand}
@@ -1330,7 +1334,6 @@ function App() {
         setCommandText={setCommandText}
         historyIndex={historyIndex}
         setHistoryIndex={setHistoryIndex}
-        commandSuffix={commandSuffix}
         closeCommandMode={closeCommandMode}
         commandHistory={commandHistory}
         liveCommandBufferRef={liveCommandBufferRef}
@@ -1385,8 +1388,9 @@ function App() {
         activeLibraryTab={activeLibraryTab}
         setActiveLibraryTab={setActiveLibraryTab}
         librarySnapshot={librarySnapshot}
+        activeTuningName={tuningName}
+        activeScaleId={scaleSourceId}
         runLibraryCommand={runLibraryCommand}
-        quoteCommandArg={quoteCommandArg}
         tuningSearchInputRef={tuningSearchInputRef}
         tuningSearch={tuningSearch}
         setTuningSearch={setTuningSearch}

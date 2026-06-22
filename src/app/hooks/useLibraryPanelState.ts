@@ -2,12 +2,15 @@ import { useMemo, useRef, useState } from 'react'
 import { getHierarchyRows } from '../shared'
 import type {
   SessionReference,
-  LibrarySnapshot,
   TuningSortMode,
   LibraryHierarchyRow,
+  LibraryCommandEntry,
 } from '../shared'
+import type { LibrarySnapshot } from '../domain/contracts'
 
 const createInitialLibrarySnapshot = (): LibrarySnapshot => ({
+  schema_version: 1,
+  library_revision: 0,
   paths: {
     library: '',
     sequences: '',
@@ -18,13 +21,9 @@ const createInitialLibrarySnapshot = (): LibrarySnapshot => ({
   scales: [],
   chords: [],
   commands: {
-    reloadScales: '',
-    reloadChords: '',
-    libraryDirectory: '',
-  },
-  active: {
-    tuningName: '',
-    scaleName: null,
+    reload_scales: '',
+    reload_chords: '',
+    library_directory: '',
   },
 })
 
@@ -71,10 +70,32 @@ export function useLibraryPanelState() {
 
   const tuningHierarchyRows = useMemo<LibraryHierarchyRow[]>(() => {
     const query = tuningSearch.trim().toLowerCase()
-    const tunings =
+    const tunings: LibraryCommandEntry[] =
       query.length === 0
-        ? librarySnapshot.tunings
-        : librarySnapshot.tunings.filter((tuning) => tuning.stem.toLowerCase().includes(query))
+        ? librarySnapshot.tunings.map((tuning) => ({
+            name: tuning.name,
+            stem: tuning.stem,
+            path: tuning.path,
+            command: tuning.command,
+            relativePath: tuning.relative_path,
+            description: tuning.description,
+            intervals: tuning.intervals,
+            octave: tuning.octave,
+            noteCount: tuning.note_count,
+          }))
+        : librarySnapshot.tunings
+            .filter((tuning) => tuning.stem.toLowerCase().includes(query))
+            .map((tuning) => ({
+              name: tuning.name,
+              stem: tuning.stem,
+              path: tuning.path,
+              command: tuning.command,
+              relativePath: tuning.relative_path,
+              description: tuning.description,
+              intervals: tuning.intervals,
+              octave: tuning.octave,
+              noteCount: tuning.note_count,
+            }))
 
     const sortedTunings = [...tunings].sort((a, b) => {
       if (tuningSortMode === 'name') {
@@ -115,10 +136,32 @@ export function useLibraryPanelState() {
 
   const measureHierarchyRows = useMemo<LibraryHierarchyRow[]>(() => {
     const query = measureSearch.trim().toLowerCase()
-    const measures =
+    const measures: LibraryCommandEntry[] =
       query.length === 0
-        ? librarySnapshot.measures
-        : librarySnapshot.measures.filter((measure) => measure.stem.toLowerCase().includes(query))
+        ? librarySnapshot.measures.map((measure) => ({
+            name: measure.name,
+            stem: measure.stem,
+            path: measure.path,
+            command: measure.command,
+            relativePath: measure.relative_path,
+            description: '',
+            intervals: [],
+            octave: null,
+            noteCount: null,
+          }))
+        : librarySnapshot.measures
+            .filter((measure) => measure.stem.toLowerCase().includes(query))
+            .map((measure) => ({
+              name: measure.name,
+              stem: measure.stem,
+              path: measure.path,
+              command: measure.command,
+              relativePath: measure.relative_path,
+              description: '',
+              intervals: [],
+              octave: null,
+              noteCount: null,
+            }))
     return getHierarchyRows(measures)
   }, [librarySnapshot.measures, measureSearch])
 

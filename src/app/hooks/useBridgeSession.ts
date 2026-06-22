@@ -1,41 +1,53 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { addXenBridgeListener, getXenBridgeRequest, removeXenBridgeListener } from '../../bridge/juceBridge'
 import {
   BRIDGE_PROTOCOL,
+  parseBridgeEvent,
+  parseCommandResponse,
+  parseEnvelope,
+  parseLibrarySnapshot,
+  parseProjectSnapshot,
+  parseSessionHello,
+} from '../domain/contracts'
+import { buildCommandContext, createSerialExecutor } from '../domain/commands'
+import { buildSessionReference } from '../domain/reference'
+import {
+  ingestLibrarySnapshot,
+  ingestProjectSnapshot,
+} from '../domain/resources'
+import { projectRootCell, resolveSelection } from '../domain/selection'
+import {
   FRONTEND_APP,
   FRONTEND_VERSION,
-  asRecord,
   createRequestId,
-  getCommandSnapshot,
-  getCommandStatus,
   getErrorMessage,
-  getLibrarySnapshot,
   getPayloadError,
-  getSequenceViewKeymap,
-  getSessionReference,
   normalizePhase,
-  parseUiStateSnapshot,
-  parseWireEnvelope,
 } from '../shared'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   Envelope,
   EnvelopePayload,
-  InputMode,
+  Keymap,
   LibrarySnapshot,
+  ProjectSnapshot,
+} from '../domain/contracts'
+import type {
+  EditorState,
   MessageLevel,
   SequenceViewKeymap,
   SessionReference,
   TransportState,
-  UiStateSnapshot,
 } from '../shared'
 
 type UseBridgeSessionArgs = {
   eventTokenRef: MutableRefObject<unknown>
   transportRef: MutableRefObject<TransportState>
-  lastSnapshotVersionRef: MutableRefObject<number>
-  setSnapshot: Dispatch<SetStateAction<UiStateSnapshot | null>>
-  setCurrentInputMode: Dispatch<SetStateAction<InputMode>>
+  projectRef: MutableRefObject<ProjectSnapshot | null>
+  editorStateRef: MutableRefObject<EditorState>
+  libraryRevisionRef: MutableRefObject<number>
+  setProject: Dispatch<SetStateAction<ProjectSnapshot | null>>
+  setEditorState: Dispatch<SetStateAction<EditorState>>
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
   setBridgeUnavailableMessage: Dispatch<SetStateAction<string | null>>
@@ -49,9 +61,11 @@ type UseBridgeSessionArgs = {
 export function useBridgeSession({
   eventTokenRef,
   transportRef,
-  lastSnapshotVersionRef,
-  setSnapshot,
-  setCurrentInputMode,
+  projectRef,
+  editorStateRef,
+  libraryRevisionRef,
+  setProject,
+  setEditorState,
   setStatusMessage,
   setStatusLevel,
   setBridgeUnavailableMessage,
@@ -61,66 +75,123 @@ export function useBridgeSession({
   setLibrarySnapshot,
   setPlayheadPhase,
 }: UseBridgeSessionArgs) {
+  const serialExecutorRef = useRef(createSerialExecutor())
+  const libraryRef = useRef<LibrarySnapshot | null>(null)
+
   const sendBridgeRequest = useCallback(
     async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
+      const requestId = createRequestId()
       const request = {
         protocol: BRIDGE_PROTOCOL,
         type: 'request' as const,
         name,
-        request_id: createRequestId(),
+        request_id: requestId,
         payload,
       }
 
       const requestFn = await getXenBridgeRequest()
-      const rawResponse = await requestFn(JSON.stringify(request))
-      const envelope = parseWireEnvelope(rawResponse)
-
-      if (envelope.type !== 'response') {
-        throw new Error(`Unexpected '${envelope.type}' envelope for '${name}'`)
+      const envelope = parseEnvelope(await requestFn(JSON.stringify(request)))
+      if (envelope.type !== 'response' || envelope.name !== name) {
+        throw new Error(`Unexpected response envelope for '${name}'`)
       }
-
+      if (envelope.request_id !== requestId) {
+        throw new Error(`Mismatched response request_id for '${name}'`)
+      }
       return envelope
     },
     []
   )
 
-  const applySnapshot = useCallback(
-    (rawSnapshot: unknown): number | null => {
-      const parsedSnapshot = parseUiStateSnapshot(rawSnapshot)
-      if (!parsedSnapshot) {
-        return null
-      }
+  const installEditorState = useCallback((nextState: EditorState): void => {
+    editorStateRef.current = nextState
+    setEditorState(nextState)
+  }, [editorStateRef, setEditorState])
 
-      if (parsedSnapshot.snapshot_version <= lastSnapshotVersionRef.current) {
-        return parsedSnapshot.snapshot_version
-      }
+  const ingestProject = useCallback((rawSnapshot: unknown): ProjectSnapshot => {
+    const snapshot = parseProjectSnapshot(rawSnapshot)
+    const result = ingestProjectSnapshot(
+      projectRef.current,
+      snapshot,
+      editorStateRef.current.selection
+    )
+    if (!result.installed) {
+      return result.snapshot
+    }
 
-      lastSnapshotVersionRef.current = parsedSnapshot.snapshot_version
-      setSnapshot(parsedSnapshot)
-      setCurrentInputMode(parsedSnapshot.editor.input_mode)
-      return parsedSnapshot.snapshot_version
-    },
-    [lastSnapshotVersionRef, setCurrentInputMode, setSnapshot]
-  )
+    projectRef.current = result.snapshot
+    setProject(result.snapshot)
+    if (result.selection !== editorStateRef.current.selection) {
+      installEditorState({ ...editorStateRef.current, selection: result.selection })
+    }
+    return result.snapshot
+  }, [editorStateRef, installEditorState, projectRef, setProject])
+
+  const ingestLibrary = useCallback((rawSnapshot: unknown): LibrarySnapshot | null => {
+    const snapshot = parseLibrarySnapshot(rawSnapshot)
+    const result = ingestLibrarySnapshot(libraryRef.current, snapshot)
+    if (!result.installed) {
+      return null
+    }
+    libraryRef.current = result.snapshot
+    libraryRevisionRef.current = result.snapshot.library_revision
+    setLibrarySnapshot(result.snapshot)
+    return result.snapshot
+  }, [libraryRevisionRef, setLibrarySnapshot])
 
   const executeBackendCommand = useCallback(
-    async (command: string): Promise<void> => {
-      const response = await sendBridgeRequest('command.execute', { command })
-      const payloadError = getPayloadError(response.payload)
-      if (payloadError) {
-        throw new Error(payloadError)
+    (command: string): Promise<void> => {
+      const run = async (): Promise<void> => {
+        const project = projectRef.current
+        if (!project) {
+          throw new Error('Project state is not loaded')
+        }
+        const context = buildCommandContext(project, editorStateRef.current.selection)
+        const selection = context.selection
+        if (selection !== editorStateRef.current.selection) {
+          installEditorState({ ...editorStateRef.current, selection })
+        }
+
+        const response = await sendBridgeRequest('command.execute', {
+          command,
+          context,
+        })
+        const payloadError = getPayloadError(response.payload)
+        if (payloadError) {
+          throw new Error(payloadError)
+        }
+
+        const commandResponse = parseCommandResponse(response.payload)
+        const installedProject = ingestProject(commandResponse.snapshot)
+        if (
+          commandResponse.suggested_selection &&
+          resolveSelection(
+            projectRootCell(installedProject),
+            commandResponse.suggested_selection
+          )
+        ) {
+          installEditorState({
+            ...editorStateRef.current,
+            selection: commandResponse.suggested_selection,
+          })
+        }
+
+        if (commandResponse.status.level !== 'debug') {
+          setStatusMessage(commandResponse.status.message)
+          setStatusLevel(commandResponse.status.level)
+        }
       }
 
-      const commandSnapshot = getCommandSnapshot(response.payload)
-      applySnapshot(commandSnapshot)
-      const commandStatus = getCommandStatus(response.payload)
-
-      if (commandStatus && commandStatus.level !== 'debug') {
-        setStatusMessage(commandStatus.message)
-        setStatusLevel(commandStatus.level)
-      }
+      return serialExecutorRef.current(run)
     },
-    [applySnapshot, sendBridgeRequest, setStatusLevel, setStatusMessage]
+    [
+      editorStateRef,
+      ingestProject,
+      installEditorState,
+      projectRef,
+      sendBridgeRequest,
+      setStatusLevel,
+      setStatusMessage,
+    ]
   )
 
   useEffect(() => {
@@ -130,123 +201,81 @@ export function useBridgeSession({
       try {
         eventTokenRef.current = addXenBridgeListener((rawEvent) => {
           try {
-            const eventEnvelope = parseWireEnvelope(rawEvent)
-            if (eventEnvelope.type !== 'event') {
+            const event = parseBridgeEvent(rawEvent)
+            if (event.name === 'state.changed') {
+              ingestProject(event.payload)
               return
             }
-
-            if (eventEnvelope.name === 'state.changed') {
-              applySnapshot(eventEnvelope.payload)
+            if (event.name === 'library.changed') {
+              ingestLibrary(event.payload)
               return
             }
-
-            if (eventEnvelope.name === 'transport.phase.sync') {
-              const payload = asRecord(eventEnvelope.payload)
-              if (!payload) {
-                return
+            if (event.name === 'transport.phase.sync') {
+              if (event.payload.bpm > 0) {
+                transportRef.current.bpm = event.payload.bpm
               }
-
-              if (typeof payload.bpm === 'number' && Number.isFinite(payload.bpm) && payload.bpm > 0) {
-                transportRef.current.bpm = payload.bpm
-              }
-
-              if (typeof payload.phase === 'number' && Number.isFinite(payload.phase)) {
-                const normalizedPhase = normalizePhase(payload.phase)
-                transportRef.current.phase = normalizedPhase
-                transportRef.current.active = true
-                setPlayheadPhase(normalizedPhase)
-              } else {
-                transportRef.current.active = false
-                setPlayheadPhase(null)
-              }
-
+              const phase = normalizePhase(event.payload.phase)
+              transportRef.current.phase = phase
+              transportRef.current.active = true
+              setPlayheadPhase(phase)
               return
             }
-
-            if (eventEnvelope.name === 'transport.stopped') {
-              transportRef.current.active = false
-              setPlayheadPhase(null)
-            }
+            transportRef.current.active = false
+            setPlayheadPhase(null)
           } catch {
-            // Keep footer status reserved for command responses only.
+            // Ignore malformed asynchronous events; requests surface contract errors.
           }
         })
 
         const helloResponse = await sendBridgeRequest('session.hello', {
           protocol: BRIDGE_PROTOCOL,
-          snapshot_schema_version: 4,
           frontend_app: FRONTEND_APP,
           frontend_version: FRONTEND_VERSION,
         })
-
         const helloError = getPayloadError(helloResponse.payload)
         if (helloError) {
           throw new Error(helloError)
         }
-
-        if (isMounted) {
-          setBridgeUnavailableMessage(null)
-          setSessionReference(getSessionReference(helloResponse.payload))
+        const hello = parseSessionHello(helloResponse.payload)
+        if (!isMounted) {
+          return
         }
 
-        const stateResponse = await sendBridgeRequest('state.get', {})
+        setBridgeUnavailableMessage(null)
+        setSessionReference(buildSessionReference(hello.catalog, hello.keymap))
+        const sequenceViewKeymap: Keymap[string] = hello.keymap.SequenceView ?? {}
+        setSequenceViewKeymap(sequenceViewKeymap)
+        setLibraryLoading(true)
+
+        const [stateResponse, libraryResponse] = await Promise.all([
+          sendBridgeRequest('state.get', {}),
+          sendBridgeRequest('library.get', {}),
+        ])
         const stateError = getPayloadError(stateResponse.payload)
-        if (stateError) {
-          throw new Error(stateError)
-        }
-
-        applySnapshot(stateResponse.payload)
-
-        const keymapResponse = await sendBridgeRequest('keymap.get', {})
-        const keymapError = getPayloadError(keymapResponse.payload)
-        if (keymapError) {
-          throw new Error(keymapError)
-        }
-        if (isMounted) {
-          setSequenceViewKeymap(getSequenceViewKeymap(keymapResponse.payload))
-        }
-
-        if (isMounted) {
-          setLibraryLoading(true)
-        }
-        const libraryResponse = await sendBridgeRequest('library.get', {})
         const libraryError = getPayloadError(libraryResponse.payload)
-        if (libraryError) {
-          throw new Error(libraryError)
+        if (stateError || libraryError) {
+          throw new Error(stateError ?? libraryError ?? 'Initial resource request failed')
         }
-        if (isMounted) {
-          const parsedLibrary = getLibrarySnapshot(libraryResponse.payload)
-          setLibrarySnapshot(parsedLibrary)
-          setLibraryLoading(false)
-        }
+        ingestProject(stateResponse.payload)
+        ingestLibrary(libraryResponse.payload)
+        setLibraryLoading(false)
 
-        const welcomeResponse = await sendBridgeRequest('command.execute', { command: 'welcome' })
-        const welcomeError = getPayloadError(welcomeResponse.payload)
-        if (welcomeError) {
-          throw new Error(welcomeError)
-        }
-
-        const welcomeSnapshot = getCommandSnapshot(welcomeResponse.payload)
-        applySnapshot(welcomeSnapshot)
-        const welcomeStatus = getCommandStatus(welcomeResponse.payload)
-
-        if (isMounted && welcomeStatus && welcomeStatus.level !== 'debug') {
-          setStatusMessage(welcomeStatus.message)
-          setStatusLevel(welcomeStatus.level)
-        }
+        await executeBackendCommand('welcome')
       } catch (error) {
         if (isMounted) {
           setLibraryLoading(false)
           const message = getErrorMessage(error)
           if (message.startsWith('JUCE bridge unavailable:')) {
             setBridgeUnavailableMessage(message)
+          } else {
+            setStatusMessage(`Bridge error: ${message}`)
+            setStatusLevel('error')
           }
         }
       }
     }
 
     void connect()
-
     return () => {
       isMounted = false
       if (eventTokenRef.current !== null) {
@@ -255,12 +284,13 @@ export function useBridgeSession({
       }
     }
   }, [
-    applySnapshot,
     eventTokenRef,
+    executeBackendCommand,
+    ingestLibrary,
+    ingestProject,
     sendBridgeRequest,
     setBridgeUnavailableMessage,
     setLibraryLoading,
-    setLibrarySnapshot,
     setPlayheadPhase,
     setSequenceViewKeymap,
     setSessionReference,
@@ -271,7 +301,7 @@ export function useBridgeSession({
 
   return {
     sendBridgeRequest,
-    applySnapshot,
+    ingestLibrary,
     executeBackendCommand,
   }
 }

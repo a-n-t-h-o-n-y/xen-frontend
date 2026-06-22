@@ -5,10 +5,10 @@ import {
   parseIntegerInput,
   parsePositiveFloatInput,
   parseTimeSignatureInput,
-  quoteCommandArg,
 } from '../shared'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { LibrarySnapshot, MessageLevel, TranslateDirection } from '../shared'
+import type { MessageLevel, TranslateDirection } from '../shared'
+import type { LibrarySnapshot } from '../domain/contracts'
 
 type UseHeaderEditingArgs = {
   bridgeUnavailableMessage: string | null
@@ -16,6 +16,7 @@ type UseHeaderEditingArgs = {
   keyDisplay: number
   baseFrequency: number
   scaleName: string
+  scaleSourceId: string | null
   scaleMode: number
   scaleSize: number
   scaleTranslateDirection: TranslateDirection
@@ -34,6 +35,7 @@ export function useHeaderEditing({
   keyDisplay,
   baseFrequency,
   scaleName,
+  scaleSourceId,
   scaleMode,
   scaleSize,
   scaleTranslateDirection,
@@ -54,13 +56,6 @@ export function useHeaderEditing({
   const [isScaleUpdating, setIsScaleUpdating] = useState(false)
 
   useEffect(() => {
-    if (isTimeSignatureEditing) {
-      return
-    }
-    setTimeSignatureDraft(timeSignature)
-  }, [isTimeSignatureEditing, timeSignature])
-
-  useEffect(() => {
     if (!isTimeSignatureEditing) {
       return
     }
@@ -73,13 +68,6 @@ export function useHeaderEditing({
   }, [isTimeSignatureEditing, timeSignatureInputRef])
 
   useEffect(() => {
-    if (isKeyEditing) {
-      return
-    }
-    setKeyDraft(`${keyDisplay}`)
-  }, [isKeyEditing, keyDisplay])
-
-  useEffect(() => {
     if (!isKeyEditing) {
       return
     }
@@ -90,13 +78,6 @@ export function useHeaderEditing({
     input.focus()
     input.select()
   }, [isKeyEditing, keyInputRef])
-
-  useEffect(() => {
-    if (isBaseFrequencyEditing) {
-      return
-    }
-    setBaseFrequencyDraft(`${baseFrequency}`)
-  }, [baseFrequency, isBaseFrequencyEditing])
 
   useEffect(() => {
     if (!isBaseFrequencyEditing) {
@@ -254,13 +235,14 @@ export function useHeaderEditing({
   )
 
   const scaleOptions = useMemo(() => {
-    const names = new Set<string>()
-    librarySnapshot.scales.forEach((scale) => names.add(scale.name))
-    if (scaleName.trim().length > 0) {
-      names.add(scaleName)
-    }
-    return Array.from(names).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-  }, [librarySnapshot.scales, scaleName])
+    return librarySnapshot.scales
+      .map((scale) => ({
+        id: scale.id,
+        name: scale.definition === null ? 'chromatic' : scale.definition.name,
+        command: scale.command,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+  }, [librarySnapshot.scales])
 
   const modeOptions = useMemo(() => {
     const isChromatic = /chromatic/i.test(scaleName)
@@ -292,19 +274,20 @@ export function useHeaderEditing({
   )
 
   const applyScaleSelection = useCallback(
-    async (nextScaleName: string): Promise<void> => {
+    async (nextScaleId: string): Promise<void> => {
+      const selectedScale = scaleOptions.find((scale) => scale.id === nextScaleId)
       if (
         bridgeUnavailableMessage !== null ||
         isScaleUpdating ||
-        !nextScaleName ||
-        nextScaleName === scaleName
+        !selectedScale ||
+        nextScaleId === scaleSourceId
       ) {
         return
       }
 
       setIsScaleUpdating(true)
       try {
-        await executeBackendCommand(`set scale ${quoteCommandArg(nextScaleName)}`)
+        await executeBackendCommand(selectedScale.command)
       } catch (error) {
         setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
         setStatusLevel('error')
@@ -316,7 +299,8 @@ export function useHeaderEditing({
       bridgeUnavailableMessage,
       executeBackendCommand,
       isScaleUpdating,
-      scaleName,
+      scaleOptions,
+      scaleSourceId,
       setStatusLevel,
       setStatusMessage,
     ]

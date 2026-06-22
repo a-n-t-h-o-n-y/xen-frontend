@@ -11,7 +11,6 @@ type StatusSectionProps = {
   setCommandText: Dispatch<SetStateAction<string>>
   historyIndex: number
   setHistoryIndex: Dispatch<SetStateAction<number>>
-  commandSuffix: string
   closeCommandMode: (options?: { preserveText?: boolean }) => void
   commandHistory: string[]
   liveCommandBufferRef: { current: string }
@@ -30,7 +29,6 @@ export function StatusSection({
   setCommandText,
   historyIndex,
   setHistoryIndex,
-  commandSuffix,
   closeCommandMode,
   commandHistory,
   liveCommandBufferRef,
@@ -64,23 +62,6 @@ export function StatusSection({
                 liveCommandBufferRef.current = nextValue
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Tab') {
-                  event.preventDefault()
-
-                  if (!commandSuffix) {
-                    return
-                  }
-
-                  const completedCore = `${commandText}${commandSuffix}`
-                  const completedText = completedCore.endsWith(' ') ? completedCore : `${completedCore} `
-                  if (historyIndex !== -1) {
-                    setHistoryIndex(-1)
-                  }
-                  setCommandText(completedText)
-                  liveCommandBufferRef.current = completedText
-                  return
-                }
-
                 if (event.key === 'Escape') {
                   event.preventDefault()
                   closeCommandMode({ preserveText: true })
@@ -138,7 +119,6 @@ export function StatusSection({
               autoCorrect="off"
               aria-label="Command input"
             />
-            {commandSuffix ? <span className="statusCommandGhost mono">{commandSuffix}</span> : null}
           </div>
         </form>
       ) : (

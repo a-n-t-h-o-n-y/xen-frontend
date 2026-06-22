@@ -3,7 +3,6 @@ import { useCallback, useRef, useState } from 'react'
 export function useCommandState() {
   const [isCommandMode, setIsCommandMode] = useState(false)
   const [commandText, setCommandText] = useState('')
-  const [commandSuffix, setCommandSuffix] = useState('')
   const [commandHistory, setCommandHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState<number>(-1)
   const liveCommandBufferRef = useRef('')
@@ -31,8 +30,6 @@ export function useCommandState() {
     setIsCommandMode,
     commandText,
     setCommandText,
-    commandSuffix,
-    setCommandSuffix,
     commandHistory,
     setCommandHistory,
     historyIndex,

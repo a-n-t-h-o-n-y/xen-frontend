@@ -32,9 +32,9 @@ type HeaderSectionProps = {
   openScaleMenu: boolean
   setOpenScaleMenu: Dispatch<SetStateAction<boolean>>
   isScaleUpdating: boolean
-  scaleOptions: string[]
+  scaleOptions: Array<{ id: string; name: string; command: string }>
   scaleName: string
-  applyScaleSelection: (name: string) => Promise<void>
+  applyScaleSelection: (id: string) => Promise<void>
   scaleTranslateDirection: TranslateDirection
   toggleTranslateDirection: () => Promise<void>
   modeOptions: number[]
@@ -259,19 +259,19 @@ export function HeaderSection({
                 </button>
                 {openScaleMenu ? (
                   <div className="waveSelectMenu headerScaleMenu" role="listbox" aria-label="Scale options">
-                    {scaleOptions.map((name) => (
+                    {scaleOptions.map((option) => (
                       <button
-                        key={`scale-option-${name}`}
+                        key={`scale-option-${option.id}`}
                         type="button"
-                        className={`waveSelectOption${name === scaleName ? ' waveSelectOption-active' : ''}`}
+                        className={`waveSelectOption${option.name === scaleName ? ' waveSelectOption-active' : ''}`}
                         onClick={() => {
                           setOpenScaleMenu(false)
-                          void applyScaleSelection(name)
+                          void applyScaleSelection(option.id)
                         }}
                         role="option"
-                        aria-selected={name === scaleName}
+                        aria-selected={option.name === scaleName}
                       >
-                        {name}
+                        {option.name}
                       </button>
                     ))}
                   </div>

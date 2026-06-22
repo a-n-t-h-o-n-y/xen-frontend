@@ -1,6 +1,26 @@
 /* Shared app declarations extracted from App.tsx */
-export const BRIDGE_PROTOCOL = 'xen.bridge.v1'
-export const FRONTEND_APP = 'xen-frontend-skeleton'
+import type {
+  Cell,
+  EnvelopePayload,
+  Measure,
+  MusicElement,
+  SelectionPath,
+} from './domain/contracts'
+
+export type {
+  Cell,
+  Envelope,
+  EnvelopePayload,
+  Measure,
+  MusicElement,
+  NoteElement,
+  SelectionPath,
+  SelectionStep,
+  SequenceElement,
+} from './domain/contracts'
+export type { ResolvedSelection } from './domain/selection'
+
+export const FRONTEND_APP = 'xen-web-ui'
 export const FRONTEND_VERSION = '0.2.0'
 export const MAX_COMMAND_HISTORY = 100
 export const DEFAULT_TUNING_LENGTH = 12
@@ -27,8 +47,11 @@ export const usesMetaForCommand = isApplePlatform()
 export type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
 export type TranslateDirection = 'up' | 'down'
 export type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
+export type EditorState = {
+  selection: { path: SelectionPath }
+  inputMode: InputMode
+}
 
-export type EnvelopePayload = Record<string, unknown>
 export type SequenceViewKeymap = Record<string, string>
 export type PatternPrefix = {
   offset: number
@@ -68,18 +91,6 @@ export type LibraryCommandEntry = {
   noteCount: number | null
 }
 
-export type LibraryScaleEntry = {
-  name: string
-  command: string
-  intervals: number[]
-}
-
-export type LibraryChordEntry = {
-  name: string
-  command: string
-  intervals: number[]
-}
-
 export type LibraryHierarchyRow = {
   kind: 'directory' | 'file'
   key: string
@@ -88,64 +99,7 @@ export type LibraryHierarchyRow = {
   entry?: LibraryCommandEntry
 }
 
-export type LibrarySnapshot = {
-  paths: {
-    library: string
-    sequences: string
-    tunings: string
-  }
-  measures: LibraryCommandEntry[]
-  tunings: LibraryCommandEntry[]
-  scales: LibraryScaleEntry[]
-  chords: LibraryChordEntry[]
-  commands: {
-    reloadScales: string
-    reloadChords: string
-    libraryDirectory: string
-  }
-  active: {
-    tuningName: string
-    scaleName: string | null
-  }
-}
-
 export type TuningSortMode = 'name' | 'noteCount' | 'octave'
-
-export type Envelope = {
-  protocol: string
-  type: 'request' | 'response' | 'event'
-  name: string
-  request_id?: string
-  payload: EnvelopePayload
-}
-
-export type NoteElement = {
-  type: 'Note'
-  pitch: number
-  velocity: number
-  delay: number
-  gate: number
-}
-
-export type SequenceElement = {
-  type: 'Sequence'
-  cells: Cell[]
-}
-
-export type MusicElement = NoteElement | SequenceElement
-
-export type Cell = {
-  weight: number
-  elements: MusicElement[]
-}
-
-export type Measure = {
-  cell: Cell
-  time_signature: {
-    numerator: number
-    denominator: number
-  }
-}
 
 export type NoteSpanIR = {
   sequenceIndex: number
@@ -166,45 +120,6 @@ export type Scale = {
   tuning_length: number
   intervals: number[]
   mode: number
-}
-
-export type SelectionStep = {
-  kind: 'element' | 'cell'
-  index: number
-}
-
-export type SelectionPath = SelectionStep[]
-
-export type ResolvedSelection = {
-  cellPath: number[]
-  selectedCell: Cell | null
-  selectedElement: MusicElement | null
-  selectedElementIndex: number | null
-  selectedElementKind: SelectionStep['kind'] | null
-}
-
-export type UiStateSnapshot = {
-  schema_version: 4
-  snapshot_version: number
-  commit_id: number
-  engine: {
-    measure: Measure
-    tuning: {
-      intervals: number[]
-      octave: number
-    }
-    tuning_name: string
-    scale: Scale | null
-    key: number
-    scale_translate_direction: TranslateDirection
-    base_frequency: number
-  }
-  editor: {
-    selected: {
-      path: SelectionPath
-    }
-    input_mode: InputMode
-  }
 }
 
 export type TransportState = {
@@ -517,45 +432,6 @@ export const getErrorMessage = (error: unknown): string => {
   return String(error)
 }
 
-export const parseWireEnvelope = (rawValue: unknown): Envelope => {
-  if (typeof rawValue === 'string') {
-    throw new Error('Bridge contract mismatch: expected object envelope, received string')
-  }
-
-  if (typeof rawValue !== 'object' || rawValue === null || Array.isArray(rawValue)) {
-    throw new Error('Envelope is not an object')
-  }
-
-  const candidate = rawValue as Record<string, unknown>
-  if (candidate.protocol !== BRIDGE_PROTOCOL) {
-    throw new Error('Unexpected bridge protocol')
-  }
-
-  if (candidate.type !== 'request' && candidate.type !== 'response' && candidate.type !== 'event') {
-    throw new Error('Unexpected envelope type')
-  }
-
-  if (typeof candidate.name !== 'string') {
-    throw new Error('Envelope name must be a string')
-  }
-
-  if (
-    typeof candidate.payload !== 'object' ||
-    candidate.payload === null ||
-    Array.isArray(candidate.payload)
-  ) {
-    throw new Error('Envelope payload must be an object')
-  }
-
-  return {
-    protocol: BRIDGE_PROTOCOL,
-    type: candidate.type,
-    name: candidate.name,
-    request_id: typeof candidate.request_id === 'string' ? candidate.request_id : undefined,
-    payload: candidate.payload as EnvelopePayload,
-  }
-}
-
 export const getPayloadError = (payload: EnvelopePayload): string | null => {
   const rawError = payload.error
   if (typeof rawError !== 'object' || rawError === null || Array.isArray(rawError)) {
@@ -565,265 +441,6 @@ export const getPayloadError = (payload: EnvelopePayload): string | null => {
   const message = (rawError as Record<string, unknown>).message
   return typeof message === 'string' ? message : null
 }
-
-export const getCommandSnapshot = (payload: EnvelopePayload): unknown =>
-  'snapshot' in payload ? payload.snapshot : null
-
-export const isMessageLevel = (value: unknown): value is MessageLevel =>
-  value === 'debug' || value === 'info' || value === 'warning' || value === 'error'
-
-export const getCommandStatus = (
-  payload: EnvelopePayload
-): { level: MessageLevel; message: string } | null => {
-  const rawStatus = payload.status
-  if (typeof rawStatus !== 'object' || rawStatus === null || Array.isArray(rawStatus)) {
-    return null
-  }
-
-  const statusLevel = (rawStatus as Record<string, unknown>).level
-  const statusMessage = (rawStatus as Record<string, unknown>).message
-  if (!isMessageLevel(statusLevel) || typeof statusMessage !== 'string') {
-    return null
-  }
-
-  return {
-    level: statusLevel,
-    message: statusMessage,
-  }
-}
-
-export const getCommandSuffix = (payload: EnvelopePayload): string | null => {
-  const suffix = payload.suffix
-  return typeof suffix === 'string' ? suffix : null
-}
-
-export const getSequenceViewKeymap = (payload: EnvelopePayload): SequenceViewKeymap => {
-  const keymapRoot = asRecord(payload.keymap)
-  if (!keymapRoot) {
-    return {}
-  }
-
-  const sequenceView = asRecord(keymapRoot.SequenceView)
-  if (!sequenceView) {
-    return {}
-  }
-
-  const entries = Object.entries(sequenceView).filter(
-    (entry): entry is [string, string] => typeof entry[1] === 'string'
-  )
-  return Object.fromEntries(entries)
-}
-
-export const getSessionReference = (payload: EnvelopePayload): SessionReference => {
-  const root = asRecord(payload.reference)
-  if (!root) {
-    return { commands: [], keybindings: [] }
-  }
-
-  const rawCommands = Array.isArray(root.commands) ? root.commands : []
-  const commands = rawCommands
-    .map((value) => {
-      const record = asRecord(value)
-      if (!record) {
-        return null
-      }
-      if (
-        typeof record.id !== 'string' ||
-        typeof record.signature !== 'string' ||
-        typeof record.description !== 'string'
-      ) {
-        return null
-      }
-      return {
-        id: record.id,
-        signature: record.signature,
-        description: record.description,
-      } satisfies CommandReferenceEntry
-    })
-    .filter((entry): entry is CommandReferenceEntry => entry !== null)
-
-  const rawKeybindingGroups = Array.isArray(root.keybindings) ? root.keybindings : []
-  const keybindings = rawKeybindingGroups
-    .map((groupValue) => {
-      const group = asRecord(groupValue)
-      if (!group || typeof group.component !== 'string') {
-        return null
-      }
-
-      const rawBindings = Array.isArray(group.bindings) ? group.bindings : []
-      const bindings = rawBindings
-        .map((bindingValue) => {
-          const binding = asRecord(bindingValue)
-          if (!binding || typeof binding.key !== 'string' || typeof binding.command !== 'string') {
-            return null
-          }
-          return {
-            key: binding.key,
-            command: binding.command,
-          } satisfies KeybindingReferenceEntry
-        })
-        .filter((binding): binding is KeybindingReferenceEntry => binding !== null)
-
-      return {
-        component: group.component,
-        bindings,
-      } satisfies KeybindingReferenceGroup
-    })
-    .filter((group): group is KeybindingReferenceGroup => group !== null)
-
-  return { commands, keybindings }
-}
-
-export const parseLibraryCommandEntries = (value: unknown): LibraryCommandEntry[] => {
-  const rows = Array.isArray(value) ? value : []
-  return rows
-    .map((row) => {
-      if (typeof row === 'string') {
-        const name = row
-        const stem = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : name
-        return {
-          name,
-          stem,
-          path: '',
-          command: '',
-          relativePath: '',
-          description: '',
-          intervals: [],
-          octave: null,
-          noteCount: null,
-        } satisfies LibraryCommandEntry
-      }
-
-      const record = asRecord(row)
-      if (!record) {
-        return null
-      }
-      const name =
-        typeof record.name === 'string'
-          ? record.name
-          : typeof record.filename === 'string'
-            ? record.filename
-            : typeof record.file === 'string'
-              ? record.file
-              : null
-      if (!name) {
-        return null
-      }
-      const stem =
-        typeof record.stem === 'string'
-          ? record.stem
-          : name.includes('.')
-            ? name.slice(0, name.lastIndexOf('.'))
-            : name
-      const path =
-        typeof record.path === 'string'
-          ? record.path
-          : typeof record.full_path === 'string'
-            ? record.full_path
-            : ''
-      const command = typeof record.command === 'string' ? record.command : ''
-      const relativePath =
-        typeof record.relative_path === 'string'
-          ? record.relative_path
-          : typeof record.relativePath === 'string'
-            ? record.relativePath
-            : ''
-      const description = typeof record.description === 'string' ? record.description : ''
-      const intervals = Array.isArray(record.intervals)
-        ? record.intervals.filter((value): value is number => typeof value === 'number')
-        : []
-      const octave =
-        typeof record.octave === 'number' && Number.isFinite(record.octave) ? record.octave : null
-      const noteCount =
-        typeof record.note_count === 'number' && Number.isFinite(record.note_count)
-          ? record.note_count
-          : typeof record.noteCount === 'number' && Number.isFinite(record.noteCount)
-            ? record.noteCount
-            : null
-      return {
-        name,
-        stem,
-        path,
-        command,
-        relativePath,
-        description,
-        intervals,
-        octave,
-        noteCount,
-      } satisfies LibraryCommandEntry
-    })
-    .filter((entry): entry is LibraryCommandEntry => entry !== null)
-}
-
-export const parseLibraryScaleEntries = (value: unknown): LibraryScaleEntry[] => {
-  const rows = Array.isArray(value) ? value : []
-  return rows
-    .map((row) => {
-      const record = asRecord(row)
-      if (!record || typeof record.name !== 'string' || typeof record.command !== 'string') {
-        return null
-      }
-      const intervals = Array.isArray(record.intervals)
-        ? record.intervals.filter((value): value is number => typeof value === 'number')
-        : []
-      return {
-        name: record.name,
-        command: record.command,
-        intervals,
-      } satisfies LibraryScaleEntry
-    })
-    .filter((entry): entry is LibraryScaleEntry => entry !== null)
-}
-
-export const parseLibraryChordEntries = (value: unknown): LibraryChordEntry[] => {
-  const rows = Array.isArray(value) ? value : []
-  return rows
-    .map((row) => {
-      const record = asRecord(row)
-      if (!record || typeof record.name !== 'string' || typeof record.command !== 'string') {
-        return null
-      }
-      const intervals = Array.isArray(record.intervals)
-        ? record.intervals.filter((value): value is number => typeof value === 'number')
-        : []
-      return {
-        name: record.name,
-        command: record.command,
-        intervals,
-      } satisfies LibraryChordEntry
-    })
-    .filter((entry): entry is LibraryChordEntry => entry !== null)
-}
-
-export const getLibrarySnapshot = (payload: EnvelopePayload): LibrarySnapshot => {
-  const paths = asRecord(payload.paths)
-  const commands = asRecord(payload.commands)
-  const active = asRecord(payload.active)
-
-  return {
-    paths: {
-      library: typeof paths?.library === 'string' ? paths.library : '',
-      sequences: typeof paths?.sequences === 'string' ? paths.sequences : '',
-      tunings: typeof paths?.tunings === 'string' ? paths.tunings : '',
-    },
-    measures: parseLibraryCommandEntries(payload.measures),
-    tunings: parseLibraryCommandEntries(payload.tunings),
-    scales: parseLibraryScaleEntries(payload.scales),
-    chords: parseLibraryChordEntries(payload.chords),
-    commands: {
-      reloadScales: typeof commands?.reload_scales === 'string' ? commands.reload_scales : '',
-      reloadChords: typeof commands?.reload_chords === 'string' ? commands.reload_chords : '',
-      libraryDirectory:
-        typeof commands?.library_directory === 'string' ? commands.library_directory : '',
-    },
-    active: {
-      tuningName: typeof active?.tuning_name === 'string' ? active.tuning_name : '',
-      scaleName: typeof active?.scale_name === 'string' ? active.scale_name : null,
-    },
-  }
-}
-
-export const quoteCommandArg = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
 
 export const formatOctaveForDisplay = (value: number): string => {
   const rounded = value.toFixed(2)
@@ -1221,22 +838,6 @@ export const isEditableTarget = (target: EventTarget | null): boolean => {
   )
 }
 
-export const asRecord = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return null
-  }
-
-  return value as Record<string, unknown>
-}
-
-export const toNumberArray = (value: unknown): number[] => {
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  return value.filter((item): item is number => typeof item === 'number')
-}
-
 export const normalizePitch = (pitch: number, tuningLength: number): number => {
   const modulo = pitch % tuningLength
   return modulo >= 0 ? modulo : modulo + tuningLength
@@ -1274,256 +875,6 @@ export const getSelectedElement = (
 
 export const getChildCells = (cell: Cell): Cell[] => {
   return getSequenceElements(cell).flatMap((element) => element.cells)
-}
-
-const parseSelectionStep = (value: unknown): SelectionStep | null => {
-  const step = asRecord(value)
-  if (
-    !step ||
-    (step.kind !== 'element' && step.kind !== 'cell') ||
-    typeof step.index !== 'number' ||
-    !Number.isInteger(step.index) ||
-    step.index < 0
-  ) {
-    return null
-  }
-
-  return {
-    kind: step.kind,
-    index: step.index,
-  }
-}
-
-export const resolveSelectionPath = (
-  rootCell: Cell,
-  selectionPath: SelectionPath
-): ResolvedSelection => {
-  let currentCell = rootCell
-  let currentCellPath: number[] = []
-  let selectedElement: MusicElement | null = null
-  let selectedElementIndex: number | null = null
-  let selectedElementKind: SelectionStep['kind'] | null = null
-
-  for (const step of selectionPath) {
-    if (step.kind === 'element') {
-      if (step.index >= currentCell.elements.length) {
-        break
-      }
-
-      selectedElementIndex = step.index
-      selectedElement = currentCell.elements[step.index] ?? null
-      selectedElementKind = 'element'
-      continue
-    }
-
-    if (step.index >= 0 && selectedElement?.type === 'Sequence' && step.index < selectedElement.cells.length) {
-      currentCell = selectedElement.cells[step.index]
-      currentCellPath = [...currentCellPath, step.index]
-      selectedElement = null
-      selectedElementIndex = null
-      selectedElementKind = 'cell'
-      continue
-    }
-
-    break
-  }
-
-  return {
-    cellPath: currentCellPath,
-    selectedCell: currentCell,
-    selectedElement,
-    selectedElementIndex,
-    selectedElementKind,
-  }
-}
-
-export const parseMusicElement = (value: unknown): MusicElement | null => {
-  const element = asRecord(value)
-  if (!element || typeof element.type !== 'string') {
-    return null
-  }
-
-  if (
-    element.type === 'Note' &&
-    typeof element.pitch === 'number' &&
-    typeof element.velocity === 'number' &&
-    typeof element.delay === 'number' &&
-    typeof element.gate === 'number'
-  ) {
-    return {
-      type: 'Note',
-      pitch: element.pitch,
-      velocity: element.velocity,
-      delay: element.delay,
-      gate: element.gate,
-    }
-  }
-
-  if (element.type === 'Sequence' && Array.isArray(element.cells)) {
-    const cells = element.cells.map(parseCell)
-    if (cells.some((cell) => cell === null)) {
-      return null
-    }
-
-    return {
-      type: 'Sequence',
-      cells: cells.filter((cell): cell is Cell => cell !== null),
-    }
-  }
-
-  return null
-}
-
-export const parseCell = (value: unknown): Cell | null => {
-  const cell = asRecord(value)
-  if (!cell || typeof cell.weight !== 'number' || !Array.isArray(cell.elements)) {
-    return null
-  }
-
-  const elements = cell.elements.map(parseMusicElement)
-  if (elements.some((element) => element === null)) {
-    return null
-  }
-
-  return {
-    weight: cell.weight,
-    elements: elements.filter((element): element is MusicElement => element !== null),
-  }
-}
-
-export const parseMeasure = (value: unknown): Measure | null => {
-  const measure = asRecord(value)
-  if (!measure) {
-    return null
-  }
-
-  const cell = parseCell(measure.cell)
-  const timeSignature = asRecord(measure.time_signature)
-  if (
-    !cell ||
-    !timeSignature ||
-    typeof timeSignature.numerator !== 'number' ||
-    typeof timeSignature.denominator !== 'number'
-  ) {
-    return null
-  }
-
-  return {
-    cell,
-    time_signature: {
-      numerator: timeSignature.numerator,
-      denominator: timeSignature.denominator,
-    },
-  }
-}
-
-export const parseScale = (value: unknown): Scale | null => {
-  if (value === null) {
-    return null
-  }
-
-  const scale = asRecord(value)
-  if (
-    !scale ||
-    typeof scale.name !== 'string' ||
-    typeof scale.tuning_length !== 'number' ||
-    typeof scale.mode !== 'number'
-  ) {
-    return null
-  }
-
-  return {
-    name: scale.name,
-    tuning_length: scale.tuning_length,
-    intervals: toNumberArray(scale.intervals),
-    mode: scale.mode,
-  }
-}
-
-export const parseUiStateSnapshot = (value: unknown): UiStateSnapshot | null => {
-  const snapshot = asRecord(value)
-  if (
-    !snapshot ||
-    snapshot.schema_version !== 4 ||
-    typeof snapshot.commit_id !== 'number' ||
-    typeof snapshot.snapshot_version !== 'number'
-  ) {
-    return null
-  }
-
-  const engine = asRecord(snapshot.engine)
-  const editor = asRecord(snapshot.editor)
-  if (!engine || !editor) {
-    return null
-  }
-
-  const tuning = asRecord(engine.tuning)
-  const selected = asRecord(editor.selected)
-  if (
-    !tuning ||
-    !selected ||
-    !engine.measure ||
-    typeof tuning.octave !== 'number' ||
-    typeof engine.tuning_name !== 'string' ||
-    typeof engine.key !== 'number' ||
-    typeof engine.base_frequency !== 'number' ||
-    (engine.scale_translate_direction !== 'up' && engine.scale_translate_direction !== 'down') ||
-    typeof editor.input_mode !== 'string'
-  ) {
-    return null
-  }
-
-  const inputMode = editor.input_mode
-  if (
-    inputMode !== 'pitch' &&
-    inputMode !== 'velocity' &&
-    inputMode !== 'delay' &&
-    inputMode !== 'gate' &&
-    inputMode !== 'scale'
-  ) {
-    return null
-  }
-
-  const measure = parseMeasure(engine.measure)
-  if (!measure) {
-    return null
-  }
-  const scale = parseScale(engine.scale)
-  const selectedPath = Array.isArray(selected.path)
-    ? selected.path.map(parseSelectionStep)
-    : null
-  if (!selectedPath || selectedPath.some((step) => step === null)) {
-    return null
-  }
-  for (let index = 1; index < selectedPath.length; index += 1) {
-    if (selectedPath[index - 1]?.kind === selectedPath[index]?.kind) {
-      return null
-    }
-  }
-
-  return {
-    schema_version: 4,
-    snapshot_version: snapshot.snapshot_version,
-    commit_id: snapshot.commit_id,
-    engine: {
-      measure,
-      tuning: {
-        intervals: toNumberArray(tuning.intervals),
-        octave: tuning.octave,
-      },
-      tuning_name: engine.tuning_name,
-      scale,
-      key: engine.key,
-      scale_translate_direction: engine.scale_translate_direction,
-      base_frequency: engine.base_frequency,
-    },
-    editor: {
-      selected: {
-        path: selectedPath as SelectionPath,
-      },
-      input_mode: inputMode,
-    },
-  }
 }
 
 export const getTuningRatios = (intervals: number[]): number[] =>

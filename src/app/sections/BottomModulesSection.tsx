@@ -68,8 +68,9 @@ export function BottomModulesSection(props: BottomModulesSectionProps) {
           activeLibraryTab={props.activeLibraryTab}
           setActiveLibraryTab={props.setActiveLibraryTab}
           librarySnapshot={props.librarySnapshot}
+          activeTuningName={props.activeTuningName}
+          activeScaleId={props.activeScaleId}
           runLibraryCommand={props.runLibraryCommand}
-          quoteCommandArg={props.quoteCommandArg}
           tuningSearchInputRef={props.tuningSearchInputRef}
           tuningSearch={props.tuningSearch}
           setTuningSearch={props.setTuningSearch}

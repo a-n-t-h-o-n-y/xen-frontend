@@ -1,12 +1,14 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { LibraryHierarchyRow, LibrarySnapshot, TuningSortMode } from '../../shared'
+import type { LibraryHierarchyRow, TuningSortMode } from '../../shared'
+import type { LibrarySnapshot } from '../../domain/contracts'
 
 type LibraryPanelProps = {
   activeLibraryTab: 'tunings' | 'measures' | 'scales' | 'chords'
   setActiveLibraryTab: Dispatch<SetStateAction<'tunings' | 'measures' | 'scales' | 'chords'>>
   librarySnapshot: LibrarySnapshot
+  activeTuningName: string
+  activeScaleId: string | null
   runLibraryCommand: (command: string) => Promise<unknown>
-  quoteCommandArg: (value: string) => string
   tuningSearchInputRef: { current: HTMLInputElement | null }
   tuningSearch: string
   setTuningSearch: Dispatch<SetStateAction<string>>
@@ -24,8 +26,9 @@ export function LibraryPanel({
   activeLibraryTab,
   setActiveLibraryTab,
   librarySnapshot,
+  activeTuningName,
+  activeScaleId,
   runLibraryCommand,
-  quoteCommandArg,
   tuningSearchInputRef,
   tuningSearch,
   setTuningSearch,
@@ -84,21 +87,26 @@ export function LibraryPanel({
       <div className="libraryList" role="list">
         {activeLibraryTab === 'scales' ? (
           librarySnapshot.scales.length > 0 ? (
-            librarySnapshot.scales.map((scale, index) => (
+            librarySnapshot.scales.map((scale) => {
+              const name = scale.definition === null ? 'chromatic' : scale.definition.name
+              return (
               <button
-                key={`library-scale-${index}-${scale.name}`}
+                key={`library-scale-${scale.id}`}
                 type="button"
-                className="libraryItem"
+                className={`libraryItem${scale.id === activeScaleId ? ' libraryItem-active' : ''}`}
                 onClick={() => {
-                  void runLibraryCommand(scale.command || `set scale ${quoteCommandArg(scale.name)}`)
+                  void runLibraryCommand(scale.command)
                 }}
               >
-                <span className="libraryItemName mono">{scale.name}</span>
+                <span className="libraryItemName mono">{name}</span>
                 <span className="libraryItemMeta mono">
-                  {scale.intervals.length > 0 ? `[${scale.intervals.join(', ')}]` : 'Intervals unavailable'}
+                  {scale.definition?.intervals.length
+                    ? `[${scale.definition.intervals.join(', ')}]`
+                    : 'Chromatic'}
                 </span>
               </button>
-            ))
+              )
+            })
           ) : (
             <p className="libraryPlaceholder">No scales loaded.</p>
           )
@@ -178,8 +186,8 @@ export function LibraryPanel({
                   return null
                 }
                 const isActive =
-                  tuning.name.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase() ||
-                  tuning.stem.toLowerCase() === librarySnapshot.active.tuningName.toLowerCase()
+                  tuning.name.toLowerCase() === activeTuningName.toLowerCase() ||
+                  tuning.stem.toLowerCase() === activeTuningName.toLowerCase()
                 const stemParts = tuning.stem.split('/').filter((part) => part.length > 0)
                 const tuningNameLeaf = stemParts[stemParts.length - 1] || row.label
                 const tuningFolderPath = stemParts.slice(0, -1).join('/')
@@ -191,7 +199,7 @@ export function LibraryPanel({
                     className={`libraryItem${isActive ? ' libraryItem-active' : ''}`}
                     style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
                     onClick={() => {
-                      void runLibraryCommand(tuning.command || `load tuning ${quoteCommandArg(tuning.name)}`)
+                      void runLibraryCommand(tuning.command)
                     }}
                   >
                     <span className="libraryItemName mono">
@@ -280,9 +288,7 @@ export function LibraryPanel({
                     className="libraryItem"
                     style={{ paddingLeft: `${row.depth * 0.9 + 0.5}rem` }}
                     onClick={() => {
-                      void runLibraryCommand(
-                        measure.command || `load measure ${quoteCommandArg(measure.name)}`
-                      )
+                      void runLibraryCommand(measure.command)
                     }}
                   >
                     <span className="libraryItemName mono">
@@ -311,7 +317,7 @@ export function LibraryPanel({
                 type="button"
                 className="libraryItem"
                 onClick={() => {
-                  void runLibraryCommand(chord.command || `arp ${quoteCommandArg(chord.name)}`)
+                  void runLibraryCommand(chord.command)
                 }}
               >
                 <span className="libraryItemName mono">{chord.name}</span>
