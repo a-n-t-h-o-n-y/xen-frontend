@@ -1,10 +1,8 @@
 import type { ComponentProps } from 'react'
 import { LibraryPanel } from './bottom/LibraryPanel'
 import { ModulatorsPanel } from './bottom/ModulatorsPanel'
-import { ReferencePanel } from './bottom/ReferencePanel'
 
 type BottomModulesSectionProps = ComponentProps<typeof ModulatorsPanel> &
-  ComponentProps<typeof ReferencePanel> &
   ComponentProps<typeof LibraryPanel>
 
 export function BottomModulesSection(props: BottomModulesSectionProps) {
@@ -53,16 +51,9 @@ export function BottomModulesSection(props: BottomModulesSectionProps) {
           baseMorphModulator={props.baseMorphModulator}
           tuningLength={props.tuningLength}
         />
-        <ReferencePanel
-          activeReferenceTab={props.activeReferenceTab}
-          setActiveReferenceTab={props.setActiveReferenceTab}
-          sessionReference={props.sessionReference}
-          referenceSearchInputRef={props.referenceSearchInputRef}
-          referenceCommandSearch={props.referenceCommandSearch}
-          setReferenceCommandSearch={props.setReferenceCommandSearch}
-          filteredReferenceCommands={props.filteredReferenceCommands}
-          focusCommandBarWithText={props.focusCommandBarWithText}
-          keymapResource={props.keymapResource}
+        <div
+          className="bottomModule-rowItem bottomModule-referenceSpacer"
+          aria-hidden="true"
         />
         <LibraryPanel
           activeLibraryTab={props.activeLibraryTab}

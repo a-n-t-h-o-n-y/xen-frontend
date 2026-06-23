@@ -18,6 +18,7 @@ import {
   triggerIdentity,
 } from './keymap'
 import { ingestKeymapResource, ingestLibrarySnapshot, ingestProjectSnapshot } from './resources'
+import { buildSessionReference, filterCommandReference } from './reference'
 import { moveSelection, reconcileSelection, resolveSelection } from './selection'
 import type { Cell, LibrarySnapshot, ProjectSnapshot, Selection } from './contracts'
 
@@ -201,6 +202,71 @@ describe('schema 1 contract validation', () => {
       payload: libraryFixture(),
     }).name).toBe('library.changed')
     expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 4 })).toThrow()
+  })
+})
+
+describe('command reference', () => {
+  const reference = buildSessionReference({
+    schema_version: 1,
+    commands: [
+      {
+        path: ['set', 'velocity'],
+        accepts_pattern_prefix: true,
+        target_requirement: 'element',
+        description: 'Set note velocity',
+        arguments: [
+          {
+            kind: 'decimal',
+            display_name: 'amount',
+            required: false,
+            default_value: '0.8',
+            constraints: [{
+              kind: 'range',
+              minimum: 0,
+              maximum: 1,
+              values: [],
+            }],
+          },
+        ],
+      },
+      {
+        path: ['transport', 'stop'],
+        accepts_pattern_prefix: false,
+        target_requirement: 'none',
+        description: 'Stop playback',
+        arguments: [],
+      },
+    ],
+  })
+
+  it('normalizes catalog command metadata', () => {
+    expect(reference.commands[0]).toEqual({
+      id: 'set velocity',
+      signature: 'set velocity [amount=0.8]',
+      description: 'Set note velocity',
+      targetRequirement: 'element',
+      acceptsPatternPrefix: true,
+      arguments: [{
+        kind: 'decimal',
+        displayName: 'amount',
+        required: false,
+        defaultValue: '0.8',
+        constraints: [{
+          kind: 'range',
+          minimum: 0,
+          maximum: 1,
+          values: [],
+        }],
+      }],
+    })
+  })
+
+  it('searches names, signatures, descriptions, and argument metadata', () => {
+    expect(filterCommandReference(reference.commands, 'velocity')).toHaveLength(1)
+    expect(filterCommandReference(reference.commands, 'playback')[0]?.id).toBe('transport stop')
+    expect(filterCommandReference(reference.commands, 'amount=0.8')[0]?.id).toBe('set velocity')
+    expect(filterCommandReference(reference.commands, 'decimal')[0]?.id).toBe('set velocity')
+    expect(filterCommandReference(reference.commands, 'range')[0]?.id).toBe('set velocity')
   })
 })
 

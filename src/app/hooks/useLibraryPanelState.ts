@@ -32,10 +32,6 @@ const createInitialSessionReference = (): SessionReference => ({
 })
 
 export function useLibraryPanelState() {
-  const [activeReferenceTab, setActiveReferenceTab] = useState<'commands' | 'keybindings'>('commands')
-  const [referenceCommandSearch, setReferenceCommandSearch] = useState('')
-  const referenceSearchInputRef = useRef<HTMLInputElement>(null)
-
   const [tuningSearch, setTuningSearch] = useState('')
   const tuningSearchInputRef = useRef<HTMLInputElement>(null)
   const [measureSearch, setMeasureSearch] = useState('')
@@ -49,15 +45,6 @@ export function useLibraryPanelState() {
   const [sessionReference, setSessionReference] = useState<SessionReference>(createInitialSessionReference)
   const [librarySnapshot, setLibrarySnapshot] = useState<LibrarySnapshot>(createInitialLibrarySnapshot)
   const [libraryLoading, setLibraryLoading] = useState(false)
-
-  const filteredReferenceCommands = useMemo(() => {
-    const query = referenceCommandSearch.trim().toLowerCase()
-    if (!query) {
-      return sessionReference.commands
-    }
-
-    return sessionReference.commands.filter((command) => command.id.toLowerCase().includes(query))
-  }, [referenceCommandSearch, sessionReference.commands])
 
   const tuningHierarchyRows = useMemo<LibraryHierarchyRow[]>(() => {
     const query = tuningSearch.trim().toLowerCase()
@@ -157,11 +144,6 @@ export function useLibraryPanelState() {
   }, [librarySnapshot.measures, measureSearch])
 
   return {
-    activeReferenceTab,
-    setActiveReferenceTab,
-    referenceCommandSearch,
-    setReferenceCommandSearch,
-    referenceSearchInputRef,
     tuningSearch,
     setTuningSearch,
     tuningSearchInputRef,
@@ -178,7 +160,6 @@ export function useLibraryPanelState() {
     setLibrarySnapshot,
     libraryLoading,
     setLibraryLoading,
-    filteredReferenceCommands,
     tuningHierarchyRows,
     measureHierarchyRows,
   }

@@ -62,6 +62,24 @@ export type CommandReferenceEntry = {
   id: string
   signature: string
   description: string
+  targetRequirement: 'none' | 'cell' | 'element' | 'cell_or_element'
+  acceptsPatternPrefix: boolean
+  arguments: CommandReferenceArgument[]
+}
+
+export type CommandReferenceConstraint = {
+  kind: string
+  minimum: number | null
+  maximum: number | null
+  values: string[]
+}
+
+export type CommandReferenceArgument = {
+  kind: string
+  displayName: string
+  required: boolean
+  defaultValue: string | null
+  constraints: CommandReferenceConstraint[]
 }
 
 export type SessionReference = {

@@ -88,6 +88,9 @@
 }
 
 .settingsNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
   padding: 1rem;
   border-right: 1px solid rgb(255 255 255 / 8%);
   background: rgb(0 0 0 / 10%);
@@ -103,6 +106,7 @@
   background: transparent;
   color: var(--text-secondary);
   text-align: left;
+  cursor: pointer;
 }
 
 .settingsNavItem small {
@@ -200,6 +204,167 @@
 
 .settingsEmpty {
   color: var(--text-secondary);
+}
+
+/* Command catalog */
+.commandReferenceSearch {
+  margin-bottom: 1rem;
+}
+
+.commandReferenceList {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.commandReferenceRow {
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.commandReferenceRow[open] {
+  border-color: rgb(245 196 90 / 24%);
+  background: rgb(255 255 255 / 4%);
+}
+
+.commandReferenceSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.commandReferenceSummary::-webkit-details-marker {
+  display: none;
+}
+
+.commandReferenceSummary:focus-visible {
+  outline: 2px solid rgb(245 196 90 / 55%);
+  outline-offset: -2px;
+}
+
+.commandReferenceSummaryText {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
+}
+
+.commandReferenceSignature {
+  color: #fff2ce;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.commandReferenceDescription {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.commandReferenceChevron {
+  flex: 0 0 auto;
+  color: rgb(255 255 255 / 45%);
+  transition: transform 180ms ease;
+}
+
+.commandReferenceRow[open] .commandReferenceChevron {
+  transform: rotate(90deg);
+}
+
+.commandReferenceDetails {
+  display: grid;
+  gap: 1rem;
+  padding: 0 0.85rem 0.85rem;
+  border-top: 1px solid rgb(255 255 255 / 7%);
+}
+
+.commandReferenceMetadata,
+.commandArgumentMetadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding-top: 0.85rem;
+}
+
+.commandReferenceMetadata div,
+.commandArgumentMetadata div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.commandReferenceMetadata dt,
+.commandArgumentMetadata dt {
+  color: rgb(255 255 255 / 42%);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.commandReferenceMetadata dd,
+.commandArgumentMetadata dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+
+.commandArguments {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.commandArguments h4 {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.commandArgument {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 14%);
+}
+
+.commandArgumentHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #fff2ce;
+  font-size: 0.74rem;
+}
+
+.commandArgumentHeader span:last-child {
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+}
+
+.commandArgumentMetadata {
+  padding-top: 0.65rem;
+}
+
+.commandConstraints {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.65rem 0 0;
+  padding-left: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.commandNoArguments,
+.commandNoConstraints {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.commandNoConstraints {
+  margin-top: 0.65rem;
 }
 
 .shortcutGroup {
@@ -432,11 +597,19 @@ button.shortcutMain {
   }
 
   .settingsBody {
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-columns: 1fr;
   }
 
   .settingsNav {
-    display: none;
+    flex-direction: row;
+    padding: 0.65rem 1rem;
+    border-right: 0;
+    border-bottom: 1px solid rgb(255 255 255 / 8%);
+  }
+
+  .settingsNavItem {
+    flex: 1;
   }
 
   .settingsSectionIntro {

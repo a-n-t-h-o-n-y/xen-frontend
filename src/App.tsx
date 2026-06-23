@@ -90,7 +90,6 @@ function App() {
   const [keymapError, setKeymapError] = useState<string | null>(null)
   const {
     isCommandMode,
-    setIsCommandMode,
     commandText,
     setCommandText,
     commandHistory,
@@ -119,11 +118,6 @@ function App() {
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
   const {
-    activeReferenceTab,
-    setActiveReferenceTab,
-    referenceCommandSearch,
-    setReferenceCommandSearch,
-    referenceSearchInputRef,
     tuningSearch,
     setTuningSearch,
     tuningSearchInputRef,
@@ -140,7 +134,6 @@ function App() {
     setLibrarySnapshot,
     libraryLoading,
     setLibraryLoading,
-    filteredReferenceCommands,
     tuningHierarchyRows,
     measureHierarchyRows,
   } = useLibraryPanelState()
@@ -700,36 +693,6 @@ function App() {
   })
 
   const currentInputModeLetter = editorState.inputMode.charAt(0).toUpperCase()
-
-  const focusCommandBarWithText = useCallback(
-    (commandTemplate: string): void => {
-      const commandWithoutPlaceholders = commandTemplate.replace(/\[[^\]]*]/g, '')
-      const normalizedCommand = commandWithoutPlaceholders.replace(/\s+/g, ' ').trim()
-      if (!normalizedCommand) {
-        return
-      }
-
-      const nextCommandText = `${normalizedCommand} `
-      if (historyIndex !== -1) {
-        setHistoryIndex(-1)
-      }
-      setIsCommandMode(true)
-      setCommandText(nextCommandText)
-      liveCommandBufferRef.current = nextCommandText
-
-      requestAnimationFrame(() => {
-        const input = commandInputRef.current
-        if (!input) {
-          return
-        }
-        input.focus()
-        const textLength = input.value.length
-        input.setSelectionRange(textLength, textLength)
-      })
-    },
-    [historyIndex, liveCommandBufferRef, setCommandText, setHistoryIndex, setIsCommandMode]
-  )
-
 
   const { waveAPreviewPath, waveBPreviewPath, morphedWavePreviewPath } = useMemo(() => {
     const width = 420
@@ -1448,15 +1411,6 @@ function App() {
         buildCommandForTarget={buildModTargetCommand}
         baseMorphModulator={baseMorphModulator}
         tuningLength={tuningLength}
-        activeReferenceTab={activeReferenceTab}
-        setActiveReferenceTab={setActiveReferenceTab}
-        sessionReference={sessionReference}
-        referenceSearchInputRef={referenceSearchInputRef}
-        referenceCommandSearch={referenceCommandSearch}
-        setReferenceCommandSearch={setReferenceCommandSearch}
-        filteredReferenceCommands={filteredReferenceCommands}
-        focusCommandBarWithText={focusCommandBarWithText}
-        keymapResource={keymapResource}
         activeLibraryTab={activeLibraryTab}
         setActiveLibraryTab={setActiveLibraryTab}
         librarySnapshot={librarySnapshot}

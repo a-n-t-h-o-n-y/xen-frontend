@@ -5,6 +5,7 @@ import {
   triggerFromKeyboardEvent,
   triggersEqual,
 } from '../domain/keymap'
+import { filterCommandReference } from '../domain/reference'
 import type {
   InputMode,
   KeymapBinding,
@@ -45,6 +46,23 @@ type EditorState = {
 }
 
 const inputModes: InputMode[] = ['pitch', 'velocity', 'delay', 'gate', 'scale']
+
+const formatTargetRequirement = (requirement: CommandReferenceEntry['targetRequirement']): string => ({
+  none: 'No target',
+  cell: 'Cell',
+  element: 'Element',
+  cell_or_element: 'Cell or element',
+})[requirement]
+
+const formatConstraint = (
+  constraint: CommandReferenceEntry['arguments'][number]['constraints'][number]
+): string => {
+  const parts = [constraint.kind]
+  if (constraint.minimum !== null) parts.push(`min ${constraint.minimum}`)
+  if (constraint.maximum !== null) parts.push(`max ${constraint.maximum}`)
+  if (constraint.values.length > 0) parts.push(constraint.values.join(', '))
+  return parts.join(' · ')
+}
 
 const editorFromBinding = (context: string, binding?: KeymapBinding): EditorState => {
   const target = binding?.target
@@ -102,6 +120,8 @@ export function SettingsOverlay({
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [conflict, setConflict] = useState<KeymapBinding | null>(null)
+  const [activeSection, setActiveSection] = useState<'shortcuts' | 'commands'>('shortcuts')
+  const [commandSearch, setCommandSearch] = useState('')
 
   const contexts = useMemo(() => {
     if (!resource) return []
@@ -110,6 +130,10 @@ export function SettingsOverlay({
       ...resource.overrides.map((override) => override.context),
     ])).sort()
   }, [resource])
+  const filteredCommands = useMemo(
+    () => filterCommandReference(commands, commandSearch),
+    [commandSearch, commands]
+  )
 
   const closeOverlay = (): void => {
     setEditor(null)
@@ -175,100 +199,210 @@ export function SettingsOverlay({
         </header>
         <div className="settingsBody">
           <nav className="settingsNav" aria-label="Settings sections">
-            <button type="button" className="settingsNavItem settingsNavItem-active">
+            <button
+              type="button"
+              className={`settingsNavItem${activeSection === 'shortcuts' ? ' settingsNavItem-active' : ''}`}
+              aria-current={activeSection === 'shortcuts' ? 'page' : undefined}
+              onClick={() => setActiveSection('shortcuts')}
+            >
               <span>Shortcuts</span>
               <small>{resource?.overrides.length ?? 0} custom</small>
             </button>
+            <button
+              type="button"
+              className={`settingsNavItem${activeSection === 'commands' ? ' settingsNavItem-active' : ''}`}
+              aria-current={activeSection === 'commands' ? 'page' : undefined}
+              onClick={() => setActiveSection('commands')}
+            >
+              <span>Commands</span>
+              <small>{commands.length} available</small>
+            </button>
           </nav>
           <main className="settingsContent">
-            <div className="settingsSectionIntro">
-              <div>
-                <h3>Keyboard shortcuts</h3>
-                <p>Bindings are matched by character, modifiers, context, and optional input mode.</p>
-              </div>
-              <div className="settingsSectionActions">
-                <button
-                  type="button"
-                  className="settingsButton"
-                  disabled={!resource || busy}
-                  onClick={() => setEditor(editorFromBinding(contexts[0] ?? 'sequence'))}
-                >
-                  Add shortcut
-                </button>
-                <button
-                  type="button"
-                  className="settingsButton settingsButton-danger"
-                  disabled={!resource || resource.overrides.length === 0 || busy}
-                  onClick={() => void onReset().catch(() => undefined)}
-                >
-                  Reset all
-                </button>
-              </div>
-            </div>
-            {error ? <p className="settingsError" role="alert">{error}</p> : null}
-            {!resource ? (
-              <p className="settingsEmpty">Waiting for keymap data…</p>
-            ) : contexts.map((context) => {
-              const bindings = resource.bindings[context] ?? []
-              const disabled = resource.overrides.filter((override) =>
-                override.context === context && override.target === null
-              )
-              return (
-                <section className="shortcutGroup" key={context}>
-                  <div className="shortcutGroupHeader">
-                    <h4>{context}</h4>
-                    <span>{bindings.length} active</span>
+            {activeSection === 'shortcuts' ? (
+              <>
+                <div className="settingsSectionIntro">
+                  <div>
+                    <h3>Keyboard shortcuts</h3>
+                    <p>Bindings are matched by character, modifiers, context, and optional input mode.</p>
                   </div>
-                  <div className="shortcutTable" role="table" aria-label={`${context} shortcuts`}>
-                    {bindings.map((binding) => {
-                      const override = resource.overrides.find((candidate) =>
-                        candidate.context === context &&
-                        triggersEqual(candidate.trigger, binding.trigger)
-                      )
-                      return (
-                        <div className="shortcutRow" role="row" key={formatKeymapTrigger(binding.trigger)}>
-                          <button
-                            type="button"
-                            className="shortcutMain"
-                            onClick={() => setEditor(editorFromBinding(context, binding))}
-                          >
-                            <span className="shortcutTrigger mono">{formatKeymapTrigger(binding.trigger)}</span>
-                            <span className="shortcutTarget mono">{formatKeymapTarget(binding.target)}</span>
-                            <span className={`shortcutOrigin${override ? ' shortcutOrigin-custom' : ''}`}>
-                              {override ? 'Custom' : 'Inherited'}
-                            </span>
-                          </button>
-                          <div className="shortcutActions">
-                            {override ? (
-                              <button type="button" disabled={busy} onClick={() => void onRestore(context, binding.trigger).catch(() => undefined)}>
+                  <div className="settingsSectionActions">
+                    <button
+                      type="button"
+                      className="settingsButton"
+                      disabled={!resource || busy}
+                      onClick={() => setEditor(editorFromBinding(contexts[0] ?? 'sequence'))}
+                    >
+                      Add shortcut
+                    </button>
+                    <button
+                      type="button"
+                      className="settingsButton settingsButton-danger"
+                      disabled={!resource || resource.overrides.length === 0 || busy}
+                      onClick={() => void onReset().catch(() => undefined)}
+                    >
+                      Reset all
+                    </button>
+                  </div>
+                </div>
+                {error ? <p className="settingsError" role="alert">{error}</p> : null}
+                {!resource ? (
+                  <p className="settingsEmpty">Waiting for keymap data…</p>
+                ) : contexts.map((context) => {
+                  const bindings = resource.bindings[context] ?? []
+                  const disabled = resource.overrides.filter((override) =>
+                    override.context === context && override.target === null
+                  )
+                  return (
+                    <section className="shortcutGroup" key={context}>
+                      <div className="shortcutGroupHeader">
+                        <h4>{context}</h4>
+                        <span>{bindings.length} active</span>
+                      </div>
+                      <div className="shortcutTable" role="table" aria-label={`${context} shortcuts`}>
+                        {bindings.map((binding) => {
+                          const override = resource.overrides.find((candidate) =>
+                            candidate.context === context &&
+                            triggersEqual(candidate.trigger, binding.trigger)
+                          )
+                          return (
+                            <div className="shortcutRow" role="row" key={formatKeymapTrigger(binding.trigger)}>
+                              <button
+                                type="button"
+                                className="shortcutMain"
+                                onClick={() => setEditor(editorFromBinding(context, binding))}
+                              >
+                                <span className="shortcutTrigger mono">{formatKeymapTrigger(binding.trigger)}</span>
+                                <span className="shortcutTarget mono">{formatKeymapTarget(binding.target)}</span>
+                                <span className={`shortcutOrigin${override ? ' shortcutOrigin-custom' : ''}`}>
+                                  {override ? 'Custom' : 'Inherited'}
+                                </span>
+                              </button>
+                              <div className="shortcutActions">
+                                {override ? (
+                                  <button type="button" disabled={busy} onClick={() => void onRestore(context, binding.trigger).catch(() => undefined)}>
+                                    Restore
+                                  </button>
+                                ) : null}
+                                <button type="button" disabled={busy} onClick={() => void onDisable(context, binding.trigger).catch(() => undefined)}>
+                                  Disable
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {disabled.map((override) => (
+                          <div className="shortcutRow shortcutRow-disabled" role="row" key={`disabled-${formatKeymapTrigger(override.trigger)}`}>
+                            <div className="shortcutMain">
+                              <span className="shortcutTrigger mono">{formatKeymapTrigger(override.trigger)}</span>
+                              <span className="shortcutTarget">Disabled</span>
+                              <span className="shortcutOrigin">Explicitly disabled</span>
+                            </div>
+                            <div className="shortcutActions">
+                              <button type="button" disabled={busy} onClick={() => void onRestore(context, override.trigger).catch(() => undefined)}>
                                 Restore
                               </button>
-                            ) : null}
-                            <button type="button" disabled={busy} onClick={() => void onDisable(context, binding.trigger).catch(() => undefined)}>
-                              Disable
-                            </button>
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                    {disabled.map((override) => (
-                      <div className="shortcutRow shortcutRow-disabled" role="row" key={`disabled-${formatKeymapTrigger(override.trigger)}`}>
-                        <div className="shortcutMain">
-                          <span className="shortcutTrigger mono">{formatKeymapTrigger(override.trigger)}</span>
-                          <span className="shortcutTarget">Disabled</span>
-                          <span className="shortcutOrigin">Explicitly disabled</span>
-                        </div>
-                        <div className="shortcutActions">
-                          <button type="button" disabled={busy} onClick={() => void onRestore(context, override.trigger).catch(() => undefined)}>
-                            Restore
-                          </button>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    </section>
+                  )
+                })}
+              </>
+            ) : (
+              <section className="commandReference" aria-labelledby="commands-title">
+                <div className="settingsSectionIntro">
+                  <div>
+                    <h3 id="commands-title">Commands</h3>
+                    <p>Browse the command catalog received when this session started.</p>
                   </div>
-                </section>
-              )
-            })}
+                </div>
+                {commands.length > 0 ? (
+                  <>
+                    <div className="referenceCommandSearchField commandReferenceSearch">
+                      <input
+                        type="search"
+                        className="referenceCommandSearchInput mono"
+                        value={commandSearch}
+                        onChange={(event) => setCommandSearch(event.target.value)}
+                        placeholder="Search commands and arguments…"
+                        aria-label="Search commands"
+                      />
+                      {commandSearch ? (
+                        <button
+                          type="button"
+                          className="referenceCommandSearchClear"
+                          aria-label="Clear command search"
+                          onClick={() => setCommandSearch('')}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="commandReferenceList">
+                      {filteredCommands.length > 0 ? filteredCommands.map((command) => (
+                        <details className="commandReferenceRow" key={command.id}>
+                          <summary className="commandReferenceSummary">
+                            <span className="commandReferenceSummaryText">
+                              <span className="commandReferenceSignature mono">{command.signature}</span>
+                              <span className="commandReferenceDescription">{command.description}</span>
+                            </span>
+                            <span className="commandReferenceChevron" aria-hidden="true">▸</span>
+                          </summary>
+                          <div className="commandReferenceDetails">
+                            <dl className="commandReferenceMetadata">
+                              <div>
+                                <dt>Target</dt>
+                                <dd>{formatTargetRequirement(command.targetRequirement)}</dd>
+                              </div>
+                              <div>
+                                <dt>Pattern prefix</dt>
+                                <dd>{command.acceptsPatternPrefix ? 'Supported' : 'Not supported'}</dd>
+                              </div>
+                            </dl>
+                            <div className="commandArguments">
+                              <h4>Arguments</h4>
+                              {command.arguments.length > 0 ? command.arguments.map((argument) => (
+                                <div className="commandArgument" key={`${command.id}-${argument.displayName}`}>
+                                  <div className="commandArgumentHeader">
+                                    <span className="mono">{argument.displayName}</span>
+                                    <span>{argument.required ? 'Required' : 'Optional'}</span>
+                                  </div>
+                                  <dl className="commandArgumentMetadata">
+                                    <div>
+                                      <dt>Kind</dt>
+                                      <dd>{argument.kind}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Default</dt>
+                                      <dd>{argument.defaultValue ?? 'None'}</dd>
+                                    </div>
+                                  </dl>
+                                  {argument.constraints.length > 0 ? (
+                                    <ul className="commandConstraints">
+                                      {argument.constraints.map((constraint, index) => (
+                                        <li key={`${constraint.kind}-${index}`}>
+                                          {formatConstraint(constraint)}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : <p className="commandNoConstraints">No constraints</p>}
+                                </div>
+                              )) : <p className="commandNoArguments">This command has no arguments.</p>}
+                            </div>
+                          </div>
+                        </details>
+                      )) : (
+                        <p className="settingsEmpty">No commands match that search.</p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="settingsEmpty">No command catalog data received.</p>
+                )}
+              </section>
+            )}
           </main>
         </div>
       </section>
