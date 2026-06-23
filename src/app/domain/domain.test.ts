@@ -163,7 +163,18 @@ describe('schema 2 contract validation', () => {
           keywords: ['note'],
           accepts_pattern_prefix: false,
           target_requirement: 'element',
-          arguments: [],
+          arguments: [{
+            kind: 'decimal',
+            display_name: 'amount',
+            required: true,
+            default_value: null,
+            constraints: [{
+              kind: 'range',
+              minimum: 0,
+              maximum: 1,
+              values: [],
+            }],
+          }],
           description: 'Set pitch',
         }],
       },
@@ -188,9 +199,28 @@ describe('schema 2 contract validation', () => {
       },
     })
     expect(hello.keymap.bindings.sequence[0]?.target.type).toBe('ui_action')
+    expect(hello.catalog.commands[0]?.arguments[0]?.constraints[0]?.maximum).toBe(1)
     expect(() => parseSessionHello({
       ...hello,
       project_schema_version: 4,
+    })).toThrow()
+    expect(() => parseSessionHello({
+      ...hello,
+      catalog: {
+        ...hello.catalog,
+        commands: [{
+          ...hello.catalog.commands[0],
+          arguments: [{
+            ...hello.catalog.commands[0]!.arguments[0],
+            constraints: [{
+              kind: 'range',
+              minimum: [0],
+              maximum: [1],
+              values: [],
+            }],
+          }],
+        }],
+      },
     })).toThrow()
   })
 

@@ -226,8 +226,8 @@ export function StatusSection({
                 }
 
                 if (event.key === 'Tab') {
+                  event.preventDefault()
                   if (isPopupVisible && selectedCandidate) {
-                    event.preventDefault()
                     acceptCompletion(selectedCandidate)
                   }
                   return
