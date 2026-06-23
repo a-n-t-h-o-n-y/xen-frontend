@@ -26,6 +26,11 @@ import {
 import { ingestKeymapResource, ingestLibrarySnapshot, ingestProjectSnapshot } from './resources'
 import { buildSessionReference, filterCommandReference } from './reference'
 import { moveSelection, reconcileSelection, resolveSelection } from './selection'
+import {
+  formatKeymapContext,
+  getCommandKeymapContext,
+  runCommandUiAction,
+} from './uiActions'
 import type { Cell, LibrarySnapshot, ProjectSnapshot, Selection } from './contracts'
 
 const nestedCell: Cell = {
@@ -583,6 +588,32 @@ describe('keymap routing', () => {
           },
         },
       ],
+      'command.input': [
+        {
+          trigger: {
+            key: 'Escape',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'command.cancel',
+            arguments: {},
+          },
+        },
+      ],
+      'command.completions': [
+        {
+          trigger: {
+            key: 'Escape',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'command.completion.dismiss',
+            arguments: {},
+          },
+        },
+      ],
     },
     overrides: [],
   })
@@ -608,16 +639,94 @@ describe('keymap routing', () => {
     expect(findKeymapBinding(resource, 'other', event, 'pitch')).toBeNull()
   })
 
+  it('parses command UI actions and matches identical triggers in separate contexts', () => {
+    const event = {
+      key: 'Escape',
+      shiftKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+    } as KeyboardEvent
+
+    expect(findKeymapBinding(resource, 'command.input', event, 'pitch')?.target)
+      .toMatchObject({ type: 'ui_action', action: 'command.cancel', arguments: {} })
+    expect(findKeymapBinding(resource, 'command.completions', event, 'pitch')?.target)
+      .toMatchObject({ type: 'ui_action', action: 'command.completion.dismiss', arguments: {} })
+  })
+
   it('formats typed triggers and targets with stable identities', () => {
     const binding = resource.bindings.sequence[0]!
     expect(triggerIdentity(binding.trigger)).toContain('h')
     expect(formatKeymapTrigger(binding.trigger)).toContain('Shift')
     expect(formatKeymapTarget(binding.target)).toBe('Move left by 2')
+    expect(formatKeymapTarget(resource.bindings['command.input']![0]!.target)).toBe('Cancel command')
+    expect(formatKeymapContext('command.completions')).toBe('Command Completions')
+    expect(getCommandKeymapContext(false)).toBe('command.input')
+    expect(getCommandKeymapContext(true)).toBe('command.completions')
   })
 
   it('installs only newer keymap revisions', () => {
     expect(ingestKeymapResource(null, resource).installed).toBe(true)
     expect(ingestKeymapResource(resource, { ...resource, revision: 4 }).installed).toBe(false)
     expect(ingestKeymapResource(resource, { ...resource, revision: 5 }).installed).toBe(true)
+  })
+
+  it('runs command UI actions with applicability checks', () => {
+    const calls: string[] = []
+    const handlers = {
+      cancel: () => calls.push('cancel'),
+      submit: () => calls.push('submit'),
+      closeIfEmpty: () => calls.push('closeIfEmpty'),
+      historyPrevious: () => calls.push('historyPrevious'),
+      historyNext: () => calls.push('historyNext'),
+      completionAccept: () => calls.push('completionAccept'),
+      completionDismiss: () => calls.push('completionDismiss'),
+      completionPrevious: () => calls.push('completionPrevious'),
+      completionNext: () => calls.push('completionNext'),
+    }
+    const baseState = {
+      commandText: 'set',
+      historyIndex: -1,
+      commandHistory: ['copy'],
+      isCompletionVisible: false,
+      isCompletionDismissed: false,
+      completionMode: 'none' as const,
+    }
+
+    expect(runCommandUiAction('command.submit', baseState, handlers)).toBe(true)
+    expect(runCommandUiAction('command.close_if_empty', baseState, handlers)).toBe(false)
+    expect(runCommandUiAction('command.history.previous', baseState, handlers)).toBe(true)
+    expect(runCommandUiAction('command.history.next', baseState, handlers)).toBe(false)
+    expect(runCommandUiAction('command.completion.accept', baseState, handlers)).toBe(false)
+    expect(runCommandUiAction('command.cancel', {
+      ...baseState,
+      completionMode: 'commandSearch',
+    }, handlers)).toBe(true)
+    expect(runCommandUiAction('command.completion.next', {
+      ...baseState,
+      isCompletionVisible: true,
+    }, handlers)).toBe(true)
+    expect(runCommandUiAction('command.completion.previous', {
+      ...baseState,
+      isCompletionVisible: true,
+    }, handlers)).toBe(true)
+    expect(runCommandUiAction('command.completion.dismiss', {
+      ...baseState,
+      completionMode: 'commandSearch',
+    }, handlers)).toBe(true)
+    expect(runCommandUiAction('command.close_if_empty', {
+      ...baseState,
+      commandText: '',
+    }, handlers)).toBe(true)
+
+    expect(calls).toEqual([
+      'submit',
+      'historyPrevious',
+      'completionDismiss',
+      'completionNext',
+      'completionPrevious',
+      'completionDismiss',
+      'closeIfEmpty',
+    ])
   })
 })

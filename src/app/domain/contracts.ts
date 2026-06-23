@@ -220,6 +220,22 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
       mode: inputModeSchema,
     }),
   }),
+  z.object({
+    type: z.literal('ui_action'),
+    action: z.enum([
+      'command.open',
+      'command.cancel',
+      'command.submit',
+      'command.close_if_empty',
+      'command.history.previous',
+      'command.history.next',
+      'command.completion.accept',
+      'command.completion.dismiss',
+      'command.completion.previous',
+      'command.completion.next',
+    ]),
+    arguments: z.object({}).strict(),
+  }),
 ])
 
 export const keymapTargetSchema = z.discriminatedUnion('type', [

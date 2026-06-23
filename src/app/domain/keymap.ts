@@ -6,6 +6,7 @@ import type {
   KeymapTarget,
   KeymapTrigger,
 } from './contracts'
+import { formatUiActionTarget } from './uiActions'
 
 export const expandNumericPlaceholders = (command: string, pendingDigits: string): string =>
   command.replace(/:N=(\d+):/g, (_, defaultValue: string) =>
@@ -84,8 +85,5 @@ export const formatKeymapTarget = (target: KeymapTarget): string => {
   if (target.type === 'command') {
     return target.command
   }
-  if (target.action === 'selection.move') {
-    return `Move ${target.arguments.direction} by ${target.arguments.amount}`
-  }
-  return `Set input mode to ${target.arguments.mode}`
+  return formatUiActionTarget(target)
 }

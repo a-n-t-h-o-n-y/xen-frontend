@@ -6,6 +6,11 @@ import {
   triggersEqual,
 } from '../domain/keymap'
 import { filterCommandReference } from '../domain/reference'
+import {
+  formatKeymapContext,
+  uiActionRegistry,
+  type FrontendUiActionId,
+} from '../domain/uiActions'
 import type {
   InputMode,
   KeymapBinding,
@@ -37,7 +42,7 @@ type EditorState = {
   context: string
   originalTrigger?: KeymapTrigger
   trigger: KeymapTrigger | null
-  targetType: 'command' | 'selection.move' | 'input_mode.set'
+  targetType: 'command' | FrontendUiActionId
   command: string
   direction: 'left' | 'right' | 'up' | 'down'
   amount: number
@@ -46,6 +51,7 @@ type EditorState = {
 }
 
 const inputModes: InputMode[] = ['pitch', 'velocity', 'delay', 'gate', 'scale']
+const uiActionOptions = Object.values(uiActionRegistry)
 
 const formatTargetRequirement = (requirement: CommandReferenceEntry['targetRequirement']): string => ({
   none: 'No target',
@@ -98,10 +104,17 @@ const targetFromEditor = (editor: EditorState): KeymapTarget => {
       arguments: { direction: editor.direction, amount: editor.amount },
     }
   }
+  if (editor.targetType === 'input_mode.set') {
+    return {
+      type: 'ui_action',
+      action: 'input_mode.set',
+      arguments: { mode: editor.mode },
+    }
+  }
   return {
     type: 'ui_action',
-    action: 'input_mode.set',
-    arguments: { mode: editor.mode },
+    action: editor.targetType,
+    arguments: {},
   }
 }
 
@@ -256,7 +269,7 @@ export function SettingsOverlay({
                   return (
                     <section className="shortcutGroup" key={context}>
                       <div className="shortcutGroupHeader">
-                        <h4>{context}</h4>
+                        <h4>{formatKeymapContext(context)}</h4>
                         <span>{bindings.length} active</span>
                       </div>
                       <div className="shortcutTable" role="table" aria-label={`${context} shortcuts`}>
@@ -468,8 +481,9 @@ export function SettingsOverlay({
                 targetType: event.target.value as EditorState['targetType'],
               })}>
                 <option value="command">Backend command</option>
-                <option value="selection.move">Move selection</option>
-                <option value="input_mode.set">Set input mode</option>
+                {uiActionOptions.map((action) => (
+                  <option value={action.id} key={action.id}>{action.label}</option>
+                ))}
               </select>
             </label>
             {editor.targetType === 'command' ? (

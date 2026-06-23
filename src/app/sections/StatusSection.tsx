@@ -1,18 +1,26 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type { Dispatch, FormEvent, SetStateAction } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import {
   analyzeCommandCompletion,
   applyCommandCompletion,
   getVisibleCompletionMode,
   type CompletionMode,
 } from '../domain/commandCompletion'
+import { findKeymapBinding } from '../domain/keymap'
+import {
+  getCommandKeymapContext,
+  isCommandUiActionId,
+  runCommandUiAction,
+} from '../domain/uiActions'
+import type { KeymapResource } from '../domain/contracts'
 import type { CommandReferenceEntry, InputMode, MessageLevel, StatusCellMetaItem } from '../shared'
 
 type StatusSectionProps = {
   currentInputMode: InputMode
   currentInputModeLetter: string
   isCommandMode: boolean
-  submitCommand: (event: FormEvent<HTMLFormElement>) => void
+  submitCommand: () => void
+  keymapResource: KeymapResource | null
   commandInputRef: { current: HTMLInputElement | null }
   commandText: string
   setCommandText: Dispatch<SetStateAction<string>>
@@ -45,6 +53,7 @@ export function StatusSection({
   currentInputModeLetter,
   isCommandMode,
   submitCommand,
+  keymapResource,
   commandInputRef,
   commandText,
   setCommandText,
@@ -149,6 +158,66 @@ export function StatusSection({
     setIsCompletionNavigationActive(true)
   }
 
+  const dismissCompletion = (): void => {
+    setIsCompletionDismissed(true)
+    setIsCompletionNavigationActive(false)
+  }
+
+  const navigateHistoryPrevious = (): void => {
+    if (historyIndex === -1) {
+      liveCommandBufferRef.current = commandText
+      setHistoryIndex(0)
+      setCommandText(commandHistory[0] ?? '')
+      setIsHistoryNavigationFrozen(true)
+      setIsCompletionDismissed(true)
+      return
+    }
+
+    const nextIndex = Math.min(historyIndex + 1, commandHistory.length - 1)
+    setHistoryIndex(nextIndex)
+    setCommandText(commandHistory[nextIndex] ?? '')
+    setIsHistoryNavigationFrozen(true)
+    setIsCompletionDismissed(true)
+  }
+
+  const navigateHistoryNext = (): void => {
+    if (historyIndex === 0) {
+      setHistoryIndex(-1)
+      setCommandText(liveCommandBufferRef.current)
+      setIsHistoryNavigationFrozen(true)
+      setIsCompletionDismissed(true)
+      return
+    }
+
+    const nextIndex = historyIndex - 1
+    setHistoryIndex(nextIndex)
+    setCommandText(commandHistory[nextIndex] ?? '')
+    setIsHistoryNavigationFrozen(true)
+    setIsCompletionDismissed(true)
+  }
+
+  const runLocalCommandAction = (action: string): boolean => {
+    if (!isCommandUiActionId(action)) return false
+    return runCommandUiAction(action, {
+      commandText,
+      historyIndex,
+      commandHistory,
+      isCompletionVisible: isPopupVisible && Boolean(selectedCandidate),
+      isCompletionDismissed,
+      completionMode,
+    }, {
+      cancel: () => closeCommandMode({ preserveText: true }),
+      submit: submitCommand,
+      closeIfEmpty: () => closeCommandMode({ preserveText: true }),
+      historyPrevious: navigateHistoryPrevious,
+      historyNext: navigateHistoryNext,
+      completionAccept: () => acceptCompletion(selectedCandidate),
+      completionDismiss: dismissCompletion,
+      completionPrevious: () => navigateCompletion(1),
+      completionNext: () => navigateCompletion(-1),
+    })
+  }
+
   return (
     <footer className="statusBarShell">
       {isPopupVisible ? (
@@ -200,7 +269,10 @@ export function StatusSection({
         </button>
       </div>
       {isCommandMode ? (
-        <form className="statusCommandForm" onSubmit={submitCommand}>
+        <form className="statusCommandForm" onSubmit={(event) => {
+          event.preventDefault()
+          submitCommand()
+        }}>
           <span className="statusPrompt mono">:</span>
           <div className="statusCommandField">
             <input
@@ -221,47 +293,65 @@ export function StatusSection({
                 liveCommandBufferRef.current = nextValue
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  if (completionMode !== 'none' && !isCompletionDismissed) {
-                    setIsCompletionDismissed(true)
-                    setIsCompletionNavigationActive(false)
+                const activeContext = getCommandKeymapContext(isPopupVisible)
+                const matchedBinding = findKeymapBinding(
+                  keymapResource,
+                  activeContext,
+                  event.nativeEvent,
+                  currentInputMode
+                )
+                if (matchedBinding?.target.type === 'ui_action') {
+                  const handled = runLocalCommandAction(matchedBinding.target.action)
+                  if (handled) {
+                    event.preventDefault()
                     return
                   }
-                  closeCommandMode({ preserveText: true })
+                }
+                const hasContextBindings = keymapResource?.bindings[activeContext] !== undefined
+                if (hasContextBindings) return
+
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  runLocalCommandAction('command.cancel')
                   return
                 }
 
                 if (event.key === 'Tab') {
                   event.preventDefault()
                   if (isPopupVisible && selectedCandidate) {
-                    acceptCompletion(selectedCandidate)
+                    runLocalCommandAction('command.completion.accept')
                   }
                   return
                 }
 
                 if (event.key === 'Enter' && isPopupVisible && selectedCandidate) {
                   event.preventDefault()
-                  acceptCompletion(selectedCandidate)
+                  runLocalCommandAction('command.completion.accept')
+                  return
+                }
+
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  runLocalCommandAction('command.submit')
                   return
                 }
 
                 if (event.key === 'ArrowDown' && isPopupVisible) {
                   event.preventDefault()
-                  navigateCompletion(-1)
+                  runLocalCommandAction('command.completion.next')
                   return
                 }
 
                 if (event.key === 'ArrowUp' && isPopupVisible) {
                   event.preventDefault()
-                  navigateCompletion(1)
+                  runLocalCommandAction('command.completion.previous')
                   return
                 }
 
                 if (event.ctrlKey && event.key.toLowerCase() === 'n') {
                   if (isPopupVisible) {
                     event.preventDefault()
-                    navigateCompletion(-1)
+                    runLocalCommandAction('command.completion.next')
                   }
                   return
                 }
@@ -269,61 +359,24 @@ export function StatusSection({
                 if (event.ctrlKey && event.key.toLowerCase() === 'p') {
                   if (isPopupVisible) {
                     event.preventDefault()
-                    navigateCompletion(1)
+                    runLocalCommandAction('command.completion.previous')
                   }
                   return
                 }
 
                 if (event.key === 'Backspace' && commandText.length === 0) {
                   event.preventDefault()
-                  closeCommandMode({ preserveText: true })
+                  runLocalCommandAction('command.close_if_empty')
                   return
                 }
 
                 if (event.key === 'ArrowUp') {
-                  if (commandHistory.length === 0) {
-                    return
-                  }
-
-                  event.preventDefault()
-
-                  if (historyIndex === -1) {
-                    liveCommandBufferRef.current = commandText
-                    setHistoryIndex(0)
-                    setCommandText(commandHistory[0])
-                    setIsHistoryNavigationFrozen(true)
-                    setIsCompletionDismissed(true)
-                    return
-                  }
-
-                  const nextIndex = Math.min(historyIndex + 1, commandHistory.length - 1)
-                  setHistoryIndex(nextIndex)
-                  setCommandText(commandHistory[nextIndex])
-                  setIsHistoryNavigationFrozen(true)
-                  setIsCompletionDismissed(true)
+                  if (runLocalCommandAction('command.history.previous')) event.preventDefault()
                   return
                 }
 
                 if (event.key === 'ArrowDown') {
-                  if (commandHistory.length === 0 || historyIndex === -1) {
-                    return
-                  }
-
-                  event.preventDefault()
-
-                  if (historyIndex === 0) {
-                    setHistoryIndex(-1)
-                    setCommandText(liveCommandBufferRef.current)
-                    setIsHistoryNavigationFrozen(true)
-                    setIsCompletionDismissed(true)
-                    return
-                  }
-
-                  const nextIndex = historyIndex - 1
-                  setHistoryIndex(nextIndex)
-                  setCommandText(commandHistory[nextIndex])
-                  setIsHistoryNavigationFrozen(true)
-                  setIsCompletionDismissed(true)
+                  if (runLocalCommandAction('command.history.next')) event.preventDefault()
                 }
               }}
               onBlur={() => closeCommandMode({ preserveText: true })}

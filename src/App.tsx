@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { HeaderSection } from './app/sections/HeaderSection'
 import { BottomModulesSection } from './app/sections/BottomModulesSection'
@@ -63,6 +63,7 @@ import {
   findKeymapBinding,
   triggersEqual,
 } from './app/domain/keymap'
+import { isCommandUiActionId } from './app/domain/uiActions'
 import {
   moveSelection,
   projectRootCell,
@@ -357,10 +358,20 @@ function App() {
               return
             }
 
-            installEditorState({
-              ...editorStateRef.current,
-              inputMode: matchedBinding.target.arguments.mode,
-            })
+            if (matchedBinding.target.action === 'input_mode.set') {
+              installEditorState({
+                ...editorStateRef.current,
+                inputMode: matchedBinding.target.arguments.mode,
+              })
+              return
+            }
+
+            if (
+              isCommandUiActionId(matchedBinding.target.action) &&
+              matchedBinding.target.action === 'command.open'
+            ) {
+              openCommandMode()
+            }
           } catch (error) {
             setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
             setStatusLevel('error')
@@ -449,9 +460,7 @@ function App() {
   ])
 
   const submitCommand = useCallback(
-    async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-      event.preventDefault()
-
+    async (): Promise<void> => {
       const command = commandText.trim()
       if (!command) {
         closeCommandMode({ preserveText: true })
@@ -1435,6 +1444,7 @@ function App() {
         currentInputModeLetter={currentInputModeLetter}
         isCommandMode={isCommandMode}
         submitCommand={submitCommand}
+        keymapResource={keymapResource}
         commandInputRef={commandInputRef}
         commandText={commandText}
         setCommandText={setCommandText}
