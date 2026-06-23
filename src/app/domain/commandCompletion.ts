@@ -30,6 +30,7 @@ export type CompletionAnalysis = {
 export type ArgumentPlaceholder = {
   displayName: string
   kind: string
+  detail: string
   defaultValue: string | null
   required: boolean
   text: string
@@ -110,15 +111,19 @@ const formatArgumentToken = (argument: CommandReferenceArgument): string => {
 }
 
 const formatPlaceholderText = (argument: CommandReferenceArgument): string => {
-  const label = argument.defaultValue === null
-    ? argument.displayName
-    : `${argument.displayName}=${argument.defaultValue}`
+  const detail = getArgumentDetail(argument)
+  const defaultText = argument.defaultValue === null ? '' : ` = ${argument.defaultValue}`
+  const label = `${argument.displayName}:${detail}${defaultText}`
+
+  return argument.required ? `<${label}>` : `[${label}]`
+}
+
+const getArgumentDetail = (argument: CommandReferenceArgument): string => {
   const enumConstraint = argument.constraints.find((constraint) =>
     constraint.kind === 'enum' && constraint.values.length > 0
   )
-  const detail = enumConstraint ? enumConstraint.values.join(' | ') : argument.kind
 
-  return argument.required ? `<${label}:${detail}>` : `[${label}:${detail}]`
+  return enumConstraint ? enumConstraint.values.join(' | ') : argument.kind
 }
 
 const rankCommand = (
@@ -262,6 +267,7 @@ export const getArgumentPlaceholders = (
   return command.arguments.slice(typedCount).map((argument) => ({
     displayName: argument.displayName,
     kind: argument.kind,
+    detail: getArgumentDetail(argument),
     defaultValue: argument.defaultValue,
     required: argument.required,
     text: formatPlaceholderText(argument),

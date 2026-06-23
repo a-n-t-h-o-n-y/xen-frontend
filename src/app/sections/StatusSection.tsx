@@ -331,7 +331,23 @@ export function StatusSection({
                 <span className="statusCommandGhostMirror">{commandText}</span>
                 {completion.argumentPlaceholders.map((placeholder) => (
                   <span className="statusCommandGhostArgument" key={placeholder.displayName}>
-                    {placeholder.text}
+                    <span className="statusCommandGhostBracket">
+                      {placeholder.required ? '<' : '['}
+                    </span>
+                    <span className="statusCommandGhostName">{placeholder.displayName}</span>
+                    <span className="statusCommandGhostPunctuation">:</span>
+                    <span className="statusCommandGhostKind">{placeholder.detail}</span>
+                    {placeholder.defaultValue === null ? null : (
+                      <>
+                        <span className="statusCommandGhostSpacer" aria-hidden="true" />
+                        <span className="statusCommandGhostPunctuation">=</span>
+                        <span className="statusCommandGhostSpacer" aria-hidden="true" />
+                        <span className="statusCommandGhostDefault">{placeholder.defaultValue}</span>
+                      </>
+                    )}
+                    <span className="statusCommandGhostBracket">
+                      {placeholder.required ? '>' : ']'}
+                    </span>
                   </span>
                 ))}
               </span>

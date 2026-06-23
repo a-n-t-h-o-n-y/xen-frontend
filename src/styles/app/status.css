@@ -169,7 +169,7 @@
   align-items: center;
   gap: 0;
   min-width: 0;
-  color: rgb(255 255 255 / 35%);
+  color: rgb(255 255 255 / 30%);
   font-size: 0.95rem;
   line-height: 1;
   font-family: inherit;
@@ -195,16 +195,36 @@
   margin-right: var(--space-1);
 }
 
+.statusCommandGhostPunctuation {
+  color: rgb(255 255 255 / 24%);
+  font-weight: 400;
+}
+
+.statusCommandGhostBracket {
+  color: rgb(255 255 255 / 42%);
+  font-weight: 600;
+}
+
+.statusCommandGhostSpacer {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 0.35em;
+}
+
 .statusCommandGhostName {
-  color: rgb(255 255 255 / 46%);
+  color: rgb(255 255 255 / 58%);
+  font-weight: 700;
 }
 
 .statusCommandGhostKind {
-  color: rgb(255 255 255 / 28%);
+  color: rgb(255 255 255 / 33%);
+  font-style: italic;
+  font-weight: 400;
 }
 
 .statusCommandGhostDefault {
-  color: rgb(255 255 255 / 20%);
+  color: rgb(255 255 255 / 42%);
+  font-weight: 500;
 }
 
 /* =========================================================

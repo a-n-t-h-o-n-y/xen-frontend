@@ -407,10 +407,10 @@ describe('command completion', () => {
 
     expect(noArgsTyped.argumentPlaceholders.map((placeholder) => placeholder.text)).toEqual([
       '<amount:decimal>',
-      '[curve=linear:linear | exp]',
+      '[curve:linear | exp = linear]',
     ])
     expect(oneArgTyped.argumentPlaceholders.map((placeholder) => placeholder.text)).toEqual([
-      '[curve=linear:linear | exp]',
+      '[curve:linear | exp = linear]',
     ])
   })
 
