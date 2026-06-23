@@ -284,9 +284,13 @@ export const analyzeCommandCompletion = (
   const leadingCommandWhitespace = segment.commandText.length - trimmedCommandText.length
   const queryStartOffset = leadingCommandWhitespace
   const normalizedSegment = normalize(trimmedCommandText)
+  const hasExplicitArgumentBoundary = /\s$/.test(trimmedCommandText)
   const recognizedCommand = commands.find((command) => {
     const id = normalize(command.id)
-    return normalizedSegment === id || normalizedSegment.startsWith(`${id} `)
+    return (
+      (normalizedSegment === id && hasExplicitArgumentBoundary) ||
+      normalizedSegment.startsWith(`${id} `)
+    )
   }) ?? null
 
   if (recognizedCommand) {

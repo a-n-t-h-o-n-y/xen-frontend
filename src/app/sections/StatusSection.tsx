@@ -85,6 +85,7 @@ export function StatusSection({
   const visibleCandidates = isEmptyCompletionQuery
     ? completion.candidates
     : completion.candidates.slice(0, 8)
+  const displayedCandidates = [...visibleCandidates].reverse()
   const selectedCandidate = visibleCandidates[selectedCompletionIndex] ?? visibleCandidates[0]
   const isGhostVisible = isCommandMode &&
     !isCompletionDismissed &&
@@ -115,10 +116,12 @@ export function StatusSection({
   }, [setSelectedCompletionIndex, visibleCandidates.length])
 
   useEffect(() => {
-    if (!isPopupVisible || !isCompletionNavigationActive) return
+    if (!isPopupVisible) return
 
-    activeCompletionRowRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [isCompletionNavigationActive, isPopupVisible, selectedCompletionIndex])
+    activeCompletionRowRef.current?.scrollIntoView({
+      block: isCompletionNavigationActive ? 'nearest' : 'end',
+    })
+  }, [isCompletionNavigationActive, isPopupVisible, selectedCompletionIndex, visibleCandidates.length])
 
   const acceptCompletion = (candidate = selectedCandidate): void => {
     if (!candidate) return
@@ -151,26 +154,30 @@ export function StatusSection({
       {isPopupVisible ? (
         <div className="commandCompletionPopup" role="listbox" aria-label="Command completions">
           <div className="commandCompletionList">
-            {visibleCandidates.map((candidate, index) => (
-              <button
-                type="button"
-                key={candidate.command.id}
-                ref={index === selectedCompletionIndex ? activeCompletionRowRef : null}
-                className={`commandCompletionRow${index === selectedCompletionIndex ? ' commandCompletionRow-active' : ''}`}
-                role="option"
-                aria-selected={index === selectedCompletionIndex}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => acceptCompletion(candidate)}
-              >
-                <span className="commandCompletionMarker mono">
-                  {candidate.command.acceptsPatternPrefix ? '# ' : ''}
-                </span>
-                <span className="commandCompletionName mono">{candidate.command.id}</span>
-                <span className="commandCompletionSignature mono">
-                  {candidate.signature.slice(candidate.command.id.length).trim()}
-                </span>
-              </button>
-            ))}
+            {displayedCandidates.map((candidate, displayIndex) => {
+              const index = visibleCandidates.length - displayIndex - 1
+
+              return (
+                <button
+                  type="button"
+                  key={candidate.command.id}
+                  ref={index === selectedCompletionIndex ? activeCompletionRowRef : null}
+                  className={`commandCompletionRow${index === selectedCompletionIndex ? ' commandCompletionRow-active' : ''}`}
+                  role="option"
+                  aria-selected={index === selectedCompletionIndex}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => acceptCompletion(candidate)}
+                >
+                  <span className="commandCompletionMarker mono">
+                    {candidate.command.acceptsPatternPrefix ? '# ' : ''}
+                  </span>
+                  <span className="commandCompletionName mono">{candidate.command.id}</span>
+                  <span className="commandCompletionSignature mono">
+                    {candidate.signature.slice(candidate.command.id.length).trim()}
+                  </span>
+                </button>
+              )
+            })}
           </div>
           {selectedCandidate ? (
             <div className="commandCompletionDetail">{selectedCandidate.command.description}</div>
@@ -241,20 +248,20 @@ export function StatusSection({
 
                 if (event.key === 'ArrowDown' && isPopupVisible) {
                   event.preventDefault()
-                  navigateCompletion(1)
+                  navigateCompletion(-1)
                   return
                 }
 
                 if (event.key === 'ArrowUp' && isPopupVisible) {
                   event.preventDefault()
-                  navigateCompletion(-1)
+                  navigateCompletion(1)
                   return
                 }
 
                 if (event.ctrlKey && event.key.toLowerCase() === 'n') {
                   if (isPopupVisible) {
                     event.preventDefault()
-                    navigateCompletion(1)
+                    navigateCompletion(-1)
                   }
                   return
                 }
@@ -262,7 +269,7 @@ export function StatusSection({
                 if (event.ctrlKey && event.key.toLowerCase() === 'p') {
                   if (isPopupVisible) {
                     event.preventDefault()
-                    navigateCompletion(-1)
+                    navigateCompletion(1)
                   }
                   return
                 }

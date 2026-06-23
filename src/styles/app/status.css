@@ -259,11 +259,14 @@
   min-height: 2rem;
   padding: 0 var(--space-2);
   border: 0;
-  border-bottom: 1px solid rgb(255 255 255 / 7%);
   background: transparent;
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
+}
+
+.commandCompletionRow + .commandCompletionRow {
+  border-top: 1px solid rgb(255 255 255 / 7%);
 }
 
 .commandCompletionRow:hover,

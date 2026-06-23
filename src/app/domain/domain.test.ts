@@ -419,14 +419,24 @@ describe('command completion', () => {
     expect(rankCommandCompletions(commands, 'gain')[0]?.matchKind).toBe('keyword')
   })
 
-  it('recognizes exact commands and argument input separately from command search', () => {
+  it('keeps exact commands without trailing space in command search for completion acceptance', () => {
     const exact = analyzeCommandCompletion('set velocity', commands)
+    const nextText = applyCommandCompletion('set velocity', exact.segment, exact.candidates[0].command)
+
+    expect(exact.mode).toBe('commandSearch')
+    expect(exact.recognizedCommand).toBeNull()
+    expect(exact.candidates[0]?.command.id).toBe('set velocity')
+    expect(exact.argumentPlaceholders).toHaveLength(0)
+    expect(nextText).toBe('set velocity ')
+  })
+
+  it('recognizes commands with an argument boundary and argument input separately from command search', () => {
+    const argumentBoundary = analyzeCommandCompletion('set velocity ', commands)
     const argumentInput = analyzeCommandCompletion('set velocity 0.5', commands)
 
-    expect(exact.mode).toBe('argumentAssist')
-    expect(exact.recognizedCommand?.id).toBe('set velocity')
-    expect(exact.candidates).toHaveLength(0)
-    expect(exact.argumentPlaceholders).toHaveLength(0)
+    expect(argumentBoundary.mode).toBe('argumentAssist')
+    expect(argumentBoundary.recognizedCommand?.id).toBe('set velocity')
+    expect(argumentBoundary.candidates).toHaveLength(0)
     expect(argumentInput.recognizedCommand?.id).toBe('set velocity')
     expect(argumentInput.argumentPlaceholders.map((placeholder) => placeholder.displayName)).toEqual(['curve'])
   })

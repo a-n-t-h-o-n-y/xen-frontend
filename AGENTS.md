@@ -146,3 +146,6 @@ General Rule: Clarity > Consistency > Simplicity > Aesthetic detail.
 - Add short, useful comments to separate sections and explain non-obvious decisions.
 - Keep naming and structure consistent across files.
 - Prefer small, focused style blocks over long, mixed-purpose sections.
+
+At the end of a message, if it implemented a commit worthy feature, offer a
+suggested commit message the user can copy/paste.
