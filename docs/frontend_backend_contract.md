@@ -93,7 +93,7 @@ type SessionHello = {
   project_schema_version: 1;
   library_schema_version: 1;
   catalog: {
-    schema_version: 1;
+    schema_version: 2;
     commands: CatalogCommand[];
   };
   keymap: Record<string, Record<string, string>>;
@@ -127,6 +127,7 @@ type CatalogArgument = {
 
 type CatalogCommand = {
   path: string[];
+  keywords: string[];
   accepts_pattern_prefix: boolean;
   target_requirement: "none" | "cell" | "element" | "cell_or_element";
   arguments: CatalogArgument[];
@@ -138,6 +139,10 @@ Cache `session.hello.payload.catalog.commands` and use it for command help,
 autocomplete, filtering, and ranking. Completion should tolerantly parse only the
 active semicolon-delimited chain segment. Final command text is still submitted to the
 strict backend parser.
+
+`keywords` are discovery-only synonyms such as `"volume"`, `"gain"`, or `"level"`.
+They are used for matching and ranking below canonical command-name matches, and are
+never inserted into submitted command text.
 
 The keymap contains raw strings. Values may contain command chains, placeholders such
 as `:N=2:`, and frontend-local actions. The frontend must split and route those

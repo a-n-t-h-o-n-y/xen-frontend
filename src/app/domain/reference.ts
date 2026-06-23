@@ -4,6 +4,7 @@ import type { CommandReferenceEntry, SessionReference } from '../shared'
 const commandSearchText = (command: CommandReferenceEntry): string => [
   command.id,
   command.signature,
+  ...command.keywords,
   command.description,
   command.targetRequirement,
   command.acceptsPatternPrefix ? 'pattern prefix' : '',
@@ -44,6 +45,7 @@ export const buildSessionReference = (
     return {
       id,
       signature: [id, ...argumentsText].join(' '),
+      keywords: command.keywords,
       description: command.description,
       targetRequirement: command.target_requirement,
       acceptsPatternPrefix: command.accepts_pattern_prefix,

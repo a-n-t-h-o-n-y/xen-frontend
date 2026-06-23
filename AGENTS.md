@@ -21,6 +21,11 @@ Keep components and related styles close together in `src/` as features are adde
 
 Use `npm run lint && npm run build` before opening a PR.
 
+Do not start or leave a Vite dev server running unless the user explicitly asks for
+one. Prefer `npm run test`, `npm run lint`, and `npm run build` for validation. If a
+temporary server is explicitly needed for verification, stop it before finishing and
+report that it was stopped.
+
 ## Coding Style & Naming Conventions
 - Language: TypeScript (`.ts`/`.tsx`) with React functional components.
 - Follow ESLint config in `eslint.config.js` (TypeScript + React Hooks + React Refresh rules).

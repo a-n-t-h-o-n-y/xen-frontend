@@ -61,6 +61,7 @@ export type PatternPrefix = {
 export type CommandReferenceEntry = {
   id: string
   signature: string
+  keywords: string[]
   description: string
   targetRequirement: 'none' | 'cell' | 'element' | 'cell_or_element'
   acceptsPatternPrefix: boolean

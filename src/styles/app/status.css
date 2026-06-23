@@ -3,6 +3,14 @@
    Purpose: Layout for mode badge, status text, and metadata.
    ========================================================= */
 
+.statusBarShell {
+  position: relative;
+  z-index: 30;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
 .statusBar {
   display: flex;
   align-items: center;
@@ -155,9 +163,12 @@
 }
 
 .statusCommandGhost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   flex: 1 1 auto;
   min-width: 0;
-  margin-left: -1ch;
+  margin-left: var(--space-1);
   color: rgb(255 255 255 / 35%);
   font-size: 0.95rem;
   line-height: 1;
@@ -171,3 +182,102 @@
 }
 
 /* Notes: Ghost text stays click-through so caret placement always targets input. */
+
+.statusCommandGhostArgument {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.statusCommandGhostName {
+  color: rgb(255 255 255 / 46%);
+}
+
+.statusCommandGhostKind {
+  color: rgb(255 255 255 / 28%);
+}
+
+.statusCommandGhostDefault {
+  color: rgb(255 255 255 / 20%);
+}
+
+/* =========================================================
+   Section 3: Completion Popup
+   Purpose: Candidate rows and selected command detail above the bar.
+   ========================================================= */
+
+.commandCompletionPopup {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-1));
+  left: 0;
+  display: grid;
+  overflow: hidden;
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: #20242c;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 28%);
+}
+
+.commandCompletionList {
+  display: grid;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.commandCompletionRow {
+  display: grid;
+  grid-template-columns: 1.2rem minmax(8rem, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.commandCompletionRow:hover,
+.commandCompletionRow-active {
+  background: rgb(255 255 255 / 8%);
+}
+
+.commandCompletionRow:focus-visible {
+  outline: 2px solid rgb(245 196 90 / 65%);
+  outline-offset: -2px;
+}
+
+.commandCompletionMarker {
+  color: rgb(245 196 90 / 72%);
+  font-size: 0.75rem;
+}
+
+.commandCompletionName {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.commandCompletionSignature {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(255 255 255 / 44%);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commandCompletionDetail {
+  min-height: 1.8rem;
+  padding: var(--space-1) var(--space-2);
+  border-top: 1px solid rgb(255 255 255 / 10%);
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

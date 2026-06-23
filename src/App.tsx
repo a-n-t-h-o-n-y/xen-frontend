@@ -4,6 +4,7 @@ import { HeaderSection } from './app/sections/HeaderSection'
 import { BottomModulesSection } from './app/sections/BottomModulesSection'
 import { useBridgeSession } from './app/hooks/useBridgeSession'
 import { useCommandState } from './app/hooks/useCommandState'
+import { recognizeCommandIds } from './app/domain/commandCompletion'
 import { useHeaderEditing } from './app/hooks/useHeaderEditing'
 import { useLibraryPanelState } from './app/hooks/useLibraryPanelState'
 import { useModulatorPanelState } from './app/hooks/useModulatorPanelState'
@@ -96,6 +97,18 @@ function App() {
     setCommandHistory,
     historyIndex,
     setHistoryIndex,
+    completionMode,
+    setCompletionMode,
+    isCompletionDismissed,
+    setIsCompletionDismissed,
+    selectedCompletionIndex,
+    setSelectedCompletionIndex,
+    isCompletionNavigationActive,
+    setIsCompletionNavigationActive,
+    isHistoryNavigationFrozen,
+    setIsHistoryNavigationFrozen,
+    recentCommandIds,
+    setRecentCommandIds,
     liveCommandBufferRef,
     openCommandMode,
     closeCommandMode,
@@ -446,6 +459,13 @@ function App() {
       }
 
       setCommandHistory((previous) => [command, ...previous].slice(0, MAX_COMMAND_HISTORY))
+      const recognizedCommandIds = recognizeCommandIds(command, sessionReference.commands)
+      if (recognizedCommandIds.length > 0) {
+        setRecentCommandIds((previous) => [
+          ...recognizedCommandIds,
+          ...previous.filter((id) => !recognizedCommandIds.includes(id)),
+        ].slice(0, 20))
+      }
       setHistoryIndex(-1)
       liveCommandBufferRef.current = ''
 
@@ -467,8 +487,10 @@ function App() {
       commandText,
       executeBackendCommand,
       liveCommandBufferRef,
+      sessionReference.commands,
       setCommandHistory,
       setHistoryIndex,
+      setRecentCommandIds,
     ]
   )
 
@@ -1355,27 +1377,6 @@ function App() {
         rulerRatios={rulerRatios}
         highlightedPitches={highlightedPitches}
       />
-      <StatusSection
-        currentInputMode={editorState.inputMode}
-        currentInputModeLetter={currentInputModeLetter}
-        isCommandMode={isCommandMode}
-        submitCommand={submitCommand}
-        commandInputRef={commandInputRef}
-        commandText={commandText}
-        setCommandText={setCommandText}
-        historyIndex={historyIndex}
-        setHistoryIndex={setHistoryIndex}
-        closeCommandMode={closeCommandMode}
-        commandHistory={commandHistory}
-        liveCommandBufferRef={liveCommandBufferRef}
-        statusLevel={statusLevel}
-        statusMessage={statusMessage}
-        selectedCellMeta={selectedCellMeta}
-        onOpenSettings={() => {
-          setKeymapError(null)
-          setSettingsOpen(true)
-        }}
-      />
       <BottomModulesSection
         activeModulatorTab={activeModulatorTab}
         setOpenWaveMenu={setOpenWaveMenu}
@@ -1428,6 +1429,40 @@ function App() {
         measureSearch={measureSearch}
         setMeasureSearch={setMeasureSearch}
         measureHierarchyRows={measureHierarchyRows}
+      />
+      <StatusSection
+        currentInputMode={editorState.inputMode}
+        currentInputModeLetter={currentInputModeLetter}
+        isCommandMode={isCommandMode}
+        submitCommand={submitCommand}
+        commandInputRef={commandInputRef}
+        commandText={commandText}
+        setCommandText={setCommandText}
+        historyIndex={historyIndex}
+        setHistoryIndex={setHistoryIndex}
+        closeCommandMode={closeCommandMode}
+        commandHistory={commandHistory}
+        liveCommandBufferRef={liveCommandBufferRef}
+        commands={sessionReference.commands}
+        completionMode={completionMode}
+        setCompletionMode={setCompletionMode}
+        isCompletionDismissed={isCompletionDismissed}
+        setIsCompletionDismissed={setIsCompletionDismissed}
+        selectedCompletionIndex={selectedCompletionIndex}
+        setSelectedCompletionIndex={setSelectedCompletionIndex}
+        isCompletionNavigationActive={isCompletionNavigationActive}
+        setIsCompletionNavigationActive={setIsCompletionNavigationActive}
+        isHistoryNavigationFrozen={isHistoryNavigationFrozen}
+        setIsHistoryNavigationFrozen={setIsHistoryNavigationFrozen}
+        recentCommandIds={recentCommandIds}
+        setRecentCommandIds={setRecentCommandIds}
+        statusLevel={statusLevel}
+        statusMessage={statusMessage}
+        selectedCellMeta={selectedCellMeta}
+        onOpenSettings={() => {
+          setKeymapError(null)
+          setSettingsOpen(true)
+        }}
       />
       <SettingsOverlay
         open={settingsOpen}

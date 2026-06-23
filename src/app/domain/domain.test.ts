@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  analyzeCommandCompletion,
+  applyCommandCompletion,
+  getVisibleCompletionMode,
+  rankCommandCompletions,
+} from './commandCompletion'
+import {
   parseBridgeEvent,
   parseCommandResponse,
   parseEnvelope,
@@ -127,7 +133,7 @@ const libraryFixture = (revision = 4): LibrarySnapshot => ({
   },
 })
 
-describe('schema 1 contract validation', () => {
+describe('schema 2 contract validation', () => {
   it('accepts envelopes and rejects invalid payloads', () => {
     expect(parseEnvelope({
       protocol: 'xen.bridge.v1',
@@ -151,9 +157,10 @@ describe('schema 1 contract validation', () => {
       project_schema_version: 1,
       library_schema_version: 1,
       catalog: {
-        schema_version: 1,
+        schema_version: 2,
         commands: [{
           path: ['set', 'pitch'],
+          keywords: ['note'],
           accepts_pattern_prefix: false,
           target_requirement: 'element',
           arguments: [],
@@ -207,10 +214,11 @@ describe('schema 1 contract validation', () => {
 
 describe('command reference', () => {
   const reference = buildSessionReference({
-    schema_version: 1,
+    schema_version: 2,
     commands: [
       {
         path: ['set', 'velocity'],
+        keywords: ['volume', 'gain', 'level'],
         accepts_pattern_prefix: true,
         target_requirement: 'element',
         description: 'Set note velocity',
@@ -231,6 +239,7 @@ describe('command reference', () => {
       },
       {
         path: ['transport', 'stop'],
+        keywords: ['pause', 'halt'],
         accepts_pattern_prefix: false,
         target_requirement: 'none',
         description: 'Stop playback',
@@ -243,6 +252,7 @@ describe('command reference', () => {
     expect(reference.commands[0]).toEqual({
       id: 'set velocity',
       signature: 'set velocity [amount=0.8]',
+      keywords: ['volume', 'gain', 'level'],
       description: 'Set note velocity',
       targetRequirement: 'element',
       acceptsPatternPrefix: true,
@@ -267,6 +277,147 @@ describe('command reference', () => {
     expect(filterCommandReference(reference.commands, 'amount=0.8')[0]?.id).toBe('set velocity')
     expect(filterCommandReference(reference.commands, 'decimal')[0]?.id).toBe('set velocity')
     expect(filterCommandReference(reference.commands, 'range')[0]?.id).toBe('set velocity')
+  })
+})
+
+describe('command completion', () => {
+  const commands = buildSessionReference({
+    schema_version: 2,
+    commands: [
+      {
+        path: ['set', 'velocity'],
+        keywords: ['volume', 'gain', 'level'],
+        accepts_pattern_prefix: true,
+        target_requirement: 'element',
+        description: 'Set note velocity',
+        arguments: [
+          {
+            kind: 'decimal',
+            display_name: 'amount',
+            required: true,
+            default_value: null,
+            constraints: [{
+              kind: 'range',
+              minimum: 0,
+              maximum: 1,
+              values: [],
+            }],
+          },
+          {
+            kind: 'mode',
+            display_name: 'curve',
+            required: false,
+            default_value: 'linear',
+            constraints: [{
+              kind: 'enum',
+              minimum: null,
+              maximum: null,
+              values: ['linear', 'exp'],
+            }],
+          },
+        ],
+      },
+      {
+        path: ['set', 'gate'],
+        keywords: ['duration'],
+        accepts_pattern_prefix: true,
+        target_requirement: 'element',
+        description: 'Set note gate',
+        arguments: [],
+      },
+      {
+        path: ['transport', 'stop'],
+        keywords: ['pause', 'halt'],
+        accepts_pattern_prefix: false,
+        target_requirement: 'none',
+        description: 'Stop playback',
+        arguments: [],
+      },
+      {
+        path: ['load', 'measure'],
+        keywords: ['open', 'file'],
+        accepts_pattern_prefix: false,
+        target_requirement: 'none',
+        description: 'Load measure',
+        arguments: [],
+      },
+      {
+        path: ['mute', 'selected'],
+        keywords: ['silence'],
+        accepts_pattern_prefix: false,
+        target_requirement: 'cell_or_element',
+        description: 'Mute selected item',
+        arguments: [],
+      },
+    ],
+  }).commands
+
+  it('strips pattern prefixes before command matching', () => {
+    const analysis = analyzeCommandCompletion('+2  1 3 set vel', commands)
+    const joined = applyCommandCompletion('+2  1 3 set vel', analysis.segment, analysis.candidates[0].command)
+
+    expect(analysis.candidates[0]?.command.id).toBe('set velocity')
+    expect(analysis.segment.patternPrefix).toBe('+2  1 3 ')
+    expect(joined).toBe('+2  1 3 set velocity ')
+  })
+
+  it('shows catalog order for empty command text with recent boosts', () => {
+    const ranked = rankCommandCompletions(commands, '', ['transport stop'])
+
+    expect(ranked.map((candidate) => candidate.command.id).slice(0, 3)).toEqual([
+      'transport stop',
+      'set velocity',
+      'set gate',
+    ])
+  })
+
+  it('matches multi-word commands and inserts the canonical command', () => {
+    const analysis = analyzeCommandCompletion('copy; +1 trans st', commands)
+    const nextText = applyCommandCompletion('copy; +1 trans st', analysis.segment, analysis.candidates[0].command)
+
+    expect(analysis.candidates[0]?.command.id).toBe('transport stop')
+    expect(nextText).toBe('copy; +1 transport stop ')
+  })
+
+  it('prioritizes prefix, token prefix, acronym, order-insensitive, typo, then keyword matches', () => {
+    expect(rankCommandCompletions(commands, 'set')[0]?.matchKind).toBe('exactPrefix')
+    expect(rankCommandCompletions(commands, 'vel')[0]?.matchKind).toBe('tokenPrefix')
+    expect(rankCommandCompletions(commands, 'ts')[0]?.matchKind).toBe('acronym')
+    expect(rankCommandCompletions(commands, 'measure load')[0]?.matchKind).toBe('orderInsensitive')
+    expect(rankCommandCompletions(commands, 'velocitty')[0]?.matchKind).toBe('typo')
+    expect(rankCommandCompletions(commands, 'gain')[0]?.matchKind).toBe('keyword')
+  })
+
+  it('recognizes exact commands and argument input separately from command search', () => {
+    const exact = analyzeCommandCompletion('set velocity', commands)
+    const argumentInput = analyzeCommandCompletion('set velocity 0.5', commands)
+
+    expect(exact.mode).toBe('argumentAssist')
+    expect(exact.recognizedCommand?.id).toBe('set velocity')
+    expect(exact.candidates).toHaveLength(0)
+    expect(argumentInput.recognizedCommand?.id).toBe('set velocity')
+    expect(argumentInput.argumentPlaceholders.map((placeholder) => placeholder.displayName)).toEqual(['curve'])
+  })
+
+  it('generates argument placeholders and hides typed arguments', () => {
+    const noArgsTyped = analyzeCommandCompletion('set velocity ', commands)
+    const oneArgTyped = analyzeCommandCompletion('set velocity 0.75', commands)
+
+    expect(noArgsTyped.argumentPlaceholders.map((placeholder) => placeholder.text)).toEqual([
+      '<amount:decimal>',
+      '[curve=linear:mode]',
+    ])
+    expect(oneArgTyped.argumentPlaceholders.map((placeholder) => placeholder.text)).toEqual([
+      '[curve=linear:mode]',
+    ])
+  })
+
+  it('keeps history-selected text frozen until editing resumes', () => {
+    const analysis = analyzeCommandCompletion('set veloc', commands, ['transport stop'])
+
+    expect(analysis.mode).toBe('commandSearch')
+    expect(getVisibleCompletionMode(true, false, true, analysis.mode)).toBe('none')
+    expect(getVisibleCompletionMode(true, false, false, analysis.mode)).toBe('commandSearch')
   })
 })
 

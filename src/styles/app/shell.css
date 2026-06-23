@@ -41,7 +41,7 @@
 /* =========================================================
    Section 2: App Layout
    Purpose: Define the high-level vertical frame for the app.
-   Notes: Rows are header, sequencer, status, then lower modules.
+   Notes: Rows are header, sequencer, lower modules, then command/status bar.
    ========================================================= */
 
 .app {

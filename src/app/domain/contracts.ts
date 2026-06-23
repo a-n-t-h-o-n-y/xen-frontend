@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const BRIDGE_PROTOCOL = 'xen.bridge.v1'
 export const PROJECT_SCHEMA_VERSION = 1
 export const LIBRARY_SCHEMA_VERSION = 1
-export const CATALOG_SCHEMA_VERSION = 1
+export const CATALOG_SCHEMA_VERSION = 2
 export const KEYMAP_SCHEMA_VERSION = 1
 
 const finiteNumber = z.number().finite()
@@ -173,6 +173,7 @@ export const catalogArgumentSchema = z.object({
 
 export const catalogCommandSchema = z.object({
   path: z.array(z.string()).min(1),
+  keywords: z.array(z.string()),
   accepts_pattern_prefix: z.boolean(),
   target_requirement: z.enum(['none', 'cell', 'element', 'cell_or_element']),
   arguments: z.array(catalogArgumentSchema),
