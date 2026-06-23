@@ -1,110 +1,91 @@
-import type { InputMode } from '../shared'
-import type { MoveDirection } from './selection'
-
-export type KeymapAction =
-  | { type: 'move'; direction: MoveDirection; amount: number }
-  | { type: 'inputMode'; inputMode: InputMode }
-  | { type: 'backend'; command: string }
+import { usesMetaForCommand } from '../shared'
+import type {
+  InputMode,
+  KeymapBinding,
+  KeymapResource,
+  KeymapTarget,
+  KeymapTrigger,
+} from './contracts'
 
 export const expandNumericPlaceholders = (command: string, pendingDigits: string): string =>
   command.replace(/:N=(\d+):/g, (_, defaultValue: string) =>
     pendingDigits.length > 0 ? pendingDigits : defaultValue
   )
 
-export const splitCommandChain = (command: string): string[] => {
-  const segments: string[] = []
-  let start = 0
-  let quote: '"' | "'" | null = null
-  let escaped = false
+export const normalizeKey = (key: string): string =>
+  /^[A-Z]$/.test(key) ? key.toLowerCase() : key
 
-  for (let index = 0; index < command.length; index += 1) {
-    const character = command[index]
-    if (escaped) {
-      escaped = false
-      continue
-    }
-    if (character === '\\' && quote !== null) {
-      escaped = true
-      continue
-    }
-    if (character === '"' || character === "'") {
-      quote = quote === character ? null : quote ?? character
-      continue
-    }
-    if (character === ';' && quote === null) {
-      const segment = command.slice(start, index).trim()
-      if (segment) {
-        segments.push(segment)
-      }
-      start = index + 1
-    }
-  }
+export const triggerFromKeyboardEvent = (event: KeyboardEvent): KeymapTrigger => ({
+  key: normalizeKey(event.key),
+  modifiers: {
+    shift: event.shiftKey,
+    command: usesMetaForCommand ? event.metaKey : event.ctrlKey,
+    alt: event.altKey,
+  },
+})
 
-  const finalSegment = command.slice(start).trim()
-  if (finalSegment) {
-    segments.push(finalSegment)
-  }
-  return segments
+export const triggerIdentity = (trigger: KeymapTrigger): string => [
+  trigger.key,
+  trigger.modifiers.shift ? '1' : '0',
+  trigger.modifiers.command ? '1' : '0',
+  trigger.modifiers.alt ? '1' : '0',
+  trigger.when?.input_mode ?? '',
+].join('\u0000')
+
+export const triggersEqual = (left: KeymapTrigger, right: KeymapTrigger): boolean =>
+  triggerIdentity(left) === triggerIdentity(right)
+
+export const matchesKeymapTrigger = (
+  trigger: KeymapTrigger,
+  event: KeyboardEvent,
+  inputMode: InputMode
+): boolean => {
+  const eventTrigger = triggerFromKeyboardEvent(event)
+  return trigger.key === eventTrigger.key &&
+    trigger.modifiers.shift === eventTrigger.modifiers.shift &&
+    trigger.modifiers.command === eventTrigger.modifiers.command &&
+    trigger.modifiers.alt === eventTrigger.modifiers.alt &&
+    (trigger.when === undefined || trigger.when.input_mode === inputMode)
 }
 
-const parseInputMode = (value: string): InputMode | null => {
-  const normalized = value.toLowerCase()
-  if (
-    normalized === 'pitch' ||
-    normalized === 'velocity' ||
-    normalized === 'delay' ||
-    normalized === 'gate' ||
-    normalized === 'scale'
-  ) {
-    return normalized
+export const findKeymapBinding = (
+  resource: KeymapResource | null,
+  context: string,
+  event: KeyboardEvent,
+  inputMode: InputMode
+): KeymapBinding | null =>
+  resource?.bindings[context]?.find((binding) =>
+    matchesKeymapTrigger(binding.trigger, event, inputMode)
+  ) ?? null
+
+const displayKey = (key: string): string => {
+  const labels: Record<string, string> = {
+    ' ': 'Space',
+    ArrowLeft: 'Left',
+    ArrowRight: 'Right',
+    ArrowUp: 'Up',
+    ArrowDown: 'Down',
+    Escape: 'Esc',
   }
-  return null
+  return labels[key] ?? key
 }
 
-export const routeKeymapAction = (command: string): KeymapAction[] => {
-  const actions: KeymapAction[] = []
-  let backendSegments: string[] = []
+export const formatKeymapTrigger = (trigger: KeymapTrigger): string => {
+  const parts: string[] = []
+  if (trigger.modifiers.command) parts.push(usesMetaForCommand ? 'Cmd' : 'Ctrl')
+  if (trigger.modifiers.alt) parts.push(usesMetaForCommand ? 'Option' : 'Alt')
+  if (trigger.modifiers.shift) parts.push('Shift')
+  parts.push(displayKey(trigger.key))
+  if (trigger.when) parts.push(`in ${trigger.when.input_mode}`)
+  return parts.join(' + ')
+}
 
-  const flushBackend = (): void => {
-    if (backendSegments.length === 0) {
-      return
-    }
-    actions.push({ type: 'backend', command: backendSegments.join('; ') })
-    backendSegments = []
+export const formatKeymapTarget = (target: KeymapTarget): string => {
+  if (target.type === 'command') {
+    return target.command
   }
-
-  for (const segment of splitCommandChain(command)) {
-    const tokens = segment.trim().split(/\s+/)
-    const actionName = tokens[0]?.toLowerCase()
-    if (actionName === 'move') {
-      const direction = tokens[1]?.toLowerCase()
-      if (
-        direction === 'left' ||
-        direction === 'right' ||
-        direction === 'up' ||
-        direction === 'down'
-      ) {
-        flushBackend()
-        const amount = tokens[2] === undefined ? 1 : Number.parseInt(tokens[2], 10)
-        actions.push({
-          type: 'move',
-          direction,
-          amount: Number.isNaN(amount) ? 1 : amount,
-        })
-        continue
-      }
-    }
-    if (actionName === 'inputmode') {
-      const nextMode = parseInputMode(tokens[1] ?? '')
-      if (nextMode) {
-        flushBackend()
-        actions.push({ type: 'inputMode', inputMode: nextMode })
-        continue
-      }
-    }
-    backendSegments.push(segment)
+  if (target.action === 'selection.move') {
+    return `Move ${target.arguments.direction} by ${target.arguments.amount}`
   }
-
-  flushBackend()
-  return actions
+  return `Set input mode to ${target.arguments.mode}`
 }

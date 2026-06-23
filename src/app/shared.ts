@@ -2,6 +2,7 @@
 import type {
   Cell,
   EnvelopePayload,
+  InputMode,
   Measure,
   MusicElement,
   SelectionPath,
@@ -46,13 +47,12 @@ export const usesMetaForCommand = isApplePlatform()
 
 export type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
 export type TranslateDirection = 'up' | 'down'
-export type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
+export type { InputMode } from './domain/contracts'
 export type EditorState = {
   selection: { path: SelectionPath }
   inputMode: InputMode
 }
 
-export type SequenceViewKeymap = Record<string, string>
 export type PatternPrefix = {
   offset: number
   intervals: number[]
@@ -64,19 +64,8 @@ export type CommandReferenceEntry = {
   description: string
 }
 
-export type KeybindingReferenceEntry = {
-  key: string
-  command: string
-}
-
-export type KeybindingReferenceGroup = {
-  component: string
-  bindings: KeybindingReferenceEntry[]
-}
-
 export type SessionReference = {
   commands: CommandReferenceEntry[]
-  keybindings: KeybindingReferenceGroup[]
 }
 
 export type LibraryCommandEntry = {
@@ -490,146 +479,6 @@ export const getHierarchyRows = (
   }
 
   return rows
-}
-
-export type ParsedKeyBinding = {
-  requiredMode: InputMode | null
-  requiresShift: boolean
-  requiresCmd: boolean
-  requiresAlt: boolean
-  key: string
-}
-
-export const parseModeToken = (token: string): InputMode | null => {
-  const normalizedToken = token.trim().toLowerCase()
-  if (normalizedToken === '[p]') return 'pitch'
-  if (normalizedToken === '[v]') return 'velocity'
-  if (normalizedToken === '[d]') return 'delay'
-  if (normalizedToken === '[g]') return 'gate'
-  if (normalizedToken === '[c]') return 'scale'
-  return null
-}
-
-export const normalizeKeyToken = (token: string): string => {
-  const trimmed = token.trim()
-  if (trimmed.toLowerCase() === 'plus') {
-    return '+'
-  }
-  return trimmed.toLowerCase()
-}
-
-export const parseKeyBinding = (binding: string): ParsedKeyBinding | null => {
-  const tokens = binding
-    .split('+')
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0)
-
-  if (tokens.length === 0) {
-    return null
-  }
-
-  let requiredMode: InputMode | null = null
-  let requiresShift = false
-  let requiresCmd = false
-  let requiresAlt = false
-  let key = ''
-
-  for (const token of tokens) {
-    const lowerToken = token.toLowerCase()
-    const mode = parseModeToken(token)
-    if (mode) {
-      requiredMode = mode
-      continue
-    }
-
-    if (lowerToken === 'shift') {
-      requiresShift = true
-      continue
-    }
-
-    if (lowerToken === 'cmd') {
-      requiresCmd = true
-      continue
-    }
-
-    if (lowerToken === 'alt') {
-      requiresAlt = true
-      continue
-    }
-
-    key = normalizeKeyToken(token)
-  }
-
-  if (!key) {
-    return null
-  }
-
-  return {
-    requiredMode,
-    requiresShift,
-    requiresCmd,
-    requiresAlt,
-    key,
-  }
-}
-
-export const getEventKeyAliases = (event: KeyboardEvent): Set<string> => {
-  const aliases = new Set<string>()
-  const key = event.key
-  const lower = key.toLowerCase()
-  aliases.add(lower)
-
-  if (key === '+') {
-    aliases.add('+')
-  }
-  if (key === '=' && event.shiftKey) {
-    aliases.add('+')
-  }
-
-  if (lower === 'escape') aliases.add('escape')
-  if (lower === 'arrowleft') aliases.add('arrowleft')
-  if (lower === 'arrowright') aliases.add('arrowright')
-  if (lower === 'arrowup') aliases.add('arrowup')
-  if (lower === 'arrowdown') aliases.add('arrowdown')
-  if (lower === 'delete') aliases.add('delete')
-  if (lower === 'pagedown') aliases.add('pagedown')
-  if (lower === 'pageup') aliases.add('pageup')
-  if (lower === 'tab') aliases.add('tab')
-
-  return aliases
-}
-
-export const matchesBinding = (
-  parsedBinding: ParsedKeyBinding,
-  event: KeyboardEvent,
-  inputMode: InputMode
-): boolean => {
-  if (parsedBinding.requiredMode && parsedBinding.requiredMode !== inputMode) {
-    return false
-  }
-
-  const commandModifier = usesMetaForCommand ? event.metaKey : event.ctrlKey
-  if (parsedBinding.requiresCmd !== commandModifier) {
-    return false
-  }
-
-  if (parsedBinding.requiresShift !== event.shiftKey) {
-    return false
-  }
-
-  if (parsedBinding.requiresAlt !== event.altKey) {
-    return false
-  }
-
-  const aliases = getEventKeyAliases(event)
-  return aliases.has(parsedBinding.key)
-}
-
-export const applyNumberParameter = (command: string, pendingDigits: string): string => {
-  const hasPendingNumber = pendingDigits.length > 0
-  return command.replace(/:N=(\d+):/g, (_, defaultValue: string) =>
-    hasPendingNumber ? pendingDigits : defaultValue
-  )
 }
 
 export const parsePatternPrefix = (value: string): PatternPrefix | null => {

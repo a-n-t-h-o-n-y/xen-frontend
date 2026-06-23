@@ -29,7 +29,6 @@ const createInitialLibrarySnapshot = (): LibrarySnapshot => ({
 
 const createInitialSessionReference = (): SessionReference => ({
   commands: [],
-  keybindings: [],
 })
 
 export function useLibraryPanelState() {
@@ -50,14 +49,6 @@ export function useLibraryPanelState() {
   const [sessionReference, setSessionReference] = useState<SessionReference>(createInitialSessionReference)
   const [librarySnapshot, setLibrarySnapshot] = useState<LibrarySnapshot>(createInitialLibrarySnapshot)
   const [libraryLoading, setLibraryLoading] = useState(false)
-
-  const sequenceViewReferenceBindings = useMemo(
-    () =>
-      sessionReference.keybindings
-        .filter((group) => group.component === 'SequenceView')
-        .flatMap((group) => group.bindings),
-    [sessionReference.keybindings]
-  )
 
   const filteredReferenceCommands = useMemo(() => {
     const query = referenceCommandSearch.trim().toLowerCase()
@@ -187,7 +178,6 @@ export function useLibraryPanelState() {
     setLibrarySnapshot,
     libraryLoading,
     setLibraryLoading,
-    sequenceViewReferenceBindings,
     filteredReferenceCommands,
     tuningHierarchyRows,
     measureHierarchyRows,

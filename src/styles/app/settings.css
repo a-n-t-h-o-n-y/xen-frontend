@@ -1,0 +1,462 @@
+/* Settings overlay */
+.settingsBackdrop {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: rgb(5 7 10 / 72%);
+  backdrop-filter: blur(10px);
+  animation: settingsFadeIn 180ms ease-out;
+}
+
+.settingsPanel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(70rem, 100%);
+  height: min(46rem, 100%);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 82% -12%, rgb(245 196 90 / 9%), transparent 32%),
+    #171a20;
+  box-shadow: 0 28px 90px rgb(0 0 0 / 48%);
+  animation: settingsRiseIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settingsHeader,
+.shortcutEditorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settingsHeader {
+  min-height: 5.25rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgb(255 255 255 / 9%);
+}
+
+.settingsHeader h2,
+.shortcutEditorHeader h3,
+.settingsSectionIntro h3,
+.shortcutGroupHeader h4 {
+  margin: 0;
+}
+
+.settingsHeader h2 {
+  font-size: 1.35rem;
+}
+
+.settingsEyebrow {
+  margin: 0 0 0.3rem;
+  color: #f5c45a;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.settingsClose {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 1.45rem;
+  cursor: pointer;
+}
+
+.settingsClose:hover,
+.settingsClose:focus-visible {
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(255 255 255 / 7%);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.settingsBody {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  min-height: 0;
+}
+
+.settingsNav {
+  padding: 1rem;
+  border-right: 1px solid rgb(255 255 255 / 8%);
+  background: rgb(0 0 0 / 10%);
+}
+
+.settingsNavItem {
+  display: grid;
+  width: 100%;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.settingsNavItem small {
+  color: rgb(255 255 255 / 38%);
+}
+
+.settingsNavItem-active {
+  border-color: rgb(245 196 90 / 22%);
+  background: rgb(245 196 90 / 9%);
+  color: #fff5dc;
+}
+
+.settingsContent {
+  min-width: 0;
+  padding: 1.5rem;
+  overflow: auto;
+}
+
+.settingsSectionIntro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.settingsSectionIntro h3 {
+  font-size: 1.08rem;
+}
+
+.settingsSectionIntro p,
+.shortcutConflict p {
+  margin: 0.45rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.settingsSectionActions,
+.shortcutActions,
+.shortcutEditorFooter,
+.shortcutConflict div {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settingsButton,
+.shortcutActions button,
+.shortcutConflict button {
+  min-height: 2rem;
+  padding: 0.45rem 0.72rem;
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 5%);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.settingsButton:hover:not(:disabled),
+.shortcutActions button:hover:not(:disabled),
+.shortcutConflict button:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 28%);
+  background: rgb(255 255 255 / 10%);
+}
+
+.settingsButton-primary {
+  border-color: rgb(245 196 90 / 52%);
+  background: #f5c45a;
+  color: #17130a;
+  font-weight: 700;
+}
+
+.settingsButton-danger {
+  color: #ffaaa4;
+}
+
+.settingsButton:disabled,
+.shortcutActions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settingsError {
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(255 116 106 / 30%);
+  border-radius: 8px;
+  background: rgb(255 116 106 / 8%);
+  color: #ffc0bb;
+  font-size: 0.76rem;
+}
+
+.settingsEmpty {
+  color: var(--text-secondary);
+}
+
+.shortcutGroup {
+  margin-top: 1.5rem;
+}
+
+.shortcutGroupHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.55rem;
+}
+
+.shortcutGroupHeader h4 {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.shortcutGroupHeader span {
+  color: rgb(255 255 255 / 38%);
+  font-size: 0.68rem;
+}
+
+.shortcutTable {
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 10px;
+}
+
+.shortcutRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  min-height: 3.25rem;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+}
+
+.shortcutRow:last-child {
+  border-bottom: 0;
+}
+
+.shortcutRow:hover {
+  background: rgb(255 255 255 / 3%);
+}
+
+.shortcutMain {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.8fr) minmax(10rem, 1.5fr) 6.5rem;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+button.shortcutMain {
+  cursor: pointer;
+}
+
+.shortcutTrigger,
+.shortcutTarget {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcutTrigger {
+  color: #fff2ce;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.shortcutTarget {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.shortcutOrigin {
+  justify-self: start;
+  padding: 0.2rem 0.42rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 6%);
+  color: rgb(255 255 255 / 45%);
+  font-size: 0.62rem;
+}
+
+.shortcutOrigin-custom {
+  background: rgb(245 196 90 / 12%);
+  color: #eacb83;
+}
+
+.shortcutRow-disabled {
+  opacity: 0.58;
+}
+
+.shortcutActions {
+  padding: 0.5rem 0.65rem;
+}
+
+.shortcutActions button {
+  min-height: 1.75rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+}
+
+/* Shortcut editor */
+.shortcutEditorBackdrop {
+  position: fixed;
+  z-index: 210;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(3 5 8 / 62%);
+}
+
+.shortcutEditor {
+  width: min(31rem, 100%);
+  max-height: 90vh;
+  padding: 1.25rem;
+  overflow: auto;
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 14px;
+  background: #20242c;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 55%);
+}
+
+.shortcutEditorHeader {
+  margin-bottom: 1.25rem;
+}
+
+.settingsField {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.settingsField input,
+.settingsField select,
+.shortcutCapture {
+  width: 100%;
+  min-height: 2.35rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 7px;
+  outline: none;
+  background: #171a20;
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.settingsField input:focus,
+.settingsField select:focus,
+.shortcutCapture:focus-visible {
+  border-color: rgb(245 196 90 / 60%);
+  box-shadow: 0 0 0 3px rgb(245 196 90 / 10%);
+}
+
+.settingsFieldRow {
+  display: grid;
+  grid-template-columns: 1fr 7rem;
+  gap: 0.75rem;
+}
+
+.shortcutCapture {
+  color: #fff2ce;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shortcutCapture-active {
+  border-color: #f5c45a;
+  background: rgb(245 196 90 / 10%);
+  animation: capturePulse 1.1s ease-in-out infinite;
+}
+
+.shortcutConflict {
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border: 1px solid rgb(245 196 90 / 28%);
+  border-radius: 8px;
+  background: rgb(245 196 90 / 7%);
+  font-size: 0.74rem;
+}
+
+.shortcutConflict div {
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.shortcutEditorFooter {
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+@keyframes settingsFadeIn {
+  from { opacity: 0; }
+}
+
+@keyframes settingsRiseIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+}
+
+@keyframes capturePulse {
+  50% { box-shadow: 0 0 0 4px rgb(245 196 90 / 8%); }
+}
+
+@media (max-width: 720px) {
+  .settingsBackdrop {
+    padding: 0;
+  }
+
+  .settingsPanel {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .settingsBody {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsNav {
+    display: none;
+  }
+
+  .settingsSectionIntro {
+    display: grid;
+  }
+
+  .shortcutMain {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+
+  .shortcutRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settingsBackdrop,
+  .settingsPanel,
+  .shortcutCapture-active {
+    animation: none;
+  }
+}

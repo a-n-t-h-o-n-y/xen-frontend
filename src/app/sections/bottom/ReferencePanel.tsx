@@ -1,5 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { KeybindingReferenceEntry, SessionReference } from '../../shared'
+import { formatKeymapTarget, formatKeymapTrigger } from '../../domain/keymap'
+import type { KeymapResource } from '../../domain/contracts'
+import type { SessionReference } from '../../shared'
 
 type ReferencePanelProps = {
   activeReferenceTab: 'commands' | 'keybindings'
@@ -10,7 +12,7 @@ type ReferencePanelProps = {
   setReferenceCommandSearch: Dispatch<SetStateAction<string>>
   filteredReferenceCommands: SessionReference['commands']
   focusCommandBarWithText: (value: string) => void
-  sequenceViewReferenceBindings: KeybindingReferenceEntry[]
+  keymapResource: KeymapResource | null
 }
 
 export function ReferencePanel({
@@ -22,7 +24,7 @@ export function ReferencePanel({
   setReferenceCommandSearch,
   filteredReferenceCommands,
   focusCommandBarWithText,
-  sequenceViewReferenceBindings,
+  keymapResource,
 }: ReferencePanelProps) {
   return (
     <article className="bottomModule bottomModule-rowItem bottomModule-reference">
@@ -100,36 +102,36 @@ export function ReferencePanel({
           ) : (
             <p className="referencePlaceholder">No command reference data received.</p>
           )
-        ) : sequenceViewReferenceBindings.length > 0 ? (
+        ) : keymapResource && Object.keys(keymapResource.bindings).length > 0 ? (
           <div className="referenceKeybindings">
-            <div className="referenceModeLegend">
-              <span className="referenceModeBadge mono">[p] Pitch</span>
-              <span className="referenceModeBadge mono">[v] Velocity</span>
-              <span className="referenceModeBadge mono">[d] Delay</span>
-              <span className="referenceModeBadge mono">[g] Gate</span>
-              <span className="referenceModeBadge mono">[c] Scale</span>
-            </div>
-            <div className="referenceKeybindingGroup">
-              <table className="referenceKeybindingTable">
-                <thead>
-                  <tr>
-                    <th className="mono">Key Chord</th>
-                    <th className="mono">Command</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sequenceViewReferenceBindings.map((binding, index) => (
-                    <tr key={`reference-keybinding-sequence-view-${index}`}>
-                      <td className="referenceKeybindingKey mono">{binding.key}</td>
-                      <td className="referenceKeybindingCommand mono">{binding.command}</td>
+            {Object.entries(keymapResource.bindings).map(([context, bindings]) => (
+              <div className="referenceKeybindingGroup" key={context}>
+                <p className="referenceModeBadge mono">{context}</p>
+                <table className="referenceKeybindingTable">
+                  <thead>
+                    <tr>
+                      <th className="mono">Shortcut</th>
+                      <th className="mono">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {bindings.map((binding) => (
+                      <tr key={`${context}-${formatKeymapTrigger(binding.trigger)}`}>
+                        <td className="referenceKeybindingKey mono">
+                          {formatKeymapTrigger(binding.trigger)}
+                        </td>
+                        <td className="referenceKeybindingCommand mono">
+                          {formatKeymapTarget(binding.target)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
         ) : (
-          <p className="referencePlaceholder">No SequenceView keybindings received.</p>
+          <p className="referencePlaceholder">No keybindings received.</p>
         )}
       </div>
     </article>

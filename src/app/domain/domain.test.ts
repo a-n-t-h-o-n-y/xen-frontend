@@ -3,6 +3,7 @@ import {
   parseBridgeEvent,
   parseCommandResponse,
   parseEnvelope,
+  parseKeymapResource,
   parseLibrarySnapshot,
   parseProjectSnapshot,
   parseSessionHello,
@@ -10,10 +11,13 @@ import {
 import { buildCommandContext, createSerialExecutor } from './commands'
 import {
   expandNumericPlaceholders,
-  routeKeymapAction,
-  splitCommandChain,
+  findKeymapBinding,
+  formatKeymapTarget,
+  formatKeymapTrigger,
+  normalizeKey,
+  triggerIdentity,
 } from './keymap'
-import { ingestLibrarySnapshot, ingestProjectSnapshot } from './resources'
+import { ingestKeymapResource, ingestLibrarySnapshot, ingestProjectSnapshot } from './resources'
 import { moveSelection, reconcileSelection, resolveSelection } from './selection'
 import type { Cell, LibrarySnapshot, ProjectSnapshot, Selection } from './contracts'
 
@@ -155,9 +159,27 @@ describe('schema 1 contract validation', () => {
           description: 'Set pitch',
         }],
       },
-      keymap: { SequenceView: { ArrowLeft: 'move left' } },
+      keymap: {
+        schema_version: 1,
+        revision: 2,
+        key_semantics: 'KeyboardEvent.key',
+        bindings: {
+          sequence: [{
+            trigger: {
+              key: 'ArrowLeft',
+              modifiers: { shift: false, command: false, alt: false },
+            },
+            target: {
+              type: 'ui_action',
+              action: 'selection.move',
+              arguments: { direction: 'left', amount: 1 },
+            },
+          }],
+        },
+        overrides: [],
+      },
     })
-    expect(hello.keymap.SequenceView.ArrowLeft).toBe('move left')
+    expect(hello.keymap.bindings.sequence[0]?.target.type).toBe('ui_action')
     expect(() => parseSessionHello({
       ...hello,
       project_schema_version: 4,
@@ -283,25 +305,60 @@ describe('strict selection and local navigation', () => {
 })
 
 describe('keymap routing', () => {
-  it('expands numeric placeholders and preserves quoted semicolons', () => {
-    expect(expandNumericPlaceholders('move right :N=2:', '7')).toBe('move right 7')
-    expect(expandNumericPlaceholders('move right :N=2:', '')).toBe('move right 2')
-    expect(splitCommandChain('load "a;b"; move right; set pitch 3')).toEqual([
-      'load "a;b"',
-      'move right',
-      'set pitch 3',
-    ])
+  const resource = parseKeymapResource({
+    schema_version: 1,
+    revision: 4,
+    key_semantics: 'KeyboardEvent.key',
+    bindings: {
+      sequence: [
+        {
+          trigger: {
+            key: 'h',
+            modifiers: { shift: true, command: false, alt: false },
+            when: { input_mode: 'pitch' },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'selection.move',
+            arguments: { direction: 'left', amount: 2 },
+          },
+        },
+      ],
+    },
+    overrides: [],
   })
 
-  it('routes local actions and preserves contiguous backend chains', () => {
-    const actions = routeKeymapAction(
-      'copy; cut; move down; inputMode gate; paste; set gate 0.5'
-    )
-    expect(actions).toEqual([
-      { type: 'backend', command: 'copy; cut' },
-      { type: 'move', direction: 'down', amount: 1 },
-      { type: 'inputMode', inputMode: 'gate' },
-      { type: 'backend', command: 'paste; set gate 0.5' },
-    ])
+  it('normalizes only ASCII capital letters and expands numeric placeholders', () => {
+    expect(normalizeKey('H')).toBe('h')
+    expect(normalizeKey('ArrowLeft')).toBe('ArrowLeft')
+    expect(normalizeKey('É')).toBe('É')
+    expect(expandNumericPlaceholders('duplicate :N=2:', '7')).toBe('duplicate 7')
+    expect(expandNumericPlaceholders('duplicate :N=2:', '')).toBe('duplicate 2')
+  })
+
+  it('matches exact key, modifiers, context, and input mode', () => {
+    const event = {
+      key: 'H',
+      shiftKey: true,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+    } as KeyboardEvent
+    expect(findKeymapBinding(resource, 'sequence', event, 'pitch')?.target.type).toBe('ui_action')
+    expect(findKeymapBinding(resource, 'sequence', event, 'gate')).toBeNull()
+    expect(findKeymapBinding(resource, 'other', event, 'pitch')).toBeNull()
+  })
+
+  it('formats typed triggers and targets with stable identities', () => {
+    const binding = resource.bindings.sequence[0]!
+    expect(triggerIdentity(binding.trigger)).toContain('h')
+    expect(formatKeymapTrigger(binding.trigger)).toContain('Shift')
+    expect(formatKeymapTarget(binding.target)).toBe('Move left by 2')
+  })
+
+  it('installs only newer keymap revisions', () => {
+    expect(ingestKeymapResource(null, resource).installed).toBe(true)
+    expect(ingestKeymapResource(resource, { ...resource, revision: 4 }).installed).toBe(false)
+    expect(ingestKeymapResource(resource, { ...resource, revision: 5 }).installed).toBe(true)
   })
 })

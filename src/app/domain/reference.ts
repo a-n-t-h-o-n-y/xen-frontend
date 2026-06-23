@@ -1,9 +1,8 @@
-import type { Catalog, Keymap } from './contracts'
+import type { Catalog } from './contracts'
 import type { SessionReference } from '../shared'
 
 export const buildSessionReference = (
-  catalog: Catalog,
-  keymap: Keymap
+  catalog: Catalog
 ): SessionReference => ({
   commands: catalog.commands.map((command) => {
     const argumentsText = command.arguments.map((argument) => {
@@ -19,9 +18,4 @@ export const buildSessionReference = (
       description: command.description,
     }
   }),
-  keybindings: Object.entries(keymap).map(([component, bindings]) => ({
-    component,
-    bindings: Object.entries(bindings).map(([key, command]) => ({ key, command })),
-  })),
 })
-

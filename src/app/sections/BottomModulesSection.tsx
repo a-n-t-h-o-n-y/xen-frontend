@@ -62,7 +62,7 @@ export function BottomModulesSection(props: BottomModulesSectionProps) {
           setReferenceCommandSearch={props.setReferenceCommandSearch}
           filteredReferenceCommands={props.filteredReferenceCommands}
           focusCommandBarWithText={props.focusCommandBarWithText}
-          sequenceViewReferenceBindings={props.sequenceViewReferenceBindings}
+          keymapResource={props.keymapResource}
         />
         <LibraryPanel
           activeLibraryTab={props.activeLibraryTab}

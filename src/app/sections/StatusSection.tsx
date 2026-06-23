@@ -17,6 +17,7 @@ type StatusSectionProps = {
   statusLevel: MessageLevel
   statusMessage: string
   selectedCellMeta: StatusCellMetaItem[]
+  onOpenSettings: () => void
 }
 
 export function StatusSection({
@@ -35,6 +36,7 @@ export function StatusSection({
   statusLevel,
   statusMessage,
   selectedCellMeta,
+  onOpenSettings,
 }: StatusSectionProps) {
   return (
     <footer className="statusBar">
@@ -42,6 +44,15 @@ export function StatusSection({
         <span className="modeBadge mono" aria-label={`Input mode ${currentInputMode}`}>
           {currentInputModeLetter}
         </span>
+        <button
+          type="button"
+          className="statusSettingsButton"
+          onClick={onOpenSettings}
+          aria-label="Open settings"
+          title="Settings"
+        >
+          <span aria-hidden="true">⚙</span>
+        </button>
       </div>
       {isCommandMode ? (
         <form className="statusCommandForm" onSubmit={submitCommand}>

@@ -1,4 +1,4 @@
-import type { LibrarySnapshot, ProjectSnapshot, Selection } from './contracts'
+import type { KeymapResource, LibrarySnapshot, ProjectSnapshot, Selection } from './contracts'
 import { projectRootCell, reconcileSelection } from './selection'
 
 export type ProjectIngestion = {
@@ -30,4 +30,14 @@ export const ingestLibrarySnapshot = (
     return { snapshot: current, installed: false }
   }
   return { snapshot: incoming, installed: true }
+}
+
+export const ingestKeymapResource = (
+  current: KeymapResource | null,
+  incoming: KeymapResource
+): { resource: KeymapResource; installed: boolean } => {
+  if (current && incoming.revision <= current.revision) {
+    return { resource: current, installed: false }
+  }
+  return { resource: incoming, installed: true }
 }

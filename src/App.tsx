@@ -11,6 +11,7 @@ import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { StatusSection } from './app/sections/StatusSection'
+import { SettingsOverlay } from './app/sections/SettingsOverlay'
 import {
   MAX_COMMAND_HISTORY,
   DEFAULT_TUNING_LENGTH,
@@ -23,9 +24,8 @@ import {
   ratioToFrequency,
   createTransportState,
   getErrorMessage,
+  getPayloadError,
   formatOctaveForDisplay,
-  parseKeyBinding,
-  matchesBinding,
   sampleWaveShape,
   createMorphModulator,
   createTargetModulator,
@@ -59,14 +59,21 @@ import type {
 } from './app/shared'
 import {
   expandNumericPlaceholders,
-  routeKeymapAction,
+  findKeymapBinding,
+  triggersEqual,
 } from './app/domain/keymap'
 import {
   moveSelection,
   projectRootCell,
   resolveSelection,
 } from './app/domain/selection'
-import type { ProjectSnapshot } from './app/domain/contracts'
+import { parseKeymapResource } from './app/domain/contracts'
+import type {
+  KeymapResource,
+  KeymapTarget,
+  KeymapTrigger,
+  ProjectSnapshot,
+} from './app/domain/contracts'
 function App() {
   const [editorState, setEditorState] = useState<EditorState>({
     selection: { path: [] },
@@ -77,7 +84,10 @@ function App() {
   const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
   const [projectSnapshot, setProjectSnapshot] = useState<ProjectSnapshot | null>(null)
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
-  const [sequenceViewKeymap, setSequenceViewKeymap] = useState<Record<string, string>>({})
+  const [keymapResource, setKeymapResource] = useState<KeymapResource | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [keymapBusy, setKeymapBusy] = useState(false)
+  const [keymapError, setKeymapError] = useState<string | null>(null)
   const {
     isCommandMode,
     setIsCommandMode,
@@ -100,6 +110,7 @@ function App() {
   const projectRef = useRef<ProjectSnapshot | null>(null)
   const editorStateRef = useRef<EditorState>(editorState)
   const libraryRevisionRef = useRef(-1)
+  const keymapRef = useRef<KeymapResource | null>(null)
   const pendingNumberRef = useRef('')
   const lastShortcutCommandRef = useRef<{ command: 'copy' | 'cut' | 'paste'; at: number } | null>(
     null
@@ -129,7 +140,6 @@ function App() {
     setLibrarySnapshot,
     libraryLoading,
     setLibraryLoading,
-    sequenceViewReferenceBindings,
     filteredReferenceCommands,
     tuningHierarchyRows,
     measureHierarchyRows,
@@ -170,19 +180,20 @@ function App() {
     isSwitchingModTabRef,
     modulatorInstancesRef,
   } = useModulatorPanelState()
-  const { sendBridgeRequest, ingestLibrary, executeBackendCommand } = useBridgeSession({
+  const { sendBridgeRequest, ingestLibrary, ingestKeymap, executeBackendCommand } = useBridgeSession({
     eventTokenRef,
     transportRef,
     projectRef,
     editorStateRef,
     libraryRevisionRef,
+    keymapRef,
     setProject: setProjectSnapshot,
     setEditorState,
     setStatusMessage,
     setStatusLevel,
     setBridgeUnavailableMessage,
     setSessionReference,
-    setSequenceViewKeymap,
+    setKeymapResource,
     setLibraryLoading,
     setLibrarySnapshot,
     setPlayheadPhase,
@@ -192,6 +203,71 @@ function App() {
     editorStateRef.current = nextState
     setEditorState(nextState)
   }, [])
+
+  const refreshKeymap = useCallback(async (): Promise<void> => {
+    const response = await sendBridgeRequest('keymap.get', {})
+    const payloadError = getPayloadError(response.payload)
+    if (payloadError) throw new Error(payloadError)
+    ingestKeymap(response.payload)
+  }, [ingestKeymap, sendBridgeRequest])
+
+  const mutateKeymap = useCallback(async (
+    name: 'keymap.override.set' | 'keymap.override.remove' | 'keymap.reset',
+    payload: Record<string, unknown>
+  ): Promise<void> => {
+    const current = keymapRef.current
+    if (!current) throw new Error('Keymap is not loaded')
+    setKeymapBusy(true)
+    setKeymapError(null)
+    try {
+      const response = await sendBridgeRequest(name, {
+        expected_revision: current.revision,
+        ...payload,
+      })
+      const payloadError = getPayloadError(response.payload)
+      if (payloadError) {
+        const rawError = response.payload.error
+        const code = typeof rawError === 'object' && rawError !== null
+          ? (rawError as Record<string, unknown>).code
+          : null
+        if (code === 'invalid_request') {
+          await refreshKeymap()
+          throw new Error('Shortcuts changed elsewhere. The latest version was loaded; retry your edit.')
+        }
+        throw new Error(payloadError)
+      }
+      ingestKeymap(parseKeymapResource(response.payload))
+    } catch (error) {
+      const message = getErrorMessage(error)
+      setKeymapError(message)
+      throw error
+    } finally {
+      setKeymapBusy(false)
+    }
+  }, [ingestKeymap, keymapRef, refreshKeymap, sendBridgeRequest])
+
+  const setKeymapOverride = useCallback(async (
+    context: string,
+    trigger: KeymapTrigger,
+    target: KeymapTarget,
+    originalTrigger?: KeymapTrigger
+  ): Promise<void> => {
+    await mutateKeymap('keymap.override.set', { context, trigger, target })
+    if (!originalTrigger || triggersEqual(originalTrigger, trigger)) return
+
+    const originalWasOverride = keymapRef.current?.overrides.some((override) =>
+      override.context === context && triggersEqual(override.trigger, originalTrigger)
+    )
+    if (originalWasOverride) {
+      await mutateKeymap('keymap.override.remove', { context, trigger: originalTrigger })
+    } else {
+      await mutateKeymap('keymap.override.set', {
+        context,
+        trigger: originalTrigger,
+        target: null,
+      })
+    }
+  }, [mutateKeymap])
 
   useEffect(() => {
     if (!isCommandMode) {
@@ -215,18 +291,11 @@ function App() {
         return
       }
 
-      if (editableTarget) {
+      if (settingsOpen) {
         return
       }
 
-      const isPlainSpace =
-        (event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space') &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey
-      if (!isCommandMode && isPlainSpace) {
-        event.preventDefault()
-        pendingNumberRef.current = ''
+      if (editableTarget) {
         return
       }
 
@@ -238,47 +307,23 @@ function App() {
         !event.ctrlKey &&
         !event.altKey
 
-      if (!isCommandMode && isDigitKey) {
-        pendingNumberRef.current = `${pendingNumberRef.current}${event.key}`
-        event.preventDefault()
-        return
-      }
-
-      const matchedBinding = Object.entries(sequenceViewKeymap).find(([binding]) => {
-        const parsedBinding = parseKeyBinding(binding)
-        if (!parsedBinding) {
-          return false
-        }
-
-        return matchesBinding(parsedBinding, event, editorStateRef.current.inputMode)
-      })
+      const matchedBinding = findKeymapBinding(
+        keymapRef.current,
+        'sequence',
+        event,
+        editorStateRef.current.inputMode
+      )
 
       if (matchedBinding) {
         event.preventDefault()
-        const command = expandNumericPlaceholders(matchedBinding[1], pendingNumberRef.current)
-        const actions = routeKeymapAction(command)
         void (async () => {
           try {
-            for (const action of actions) {
-              if (action.type === 'move') {
-                const project = projectRef.current
-                if (project) {
-                  const selection = moveSelection(
-                    projectRootCell(project),
-                    editorStateRef.current.selection,
-                    action.direction,
-                    action.amount
-                  )
-                  installEditorState({ ...editorStateRef.current, selection })
-                }
-                continue
-              }
-              if (action.type === 'inputMode') {
-                installEditorState({ ...editorStateRef.current, inputMode: action.inputMode })
-                continue
-              }
-
-              const normalizedCommand = action.command.trim().toLowerCase()
+            if (matchedBinding.target.type === 'command') {
+              const command = expandNumericPlaceholders(
+                matchedBinding.target.command,
+                pendingNumberRef.current
+              )
+              const normalizedCommand = command.trim().toLowerCase()
               if (
                 normalizedCommand === 'copy' ||
                 normalizedCommand === 'cut' ||
@@ -289,8 +334,27 @@ function App() {
                   at: Date.now(),
                 }
               }
-              await executeBackendCommand(action.command)
+              await executeBackendCommand(command)
+              return
             }
+
+            if (matchedBinding.target.action === 'selection.move') {
+              const project = projectRef.current
+              if (!project) return
+              const selection = moveSelection(
+                projectRootCell(project),
+                editorStateRef.current.selection,
+                matchedBinding.target.arguments.direction,
+                matchedBinding.target.arguments.amount
+              )
+              installEditorState({ ...editorStateRef.current, selection })
+              return
+            }
+
+            installEditorState({
+              ...editorStateRef.current,
+              inputMode: matchedBinding.target.arguments.mode,
+            })
           } catch (error) {
             setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
             setStatusLevel('error')
@@ -300,9 +364,13 @@ function App() {
         return
       }
 
-      if (!isDigitKey) {
-        pendingNumberRef.current = ''
+      if (!isCommandMode && isDigitKey) {
+        pendingNumberRef.current = `${pendingNumberRef.current}${event.key}`
+        event.preventDefault()
+        return
       }
+
+      pendingNumberRef.current = ''
 
       if (isCommandMode) {
         return
@@ -322,7 +390,7 @@ function App() {
     installEditorState,
     isCommandMode,
     openCommandMode,
-    sequenceViewKeymap,
+    settingsOpen,
   ])
 
   useEffect(() => {
@@ -1340,6 +1408,10 @@ function App() {
         statusLevel={statusLevel}
         statusMessage={statusMessage}
         selectedCellMeta={selectedCellMeta}
+        onOpenSettings={() => {
+          setKeymapError(null)
+          setSettingsOpen(true)
+        }}
       />
       <BottomModulesSection
         activeModulatorTab={activeModulatorTab}
@@ -1384,7 +1456,7 @@ function App() {
         setReferenceCommandSearch={setReferenceCommandSearch}
         filteredReferenceCommands={filteredReferenceCommands}
         focusCommandBarWithText={focusCommandBarWithText}
-        sequenceViewReferenceBindings={sequenceViewReferenceBindings}
+        keymapResource={keymapResource}
         activeLibraryTab={activeLibraryTab}
         setActiveLibraryTab={setActiveLibraryTab}
         librarySnapshot={librarySnapshot}
@@ -1402,6 +1474,22 @@ function App() {
         measureSearch={measureSearch}
         setMeasureSearch={setMeasureSearch}
         measureHierarchyRows={measureHierarchyRows}
+      />
+      <SettingsOverlay
+        open={settingsOpen}
+        resource={keymapResource}
+        commands={sessionReference.commands}
+        busy={keymapBusy}
+        error={keymapError}
+        onClose={() => setSettingsOpen(false)}
+        onSetOverride={setKeymapOverride}
+        onDisable={(context, trigger) =>
+          mutateKeymap('keymap.override.set', { context, trigger, target: null })
+        }
+        onRestore={(context, trigger) =>
+          mutateKeymap('keymap.override.remove', { context, trigger })
+        }
+        onReset={() => mutateKeymap('keymap.reset', {})}
       />
     </div>
   )

@@ -5,6 +5,7 @@ import {
   parseBridgeEvent,
   parseCommandResponse,
   parseEnvelope,
+  parseKeymapResource,
   parseLibrarySnapshot,
   parseProjectSnapshot,
   parseSessionHello,
@@ -13,6 +14,7 @@ import { buildCommandContext, createSerialExecutor } from '../domain/commands'
 import { buildSessionReference } from '../domain/reference'
 import {
   ingestLibrarySnapshot,
+  ingestKeymapResource,
   ingestProjectSnapshot,
 } from '../domain/resources'
 import { projectRootCell, resolveSelection } from '../domain/selection'
@@ -28,14 +30,13 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   Envelope,
   EnvelopePayload,
-  Keymap,
+  KeymapResource,
   LibrarySnapshot,
   ProjectSnapshot,
 } from '../domain/contracts'
 import type {
   EditorState,
   MessageLevel,
-  SequenceViewKeymap,
   SessionReference,
   TransportState,
 } from '../shared'
@@ -46,13 +47,14 @@ type UseBridgeSessionArgs = {
   projectRef: MutableRefObject<ProjectSnapshot | null>
   editorStateRef: MutableRefObject<EditorState>
   libraryRevisionRef: MutableRefObject<number>
+  keymapRef: MutableRefObject<KeymapResource | null>
   setProject: Dispatch<SetStateAction<ProjectSnapshot | null>>
   setEditorState: Dispatch<SetStateAction<EditorState>>
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
   setBridgeUnavailableMessage: Dispatch<SetStateAction<string | null>>
   setSessionReference: Dispatch<SetStateAction<SessionReference>>
-  setSequenceViewKeymap: Dispatch<SetStateAction<SequenceViewKeymap>>
+  setKeymapResource: Dispatch<SetStateAction<KeymapResource | null>>
   setLibraryLoading: Dispatch<SetStateAction<boolean>>
   setLibrarySnapshot: Dispatch<SetStateAction<LibrarySnapshot>>
   setPlayheadPhase: Dispatch<SetStateAction<number | null>>
@@ -64,13 +66,14 @@ export function useBridgeSession({
   projectRef,
   editorStateRef,
   libraryRevisionRef,
+  keymapRef,
   setProject,
   setEditorState,
   setStatusMessage,
   setStatusLevel,
   setBridgeUnavailableMessage,
   setSessionReference,
-  setSequenceViewKeymap,
+  setKeymapResource,
   setLibraryLoading,
   setLibrarySnapshot,
   setPlayheadPhase,
@@ -137,6 +140,16 @@ export function useBridgeSession({
     setLibrarySnapshot(result.snapshot)
     return result.snapshot
   }, [libraryRevisionRef, setLibrarySnapshot])
+
+  const ingestKeymap = useCallback((rawResource: unknown): KeymapResource => {
+    const resource = parseKeymapResource(rawResource)
+    const result = ingestKeymapResource(keymapRef.current, resource)
+    if (result.installed) {
+      keymapRef.current = result.resource
+      setKeymapResource(result.resource)
+    }
+    return result.resource
+  }, [keymapRef, setKeymapResource])
 
   const executeBackendCommand = useCallback(
     (command: string): Promise<void> => {
@@ -210,6 +223,10 @@ export function useBridgeSession({
               ingestLibrary(event.payload)
               return
             }
+            if (event.name === 'keymap.changed') {
+              ingestKeymap(event.payload)
+              return
+            }
             if (event.name === 'transport.phase.sync') {
               if (event.payload.bpm > 0) {
                 transportRef.current.bpm = event.payload.bpm
@@ -222,8 +239,9 @@ export function useBridgeSession({
             }
             transportRef.current.active = false
             setPlayheadPhase(null)
-          } catch {
-            // Ignore malformed asynchronous events; requests surface contract errors.
+          } catch (error) {
+            setStatusMessage(`Bridge event contract error: ${getErrorMessage(error)}`)
+            setStatusLevel('error')
           }
         })
 
@@ -242,9 +260,8 @@ export function useBridgeSession({
         }
 
         setBridgeUnavailableMessage(null)
-        setSessionReference(buildSessionReference(hello.catalog, hello.keymap))
-        const sequenceViewKeymap: Keymap[string] = hello.keymap.SequenceView ?? {}
-        setSequenceViewKeymap(sequenceViewKeymap)
+        setSessionReference(buildSessionReference(hello.catalog))
+        ingestKeymap(hello.keymap)
         setLibraryLoading(true)
 
         const [stateResponse, libraryResponse] = await Promise.all([
@@ -287,12 +304,12 @@ export function useBridgeSession({
     eventTokenRef,
     executeBackendCommand,
     ingestLibrary,
+    ingestKeymap,
     ingestProject,
     sendBridgeRequest,
     setBridgeUnavailableMessage,
     setLibraryLoading,
     setPlayheadPhase,
-    setSequenceViewKeymap,
     setSessionReference,
     setStatusLevel,
     setStatusMessage,
@@ -302,6 +319,7 @@ export function useBridgeSession({
   return {
     sendBridgeRequest,
     ingestLibrary,
+    ingestKeymap,
     executeBackendCommand,
   }
 }
