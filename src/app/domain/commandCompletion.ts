@@ -113,7 +113,12 @@ const formatPlaceholderText = (argument: CommandReferenceArgument): string => {
   const label = argument.defaultValue === null
     ? argument.displayName
     : `${argument.displayName}=${argument.defaultValue}`
-  return argument.required ? `<${label}:${argument.kind}>` : `[${label}:${argument.kind}]`
+  const enumConstraint = argument.constraints.find((constraint) =>
+    constraint.kind === 'enum' && constraint.values.length > 0
+  )
+  const detail = enumConstraint ? enumConstraint.values.join(' | ') : argument.kind
+
+  return argument.required ? `<${label}:${detail}>` : `[${label}:${detail}]`
 }
 
 const rankCommand = (
@@ -280,12 +285,16 @@ export const analyzeCommandCompletion = (
 
   if (recognizedCommand) {
     const argumentInput = trimmedCommandText.slice(recognizedCommand.id.length)
+    const isArgumentInputVisible = /^\s/.test(argumentInput)
+
     return {
       mode: 'argumentAssist',
       segment,
       recognizedCommand,
       candidates: [],
-      argumentPlaceholders: getArgumentPlaceholders(recognizedCommand, argumentInput),
+      argumentPlaceholders: isArgumentInputVisible
+        ? getArgumentPlaceholders(recognizedCommand, argumentInput)
+        : [],
     }
   }
 

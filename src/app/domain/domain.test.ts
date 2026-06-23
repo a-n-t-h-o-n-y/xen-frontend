@@ -364,6 +364,7 @@ describe('command completion', () => {
   it('shows catalog order for empty command text with recent boosts', () => {
     const ranked = rankCommandCompletions(commands, '', ['transport stop'])
 
+    expect(ranked).toHaveLength(commands.length)
     expect(ranked.map((candidate) => candidate.command.id).slice(0, 3)).toEqual([
       'transport stop',
       'set velocity',
@@ -395,6 +396,7 @@ describe('command completion', () => {
     expect(exact.mode).toBe('argumentAssist')
     expect(exact.recognizedCommand?.id).toBe('set velocity')
     expect(exact.candidates).toHaveLength(0)
+    expect(exact.argumentPlaceholders).toHaveLength(0)
     expect(argumentInput.recognizedCommand?.id).toBe('set velocity')
     expect(argumentInput.argumentPlaceholders.map((placeholder) => placeholder.displayName)).toEqual(['curve'])
   })
@@ -405,10 +407,10 @@ describe('command completion', () => {
 
     expect(noArgsTyped.argumentPlaceholders.map((placeholder) => placeholder.text)).toEqual([
       '<amount:decimal>',
-      '[curve=linear:mode]',
+      '[curve=linear:linear | exp]',
     ])
     expect(oneArgTyped.argumentPlaceholders.map((placeholder) => placeholder.text)).toEqual([
-      '[curve=linear:mode]',
+      '[curve=linear:linear | exp]',
     ])
   })
 

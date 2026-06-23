@@ -129,9 +129,9 @@
 }
 
 .statusCommandField {
-  display: flex;
+  position: relative;
+  display: grid;
   align-items: center;
-  gap: 0;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -145,8 +145,9 @@
 }
 
 .statusCommandInput {
-  flex: 0 0 auto;
-  min-width: 1ch;
+  grid-area: 1 / 1;
+  width: 100%;
+  min-width: 0;
   padding: 0;
   border: 0;
   outline: none;
@@ -163,12 +164,11 @@
 }
 
 .statusCommandGhost {
+  grid-area: 1 / 1;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  flex: 1 1 auto;
+  gap: 0;
   min-width: 0;
-  margin-left: var(--space-1);
   color: rgb(255 255 255 / 35%);
   font-size: 0.95rem;
   line-height: 1;
@@ -183,10 +183,16 @@
 
 /* Notes: Ghost text stays click-through so caret placement always targets input. */
 
+.statusCommandGhostMirror {
+  visibility: hidden;
+  white-space: pre;
+}
+
 .statusCommandGhostArgument {
   display: inline-flex;
   align-items: baseline;
   min-width: 0;
+  margin-right: var(--space-1);
 }
 
 .statusCommandGhostName {

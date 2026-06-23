@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
 import {
   analyzeCommandCompletion,
@@ -71,16 +71,20 @@ export function StatusSection({
   selectedCellMeta,
   onOpenSettings,
 }: StatusSectionProps) {
+  const activeCompletionRowRef = useRef<HTMLButtonElement | null>(null)
   const completion = useMemo(
     () => analyzeCommandCompletion(commandText, commands, recentCommandIds),
     [commandText, commands, recentCommandIds]
   )
+  const isEmptyCompletionQuery = completion.segment.commandText.trim().length === 0
   const isPopupVisible = isCommandMode &&
     !isCompletionDismissed &&
     !isHistoryNavigationFrozen &&
     completion.mode === 'commandSearch' &&
     completion.candidates.length > 0
-  const visibleCandidates = completion.candidates.slice(0, 8)
+  const visibleCandidates = isEmptyCompletionQuery
+    ? completion.candidates
+    : completion.candidates.slice(0, 8)
   const selectedCandidate = visibleCandidates[selectedCompletionIndex] ?? visibleCandidates[0]
   const isGhostVisible = isCommandMode &&
     !isCompletionDismissed &&
@@ -109,6 +113,12 @@ export function StatusSection({
       return Math.min(current, visibleCandidates.length - 1)
     })
   }, [setSelectedCompletionIndex, visibleCandidates.length])
+
+  useEffect(() => {
+    if (!isPopupVisible || !isCompletionNavigationActive) return
+
+    activeCompletionRowRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [isCompletionNavigationActive, isPopupVisible, selectedCompletionIndex])
 
   const acceptCompletion = (candidate = selectedCandidate): void => {
     if (!candidate) return
@@ -145,6 +155,7 @@ export function StatusSection({
               <button
                 type="button"
                 key={candidate.command.id}
+                ref={index === selectedCompletionIndex ? activeCompletionRowRef : null}
                 className={`commandCompletionRow${index === selectedCompletionIndex ? ' commandCompletionRow-active' : ''}`}
                 role="option"
                 aria-selected={index === selectedCompletionIndex}
@@ -190,7 +201,6 @@ export function StatusSection({
               className="statusCommandInput mono"
               type="text"
               value={commandText}
-              size={Math.max(1, commandText.length)}
               onChange={(event) => {
                 const nextValue = event.target.value
                 if (historyIndex !== -1) {
@@ -223,7 +233,7 @@ export function StatusSection({
                   return
                 }
 
-                if (event.key === 'Enter' && isPopupVisible && isCompletionNavigationActive) {
+                if (event.key === 'Enter' && isPopupVisible && selectedCandidate) {
                   event.preventDefault()
                   acceptCompletion(selectedCandidate)
                   return
@@ -318,13 +328,10 @@ export function StatusSection({
             />
             {isGhostVisible ? (
               <span className="statusCommandGhost mono" aria-hidden="true">
+                <span className="statusCommandGhostMirror">{commandText}</span>
                 {completion.argumentPlaceholders.map((placeholder) => (
                   <span className="statusCommandGhostArgument" key={placeholder.displayName}>
-                    <span className="statusCommandGhostName">{placeholder.displayName}</span>
-                    <span className="statusCommandGhostKind">:{placeholder.kind}</span>
-                    {placeholder.defaultValue !== null ? (
-                      <span className="statusCommandGhostDefault">={placeholder.defaultValue}</span>
-                    ) : null}
+                    {placeholder.text}
                   </span>
                 ))}
               </span>
