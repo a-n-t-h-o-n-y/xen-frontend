@@ -3,22 +3,25 @@ import { addXenBridgeListener, removeXenBridgeListener } from '../../bridge/juce
 import {
   BRIDGE_PROTOCOL,
   parseBridgeEvent,
-  parseKeymapResource,
-  parseSessionHello,
 } from '../domain/contracts'
+import { BridgePayloadError } from '../bridge/BridgeClient'
 import { buildSessionReference } from '../domain/reference'
 import {
   FRONTEND_APP,
   FRONTEND_VERSION,
   getErrorMessage,
-  getPayloadError,
   normalizePhase,
 } from '../shared'
 import { triggersEqual } from '../domain/keymap'
 import { useBridgeSession } from './useBridgeSession'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
-  EnvelopePayload,
+  BridgeMethodMap,
+  KeymapOverrideRemoveRequest,
+  KeymapOverrideSetRequest,
+  KeymapResetRequest,
+} from '../bridge/BridgeClient'
+import type {
   KeymapResource,
   KeymapTarget,
   KeymapTrigger,
@@ -75,7 +78,7 @@ export function useProjectSession({
   }, [])
 
   const {
-    sendBridgeRequest,
+    request,
     ingestProject,
     ingestLibrary,
     ingestKeymap,
@@ -94,46 +97,50 @@ export function useProjectSession({
   })
 
   const refreshKeymap = useCallback(async (): Promise<void> => {
-    const response = await sendBridgeRequest('keymap.get', {})
-    const payloadError = getPayloadError(response.payload)
-    if (payloadError) throw new Error(payloadError)
-    ingestKeymap(response.payload)
-  }, [ingestKeymap, sendBridgeRequest])
+    ingestKeymap(await request('keymap.get', {}))
+  }, [ingestKeymap, request])
 
-  const mutateKeymap = useCallback(async (
-    name: 'keymap.override.set' | 'keymap.override.remove' | 'keymap.reset',
-    payload: EnvelopePayload
+  type KeymapMutationMethod =
+    | 'keymap.override.set'
+    | 'keymap.override.remove'
+    | 'keymap.reset'
+
+  type KeymapMutationPayload = {
+    'keymap.override.set': Omit<KeymapOverrideSetRequest, 'expected_revision'>
+    'keymap.override.remove': Omit<KeymapOverrideRemoveRequest, 'expected_revision'>
+    'keymap.reset': Omit<KeymapResetRequest, 'expected_revision'>
+  }
+
+  const mutateKeymap = useCallback(async <K extends KeymapMutationMethod>(
+    name: K,
+    payload: KeymapMutationPayload[K]
   ): Promise<void> => {
     const current = keymapRef.current
     if (!current) throw new Error('Keymap is not loaded')
     setKeymapBusy(true)
     setKeymapError(null)
     try {
-      const response = await sendBridgeRequest(name, {
+      const response = await request(name, {
         expected_revision: current.revision,
         ...payload,
-      })
-      const payloadError = getPayloadError(response.payload)
-      if (payloadError) {
-        const rawError = response.payload.error
-        const code = typeof rawError === 'object' && rawError !== null
-          ? (rawError as Record<string, unknown>).code
-          : null
-        if (code === 'invalid_request') {
-          await refreshKeymap()
-          throw new Error('Shortcuts changed elsewhere. The latest version was loaded; retry your edit.')
-        }
-        throw new Error(payloadError)
-      }
-      ingestKeymap(parseKeymapResource(response.payload))
+      } as BridgeMethodMap[K]['request'])
+      ingestKeymap(response)
     } catch (error) {
+      if (error instanceof BridgePayloadError && error.code === 'invalid_request') {
+        await refreshKeymap()
+        const retryError = new Error(
+          'Shortcuts changed elsewhere. The latest version was loaded; retry your edit.'
+        )
+        setKeymapError(retryError.message)
+        throw retryError
+      }
       const message = getErrorMessage(error)
       setKeymapError(message)
       throw error
     } finally {
       setKeymapBusy(false)
     }
-  }, [ingestKeymap, refreshKeymap, sendBridgeRequest])
+  }, [ingestKeymap, refreshKeymap, request])
 
   const setKeymapOverride = useCallback(async (
     context: string,
@@ -160,6 +167,7 @@ export function useProjectSession({
 
   useEffect(() => {
     let isMounted = true
+    const abortController = new AbortController()
 
     const connect = async (): Promise<void> => {
       setProjectState({ status: 'loading' })
@@ -200,14 +208,11 @@ export function useProjectSession({
           }
         })
 
-        const helloResponse = await sendBridgeRequest('session.hello', {
+        const hello = await request('session.hello', {
           protocol: BRIDGE_PROTOCOL,
           frontend_app: FRONTEND_APP,
           frontend_version: FRONTEND_VERSION,
-        })
-        const helloError = getPayloadError(helloResponse.payload)
-        if (helloError) throw new Error(helloError)
-        const hello = parseSessionHello(helloResponse.payload)
+        }, { signal: abortController.signal })
         if (!isMounted) return
 
         setBridgeUnavailableMessage(null)
@@ -216,20 +221,15 @@ export function useProjectSession({
         setStatusMessage('Connected')
         setLibraryLoading(true)
 
-        const [stateResponse, libraryResponse] = await Promise.all([
-          sendBridgeRequest('state.get', {}),
-          sendBridgeRequest('library.get', {}),
+        const [snapshot, librarySnapshot] = await Promise.all([
+          request('state.get', {}, { signal: abortController.signal }),
+          request('library.get', {}, { signal: abortController.signal }),
         ])
-        const stateError = getPayloadError(stateResponse.payload)
-        const libraryError = getPayloadError(libraryResponse.payload)
-        if (stateError || libraryError) {
-          throw new Error(stateError ?? libraryError ?? 'Initial resource request failed')
-        }
-        const snapshot = ingestProject(stateResponse.payload)
-        ingestLibrary(libraryResponse.payload)
+        const installedSnapshot = ingestProject(snapshot)
+        ingestLibrary(librarySnapshot)
         setLibraryLoading(false)
         if (!isMounted) return
-        setProjectState({ status: 'ready', snapshot })
+        setProjectState({ status: 'ready', snapshot: installedSnapshot })
         setStatusMessage('Project loaded')
         setStatusLevel('info')
       } catch (error) {
@@ -250,6 +250,7 @@ export function useProjectSession({
     void connect()
     return () => {
       isMounted = false
+      abortController.abort()
       if (eventTokenRef.current !== null) {
         removeXenBridgeListener(eventTokenRef.current)
         eventTokenRef.current = null
@@ -259,7 +260,7 @@ export function useProjectSession({
     ingestKeymap,
     ingestLibrary,
     ingestProject,
-    sendBridgeRequest,
+    request,
     setLibraryLoading,
     setLibrarySnapshot,
     setPlayheadPhase,
@@ -283,7 +284,7 @@ export function useProjectSession({
     refreshKeymap,
     mutateKeymap,
     setKeymapOverride,
-    sendBridgeRequest,
+    request,
     executeBackendCommand,
   }
 }

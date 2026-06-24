@@ -1,13 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { getXenBridgeRequest } from '../../bridge/juceBridge'
-import {
-  BRIDGE_PROTOCOL,
-  parseCommandResponse,
-  parseEnvelope,
-  parseKeymapResource,
-  parseLibrarySnapshot,
-  parseProjectSnapshot,
-} from '../domain/contracts'
+import { bridgeClient } from '../bridge/BridgeClient'
 import { buildCommandContext, createSerialExecutor } from '../domain/commands'
 import {
   ingestLibrarySnapshot,
@@ -15,14 +7,9 @@ import {
   ingestProjectSnapshot,
 } from '../domain/resources'
 import { projectRootCell, resolveSelection } from '../domain/selection'
-import {
-  createRequestId,
-  getPayloadError,
-} from '../shared'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { RequestOptions } from '../bridge/BridgeClient'
 import type {
-  Envelope,
-  EnvelopePayload,
   KeymapResource,
   LibrarySnapshot,
   ProjectSnapshot,
@@ -60,37 +47,17 @@ export function useBridgeSession({
   const serialExecutorRef = useRef(createSerialExecutor())
   const libraryRef = useRef<LibrarySnapshot | null>(null)
 
-  const sendBridgeRequest = useCallback(
-    async (name: string, payload: EnvelopePayload): Promise<Envelope> => {
-      const requestId = createRequestId()
-      const request = {
-        protocol: BRIDGE_PROTOCOL,
-        type: 'request' as const,
-        name,
-        request_id: requestId,
-        payload,
-      }
-
-      const requestFn = await getXenBridgeRequest()
-      const envelope = parseEnvelope(await requestFn(JSON.stringify(request)))
-      if (envelope.type !== 'response' || envelope.name !== name) {
-        throw new Error(`Unexpected response envelope for '${name}'`)
-      }
-      if (envelope.request_id !== requestId) {
-        throw new Error(`Mismatched response request_id for '${name}'`)
-      }
-      return envelope
-    },
-    []
-  )
-
   const installEditorState = useCallback((nextState: EditorState): void => {
     editorStateRef.current = nextState
     setEditorState(nextState)
   }, [editorStateRef, setEditorState])
 
-  const ingestProject = useCallback((rawSnapshot: unknown): ProjectSnapshot => {
-    const snapshot = parseProjectSnapshot(rawSnapshot)
+  const request: typeof bridgeClient.request = useCallback(
+    (name, payload, options?: RequestOptions) => bridgeClient.request(name, payload, options),
+    []
+  )
+
+  const ingestProject = useCallback((snapshot: ProjectSnapshot): ProjectSnapshot => {
     const result = ingestProjectSnapshot(
       projectRef.current,
       snapshot,
@@ -108,8 +75,7 @@ export function useBridgeSession({
     return result.snapshot
   }, [editorStateRef, installEditorState, projectRef, setProject])
 
-  const ingestLibrary = useCallback((rawSnapshot: unknown): LibrarySnapshot | null => {
-    const snapshot = parseLibrarySnapshot(rawSnapshot)
+  const ingestLibrary = useCallback((snapshot: LibrarySnapshot): LibrarySnapshot | null => {
     const result = ingestLibrarySnapshot(libraryRef.current, snapshot)
     if (!result.installed) {
       return null
@@ -120,8 +86,7 @@ export function useBridgeSession({
     return result.snapshot
   }, [libraryRevisionRef, setLibrarySnapshot])
 
-  const ingestKeymap = useCallback((rawResource: unknown): KeymapResource => {
-    const resource = parseKeymapResource(rawResource)
+  const ingestKeymap = useCallback((resource: KeymapResource): KeymapResource => {
     const result = ingestKeymapResource(keymapRef.current, resource)
     if (result.installed) {
       keymapRef.current = result.resource
@@ -143,16 +108,10 @@ export function useBridgeSession({
           installEditorState({ ...editorStateRef.current, selection })
         }
 
-        const response = await sendBridgeRequest('command.execute', {
+        const commandResponse = await request('command.execute', {
           command,
           context,
         })
-        const payloadError = getPayloadError(response.payload)
-        if (payloadError) {
-          throw new Error(payloadError)
-        }
-
-        const commandResponse = parseCommandResponse(response.payload)
         const installedProject = ingestProject(commandResponse.snapshot)
         if (
           commandResponse.suggested_selection &&
@@ -180,14 +139,14 @@ export function useBridgeSession({
       ingestProject,
       installEditorState,
       projectRef,
-      sendBridgeRequest,
+      request,
       setStatusLevel,
       setStatusMessage,
     ]
   )
 
   return {
-    sendBridgeRequest,
+    request,
     ingestProject,
     ingestLibrary,
     ingestKeymap,
