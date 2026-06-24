@@ -110,40 +110,19 @@ function App() {
     measureHierarchyRows,
   } = useLibraryPanelState()
   const {
-    modulatorInstances,
-    setModulatorInstances,
     activeModulatorTab,
-    setActiveModulatorTab,
-    waveAType,
-    setWaveAType,
-    waveBType,
-    setWaveBType,
-    waveAPulseWidth,
-    setWaveAPulseWidth,
-    waveBPulseWidth,
-    setWaveBPulseWidth,
-    waveLerp,
-    setWaveLerp,
-    lfoAFrequency,
-    setLfoAFrequency,
-    lfoAPhaseOffset,
-    setLfoAPhaseOffset,
-    lfoBFrequency,
-    setLfoBFrequency,
-    lfoBPhaseOffset,
-    setLfoBPhaseOffset,
+    selectActiveModulatorTab,
+    activeModulator,
+    updateActiveModulator,
+    updateActiveTargetControl,
     openWaveMenu,
     setOpenWaveMenu,
-    targetControls,
-    setTargetControls,
     padDragRef,
     wavePadDragRef,
     lastWaveHandleUsedRef,
     liveEmitFrameRef,
     liveEmitCommandsRef,
     waveMenuRef,
-    isSwitchingModTabRef,
-    modulatorInstancesRef,
   } = useModulatorPanelState()
   const {
     projectState,
@@ -178,26 +157,6 @@ function App() {
     : projectState.status === 'error'
       ? projectState.message
       : 'Project is loading'
-
-  useKeyboardController({
-    bridgeUnavailableMessage,
-    isProjectReady,
-    settingsOpen,
-    isCommandMode,
-    openCommandMode,
-    executeBackendCommand,
-    projectRef,
-    editorStateRef,
-    keymapRef,
-    installEditorState,
-    setWorkspaceView,
-    setIsModulatorMode,
-    setActiveModulatorTab,
-    setOpenWaveMenu,
-    setTargetControls,
-    setStatusMessage,
-    setStatusLevel,
-  })
 
   const { submitCommand } = useCommandController({
     isCommandMode,
@@ -411,10 +370,9 @@ function App() {
     waveAPreviewPath,
     waveBPreviewPath,
     morphedWavePreviewPath,
-    baseMorphModulator,
-    scheduleLiveEmit,
-    updateTargetControl,
-    buildModTargetCommand,
+    setTargetEnabled,
+    toggleTargetEnabled,
+    resetTargetControl,
     handleWaveLerpChange,
     handleWaveAPulseWidthChange,
     handleWaveBPulseWidthChange,
@@ -432,35 +390,33 @@ function App() {
     executeBackendCommand,
     setStatusMessage,
     setStatusLevel,
-    modulatorInstances,
-    setModulatorInstances,
-    activeModulatorTab,
-    waveAType,
-    setWaveAType,
-    waveBType,
-    setWaveBType,
-    waveAPulseWidth,
-    setWaveAPulseWidth,
-    waveBPulseWidth,
-    setWaveBPulseWidth,
-    waveLerp,
-    setWaveLerp,
-    lfoAFrequency,
-    setLfoAFrequency,
-    lfoAPhaseOffset,
-    setLfoAPhaseOffset,
-    lfoBFrequency,
-    setLfoBFrequency,
-    lfoBPhaseOffset,
-    setLfoBPhaseOffset,
-    targetControls,
-    setTargetControls,
+    activeModulator,
+    updateActiveModulator,
+    updateActiveTargetControl,
     setOpenWaveMenu,
     lastWaveHandleUsedRef,
     liveEmitFrameRef,
     liveEmitCommandsRef,
-    isSwitchingModTabRef,
-    modulatorInstancesRef,
+  })
+
+  useKeyboardController({
+    bridgeUnavailableMessage,
+    isProjectReady,
+    settingsOpen,
+    isCommandMode,
+    openCommandMode,
+    executeBackendCommand,
+    projectRef,
+    editorStateRef,
+    keymapRef,
+    installEditorState,
+    setWorkspaceView,
+    setIsModulatorMode,
+    selectActiveModulatorTab,
+    setOpenWaveMenu,
+    toggleActiveModulatorTarget: toggleTargetEnabled,
+    setStatusMessage,
+    setStatusLevel,
   })
 
   useEffect(() => {
@@ -716,27 +672,20 @@ function App() {
         modulatorRail={isProjectReady && isModulatorMode && workspaceView === 'sequencer' ? (
           <ModulatorsPanel
             activeModulatorTab={activeModulatorTab}
+            activeModulator={activeModulator}
             setOpenWaveMenu={setOpenWaveMenu}
-            setActiveModulatorTab={setActiveModulatorTab}
+            selectActiveModulatorTab={selectActiveModulatorTab}
             waveMenuRef={waveMenuRef}
             openWaveMenu={openWaveMenu}
-            waveAType={waveAType}
-            waveBType={waveBType}
             selectWaveType={selectWaveType}
-            waveLerp={waveLerp}
             onWaveLerpChange={handleWaveLerpChange}
-            waveAPulseWidth={waveAPulseWidth}
-            setWaveAPulseWidth={handleWaveAPulseWidthChange}
-            waveBPulseWidth={waveBPulseWidth}
-            setWaveBPulseWidth={handleWaveBPulseWidthChange}
+            onWaveAPulseWidthChange={handleWaveAPulseWidthChange}
+            onWaveBPulseWidthChange={handleWaveBPulseWidthChange}
             clampNumber={clampNumber}
-            targetControls={targetControls}
-            updateTargetControl={updateTargetControl}
+            setTargetEnabled={setTargetEnabled}
+            resetTargetControl={resetTargetControl}
             padDragRef={padDragRef}
             applyPadMotion={applyPadMotion}
-            scheduleLiveEmit={scheduleLiveEmit}
-            buildCommandForTarget={buildModTargetCommand}
-            baseMorphModulator={baseMorphModulator}
             tuningLength={tuningLength}
           />
         ) : null}

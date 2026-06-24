@@ -1,10 +1,9 @@
-import { useRef, useState } from 'react'
-import { createInitialModulatorPanelState, createInitialTargetControls } from '../domain/modulation'
+import { useCallback, useRef, useState } from 'react'
+import { createInitialModulatorPanelState } from '../domain/modulation'
 import type {
   ModTarget,
   ModulatorPanelState,
   TargetControl,
-  WaveType,
 } from '../domain/modulation'
 
 type PadDragState = {
@@ -32,21 +31,7 @@ export function useModulatorPanelState() {
     Array.from({ length: 4 }, () => createInitialModulatorPanelState())
   )
   const [activeModulatorTab, setActiveModulatorTab] = useState(0)
-
-  const [waveAType, setWaveAType] = useState<WaveType>('sine')
-  const [waveBType, setWaveBType] = useState<WaveType>('triangle')
-  const [waveAPulseWidth, setWaveAPulseWidth] = useState(0.5)
-  const [waveBPulseWidth, setWaveBPulseWidth] = useState(0.5)
-  const [waveLerp, setWaveLerp] = useState(0)
-  const [lfoAFrequency, setLfoAFrequency] = useState(1)
-  const [lfoAPhaseOffset, setLfoAPhaseOffset] = useState(0)
-  const [lfoBFrequency, setLfoBFrequency] = useState(1)
-  const [lfoBPhaseOffset, setLfoBPhaseOffset] = useState(0)
   const [openWaveMenu, setOpenWaveMenu] = useState<'a' | 'b' | null>(null)
-
-  const [targetControls, setTargetControls] = useState<Record<ModTarget, TargetControl>>(
-    createInitialTargetControls()
-  )
 
   const padDragRef = useRef<PadDragState | null>(null)
   const wavePadDragRef = useRef<WavePadDragState | null>(null)
@@ -55,43 +40,75 @@ export function useModulatorPanelState() {
   const liveEmitFrameRef = useRef<number | null>(null)
   const liveEmitCommandsRef = useRef<string[] | null>(null)
   const waveMenuRef = useRef<HTMLDivElement | null>(null)
-  const isSwitchingModTabRef = useRef(false)
-  const modulatorInstancesRef = useRef(modulatorInstances)
+  const activeModulator = modulatorInstances[activeModulatorTab] ?? modulatorInstances[0]
+
+  const updateActiveModulator = useCallback(
+    (
+      update:
+        | Partial<ModulatorPanelState>
+        | ((current: ModulatorPanelState) => Partial<ModulatorPanelState>)
+    ): void => {
+      setModulatorInstances((previous) =>
+        previous.map((instance, index) => {
+          if (index !== activeModulatorTab) {
+            return instance
+          }
+          const patch = typeof update === 'function' ? update(instance) : update
+          return {
+            ...instance,
+            ...patch,
+          }
+        })
+      )
+    },
+    [activeModulatorTab]
+  )
+
+  const updateActiveTargetControl = useCallback(
+    (
+      target: ModTarget,
+      update:
+        | Partial<TargetControl>
+        | ((current: TargetControl) => Partial<TargetControl>)
+    ): void => {
+      updateActiveModulator((current) => {
+        const currentControl = current.targetControls[target]
+        const patch = typeof update === 'function' ? update(currentControl) : update
+        return {
+          targetControls: {
+            ...current.targetControls,
+            [target]: {
+              ...currentControl,
+              ...patch,
+            },
+          },
+        }
+      })
+    },
+    [updateActiveModulator]
+  )
+
+  const selectActiveModulatorTab = useCallback((index: number): void => {
+    setOpenWaveMenu(null)
+    setActiveModulatorTab(index)
+  }, [])
 
   return {
     modulatorInstances,
     setModulatorInstances,
     activeModulatorTab,
     setActiveModulatorTab,
-    waveAType,
-    setWaveAType,
-    waveBType,
-    setWaveBType,
-    waveAPulseWidth,
-    setWaveAPulseWidth,
-    waveBPulseWidth,
-    setWaveBPulseWidth,
-    waveLerp,
-    setWaveLerp,
-    lfoAFrequency,
-    setLfoAFrequency,
-    lfoAPhaseOffset,
-    setLfoAPhaseOffset,
-    lfoBFrequency,
-    setLfoBFrequency,
-    lfoBPhaseOffset,
-    setLfoBPhaseOffset,
+    selectActiveModulatorTab,
+    activeModulator,
+    updateActiveModulator,
+    updateActiveTargetControl,
     openWaveMenu,
     setOpenWaveMenu,
-    targetControls,
-    setTargetControls,
     padDragRef,
     wavePadDragRef,
     lastWaveHandleUsedRef,
     liveEmitFrameRef,
     liveEmitCommandsRef,
     waveMenuRef,
-    isSwitchingModTabRef,
-    modulatorInstancesRef,
   }
 }

@@ -5,8 +5,7 @@ import {
   WAVE_OPTIONS,
   WAVE_OPTION_LABELS,
   type ModTarget,
-  type Modulator,
-  type TargetControl,
+  type ModulatorPanelState,
   type WaveType,
 } from '../../domain/modulation'
 
@@ -23,22 +22,18 @@ type PadDragState = {
 
 type ModulatorsPanelProps = {
   activeModulatorTab: number
+  activeModulator: ModulatorPanelState
   setOpenWaveMenu: Dispatch<SetStateAction<'a' | 'b' | null>>
-  setActiveModulatorTab: Dispatch<SetStateAction<number>>
+  selectActiveModulatorTab: (index: number) => void
   waveMenuRef: { current: HTMLDivElement | null }
   openWaveMenu: 'a' | 'b' | null
-  waveAType: WaveType
-  waveBType: WaveType
   selectWaveType: (wave: 'a' | 'b', waveType: WaveType) => void
-  waveLerp: number
   onWaveLerpChange: (value: number) => void
-  waveAPulseWidth: number
-  setWaveAPulseWidth: (value: number) => void
-  waveBPulseWidth: number
-  setWaveBPulseWidth: (value: number) => void
+  onWaveAPulseWidthChange: (value: number) => void
+  onWaveBPulseWidthChange: (value: number) => void
   clampNumber: (value: number, min: number, max: number) => number
-  targetControls: Record<ModTarget, TargetControl>
-  updateTargetControl: (target: ModTarget, patch: Partial<TargetControl>) => void
+  setTargetEnabled: (target: ModTarget, enabled: boolean) => void
+  resetTargetControl: (target: ModTarget) => void
   padDragRef: { current: PadDragState | null }
   applyPadMotion: (
     target: ModTarget,
@@ -54,13 +49,6 @@ type ModulatorsPanelProps = {
     },
     precision: 'fine' | 'coarse'
   ) => void
-  scheduleLiveEmit: (commands: string[]) => void
-  buildCommandForTarget: (
-    target: ModTarget,
-    control: TargetControl,
-    baseMorphModulator: Modulator
-  ) => string
-  baseMorphModulator: Modulator
   tuningLength: number
 }
 
@@ -152,27 +140,20 @@ function WaveSelectControl({
 
 export function ModulatorsPanel({
   activeModulatorTab,
+  activeModulator,
   setOpenWaveMenu,
-  setActiveModulatorTab,
+  selectActiveModulatorTab,
   waveMenuRef,
   openWaveMenu,
-  waveAType,
-  waveBType,
   selectWaveType,
-  waveLerp,
   onWaveLerpChange,
-  waveAPulseWidth,
-  setWaveAPulseWidth,
-  waveBPulseWidth,
-  setWaveBPulseWidth,
+  onWaveAPulseWidthChange,
+  onWaveBPulseWidthChange,
   clampNumber,
-  targetControls,
-  updateTargetControl,
+  setTargetEnabled,
+  resetTargetControl,
   padDragRef,
   applyPadMotion,
-  scheduleLiveEmit,
-  buildCommandForTarget,
-  baseMorphModulator,
   tuningLength,
 }: ModulatorsPanelProps) {
   return (
@@ -183,10 +164,7 @@ export function ModulatorsPanel({
             key={`mod-tab-${index}`}
             type="button"
             className={`modTab${activeModulatorTab === index ? ' modTab-active' : ''}`}
-            onClick={() => {
-              setOpenWaveMenu(null)
-              setActiveModulatorTab(index)
-            }}
+            onClick={() => selectActiveModulatorTab(index)}
             role="tab"
             aria-selected={activeModulatorTab === index}
           >
@@ -198,22 +176,22 @@ export function ModulatorsPanel({
         <WaveSelectControl
           wave="a"
           label="A"
-          waveType={waveAType}
-          pulseWidth={waveAPulseWidth}
-          setPulseWidth={setWaveAPulseWidth}
+          waveType={activeModulator.waveAType}
+          pulseWidth={activeModulator.waveAPulseWidth}
+          setPulseWidth={onWaveAPulseWidthChange}
           openWaveMenu={openWaveMenu}
           setOpenWaveMenu={setOpenWaveMenu}
           selectWaveType={selectWaveType}
         />
         <label className="modRailLerp">
-          <span className="modRailLerpValue mono">{Math.round(waveLerp * 100)}%</span>
+          <span className="modRailLerpValue mono">{Math.round(activeModulator.waveLerp * 100)}%</span>
           <input
             className="modulatorSlider modulatorTopLerp"
             type="range"
             min={0}
             max={1}
             step={0.01}
-            value={waveLerp}
+            value={activeModulator.waveLerp}
             onChange={(event) => onWaveLerpChange(Number(event.target.value))}
             aria-label="Wave lerp"
           />
@@ -221,9 +199,9 @@ export function ModulatorsPanel({
         <WaveSelectControl
           wave="b"
           label="B"
-          waveType={waveBType}
-          pulseWidth={waveBPulseWidth}
-          setPulseWidth={setWaveBPulseWidth}
+          waveType={activeModulator.waveBType}
+          pulseWidth={activeModulator.waveBPulseWidth}
+          setPulseWidth={onWaveBPulseWidthChange}
           openWaveMenu={openWaveMenu}
           setOpenWaveMenu={setOpenWaveMenu}
           selectWaveType={selectWaveType}
@@ -232,7 +210,7 @@ export function ModulatorsPanel({
       <div className="modTargetChipList">
           {MOD_TARGET_ORDER.map((target) => {
             const spec = getModTargetSpecForTuning(target, tuningLength)
-            const control = targetControls[target]
+            const control = activeModulator.targetControls[target]
             const clampedCenter = clampNumber(control.center, spec.min, spec.max)
             const maxPositiveSpan = spec.max - clampedCenter
             const maxNegativeSpan = clampedCenter - spec.min
@@ -248,25 +226,7 @@ export function ModulatorsPanel({
                 className={`modTargetChip${control.enabled ? ' modTargetChip-enabled' : ''}`}
                 onDoubleClick={(event) => {
                   event.preventDefault()
-                  const nextControl = {
-                    ...control,
-                    enabled: false,
-                    center: spec.defaultCenter,
-                    amount: 0,
-                  }
-                  updateTargetControl(target, nextControl)
-                  if (control.enabled) {
-                    scheduleLiveEmit([
-                      buildCommandForTarget(
-                        target,
-                        {
-                          ...nextControl,
-                          enabled: true,
-                        },
-                        baseMorphModulator
-                      ),
-                    ])
-                  }
+                  resetTargetControl(target)
                 }}
                 onPointerDown={(event) => {
                   if (!(event.currentTarget instanceof HTMLDivElement)) {
@@ -326,20 +286,7 @@ export function ModulatorsPanel({
                     type="checkbox"
                     checked={control.enabled}
                     onChange={(event) => {
-                      const nextEnabled = event.target.checked
-                      updateTargetControl(target, { enabled: nextEnabled })
-                      if (nextEnabled) {
-                        scheduleLiveEmit([
-                          buildCommandForTarget(
-                            target,
-                            {
-                              ...control,
-                              enabled: true,
-                            },
-                            baseMorphModulator
-                          ),
-                        ])
-                      }
+                      setTargetEnabled(target, event.target.checked)
                     }}
                   />
                 </label>

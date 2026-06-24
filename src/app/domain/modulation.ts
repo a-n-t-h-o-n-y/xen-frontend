@@ -349,24 +349,3 @@ export const createTargetModulator = (
     ],
   }
 }
-
-export const buildCommandForTarget = (
-  target: ModTarget,
-  control: TargetControl,
-  baseModulator: Modulator
-): string => {
-  const spec = MOD_TARGET_SPECS[target]
-  const modulator = createTargetModulator(baseModulator, spec, control.center, control.amount)
-  return `set ${target} ${JSON.stringify(modulator)}`
-}
-
-export const buildCommandLines = (
-  controls: Record<ModTarget, TargetControl>,
-  baseModulator: Modulator,
-  onlyTargets?: ModTarget[]
-): string[] => {
-  const filterSet = onlyTargets ? new Set(onlyTargets) : null
-  return MOD_TARGET_ORDER.filter((target) => controls[target].enabled)
-    .filter((target) => (filterSet ? filterSet.has(target) : true))
-    .map((target) => buildCommandForTarget(target, controls[target], baseModulator))
-}

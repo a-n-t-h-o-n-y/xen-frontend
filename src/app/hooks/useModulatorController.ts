@@ -2,21 +2,21 @@ import { useCallback, useEffect, useMemo } from 'react'
 import {
   LFO_PHASE_OFFSET_MAX,
   LFO_PHASE_OFFSET_MIN,
-  MOD_TARGET_ORDER,
-  createMorphModulator,
-  createTargetModulator,
   frequencyToRatio,
   getModTargetSpecForTuning,
   ratioToFrequency,
   sampleWaveShape,
   toNormalizedPhase,
 } from '../domain/modulation'
+import {
+  buildEnabledModulatorTargetCommands,
+  buildModulatorTargetCommand,
+  joinModulatorCommands,
+} from '../domain/modulatorCommands'
 import { clampNumber, roundByStep } from '../domain/music'
 import { getErrorMessage } from '../utils/errors'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type {
-  MessageLevel,
-} from '../domain/models'
+import type { MessageLevel } from '../domain/models'
 import type {
   ModTarget,
   ModulatorPanelState,
@@ -24,41 +24,27 @@ import type {
   WaveType,
 } from '../domain/modulation'
 
+type TargetControlUpdate =
+  | Partial<TargetControl>
+  | ((current: TargetControl) => Partial<TargetControl>)
+
 type UseModulatorControllerArgs = {
   bridgeUnavailableMessage: string | null
   tuningLength: number
   executeBackendCommand: (command: string) => Promise<void>
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
-  modulatorInstances: ModulatorPanelState[]
-  setModulatorInstances: Dispatch<SetStateAction<ModulatorPanelState[]>>
-  activeModulatorTab: number
-  waveAType: WaveType
-  setWaveAType: Dispatch<SetStateAction<WaveType>>
-  waveBType: WaveType
-  setWaveBType: Dispatch<SetStateAction<WaveType>>
-  waveAPulseWidth: number
-  setWaveAPulseWidth: Dispatch<SetStateAction<number>>
-  waveBPulseWidth: number
-  setWaveBPulseWidth: Dispatch<SetStateAction<number>>
-  waveLerp: number
-  setWaveLerp: Dispatch<SetStateAction<number>>
-  lfoAFrequency: number
-  setLfoAFrequency: Dispatch<SetStateAction<number>>
-  lfoAPhaseOffset: number
-  setLfoAPhaseOffset: Dispatch<SetStateAction<number>>
-  lfoBFrequency: number
-  setLfoBFrequency: Dispatch<SetStateAction<number>>
-  lfoBPhaseOffset: number
-  setLfoBPhaseOffset: Dispatch<SetStateAction<number>>
-  targetControls: Record<ModTarget, TargetControl>
-  setTargetControls: Dispatch<SetStateAction<Record<ModTarget, TargetControl>>>
+  activeModulator: ModulatorPanelState
+  updateActiveModulator: (
+    update:
+      | Partial<ModulatorPanelState>
+      | ((current: ModulatorPanelState) => Partial<ModulatorPanelState>)
+  ) => void
+  updateActiveTargetControl: (target: ModTarget, update: TargetControlUpdate) => void
   setOpenWaveMenu: Dispatch<SetStateAction<'a' | 'b' | null>>
   lastWaveHandleUsedRef: MutableRefObject<'a' | 'b'>
   liveEmitFrameRef: MutableRefObject<number | null>
   liveEmitCommandsRef: MutableRefObject<string[] | null>
-  isSwitchingModTabRef: MutableRefObject<boolean>
-  modulatorInstancesRef: MutableRefObject<ModulatorPanelState[]>
 }
 
 export function useModulatorController({
@@ -67,35 +53,13 @@ export function useModulatorController({
   executeBackendCommand,
   setStatusMessage,
   setStatusLevel,
-  modulatorInstances,
-  setModulatorInstances,
-  activeModulatorTab,
-  waveAType,
-  setWaveAType,
-  waveBType,
-  setWaveBType,
-  waveAPulseWidth,
-  setWaveAPulseWidth,
-  waveBPulseWidth,
-  setWaveBPulseWidth,
-  waveLerp,
-  setWaveLerp,
-  lfoAFrequency,
-  setLfoAFrequency,
-  lfoAPhaseOffset,
-  setLfoAPhaseOffset,
-  lfoBFrequency,
-  setLfoBFrequency,
-  lfoBPhaseOffset,
-  setLfoBPhaseOffset,
-  targetControls,
-  setTargetControls,
+  activeModulator,
+  updateActiveModulator,
+  updateActiveTargetControl,
   setOpenWaveMenu,
   lastWaveHandleUsedRef,
   liveEmitFrameRef,
   liveEmitCommandsRef,
-  isSwitchingModTabRef,
-  modulatorInstancesRef,
 }: UseModulatorControllerArgs) {
   const { waveAPreviewPath, waveBPreviewPath, morphedWavePreviewPath } = useMemo(() => {
     const width = 420
@@ -104,23 +68,27 @@ export function useModulatorController({
     const waveAPoints: string[] = []
     const waveBPoints: string[] = []
     const mixedPoints: string[] = []
-    const normalizedWaveAPhase = toNormalizedPhase(lfoAPhaseOffset)
-    const normalizedWaveBPhase = toNormalizedPhase(lfoBPhaseOffset)
+    const normalizedWaveAPhase = toNormalizedPhase(activeModulator.lfoAPhaseOffset)
+    const normalizedWaveBPhase = toNormalizedPhase(activeModulator.lfoBPhaseOffset)
 
     for (let index = 0; index <= steps; index += 1) {
       const progress = index / steps
       const x = progress * width
       const waveA = sampleWaveShape(
-        waveAType,
-        progress * lfoAFrequency + normalizedWaveAPhase,
-        waveAPulseWidth
+        activeModulator.waveAType,
+        progress * activeModulator.lfoAFrequency + normalizedWaveAPhase,
+        activeModulator.waveAPulseWidth
       )
       const waveB = sampleWaveShape(
-        waveBType,
-        progress * lfoBFrequency + normalizedWaveBPhase,
-        waveBPulseWidth
+        activeModulator.waveBType,
+        progress * activeModulator.lfoBFrequency + normalizedWaveBPhase,
+        activeModulator.waveBPulseWidth
       )
-      const mixed = clampNumber(waveA * (1 - waveLerp) + waveB * waveLerp, -1, 1)
+      const mixed = clampNumber(
+        waveA * (1 - activeModulator.waveLerp) + waveB * activeModulator.waveLerp,
+        -1,
+        1
+      )
       const waveAY = (1 - (waveA + 1) / 2) * height
       const waveBY = (1 - (waveB + 1) / 2) * height
       const mixedY = (1 - (mixed + 1) / 2) * height
@@ -134,43 +102,7 @@ export function useModulatorController({
       waveBPreviewPath: waveBPoints.join(' '),
       morphedWavePreviewPath: mixedPoints.join(' '),
     }
-  }, [
-    lfoAFrequency,
-    lfoAPhaseOffset,
-    lfoBFrequency,
-    lfoBPhaseOffset,
-    waveAType,
-    waveAPulseWidth,
-    waveBType,
-    waveBPulseWidth,
-    waveLerp,
-  ])
-
-  const baseMorphModulator = useMemo(
-    () =>
-      createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        waveLerp
-      ),
-    [
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      waveAType,
-      waveAPulseWidth,
-      waveBType,
-      waveBPulseWidth,
-      waveLerp,
-    ]
-  )
+  }, [activeModulator])
 
   const emitCommandsNow = useCallback(
     (commands: string[]): void => {
@@ -178,7 +110,7 @@ export function useModulatorController({
         return
       }
 
-      void executeBackendCommand(commands.join('; ')).catch((error: unknown) => {
+      void executeBackendCommand(joinModulatorCommands(commands)).catch((error: unknown) => {
         setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
         setStatusLevel('error')
       })
@@ -221,211 +153,100 @@ export function useModulatorController({
     [liveEmitCommandsRef, liveEmitFrameRef]
   )
 
-  useEffect(() => {
-    modulatorInstancesRef.current = modulatorInstances
-  }, [modulatorInstances, modulatorInstancesRef])
-
-  useEffect(() => {
-    const nextState = modulatorInstancesRef.current[activeModulatorTab]
-    if (!nextState) {
-      return
-    }
-
-    isSwitchingModTabRef.current = true
-    setWaveAType(nextState.waveAType)
-    setWaveBType(nextState.waveBType)
-    setWaveAPulseWidth(nextState.waveAPulseWidth)
-    setWaveBPulseWidth(nextState.waveBPulseWidth)
-    setWaveLerp(nextState.waveLerp)
-    setLfoAFrequency(nextState.lfoAFrequency)
-    setLfoAPhaseOffset(nextState.lfoAPhaseOffset)
-    setLfoBFrequency(nextState.lfoBFrequency)
-    setLfoBPhaseOffset(nextState.lfoBPhaseOffset)
-    setTargetControls(nextState.targetControls)
-
-    queueMicrotask(() => {
-      isSwitchingModTabRef.current = false
-    })
-  }, [
-    activeModulatorTab,
-    isSwitchingModTabRef,
-    modulatorInstancesRef,
-    setLfoAFrequency,
-    setLfoAPhaseOffset,
-    setLfoBFrequency,
-    setLfoBPhaseOffset,
-    setTargetControls,
-    setWaveAPulseWidth,
-    setWaveAType,
-    setWaveBPulseWidth,
-    setWaveBType,
-    setWaveLerp,
-  ])
-
-  useEffect(() => {
-    if (isSwitchingModTabRef.current) {
-      return
-    }
-
-    setModulatorInstances((previous) =>
-      previous.map((instance, index) =>
-        index === activeModulatorTab
-          ? {
-              ...instance,
-              waveAType,
-              waveBType,
-              waveAPulseWidth,
-              waveBPulseWidth,
-              waveLerp,
-              lfoAFrequency,
-              lfoAPhaseOffset,
-              lfoBFrequency,
-              lfoBPhaseOffset,
-              targetControls,
-            }
-          : instance
-      )
-    )
-  }, [
-    activeModulatorTab,
-    lfoAFrequency,
-    lfoAPhaseOffset,
-    lfoBFrequency,
-    lfoBPhaseOffset,
-    targetControls,
-    waveAPulseWidth,
-    waveAType,
-    waveBPulseWidth,
-    waveBType,
-    waveLerp,
-    isSwitchingModTabRef,
-    setModulatorInstances,
-  ])
+  const emitEnabledTargetsForState = useCallback(
+    (state: ModulatorPanelState): void => {
+      scheduleLiveEmit(buildEnabledModulatorTargetCommands(state, tuningLength))
+    },
+    [scheduleLiveEmit, tuningLength]
+  )
 
   const updateTargetControl = useCallback(
-    (target: ModTarget, update: Partial<TargetControl>): void => {
-      setTargetControls((previous) => ({
-        ...previous,
-        [target]: {
-          ...previous[target],
-          ...update,
-        },
-      }))
+    (target: ModTarget, update: TargetControlUpdate): TargetControl => {
+      const currentControl = activeModulator.targetControls[target]
+      const patch = typeof update === 'function' ? update(currentControl) : update
+      const nextControl = {
+        ...currentControl,
+        ...patch,
+      }
+      updateActiveTargetControl(target, patch)
+      return nextControl
     },
-    [setTargetControls]
-  )
-
-  const buildModTargetCommand = useCallback(
-    (target: ModTarget, control: TargetControl, modulator: ReturnType<typeof createMorphModulator>): string => {
-      const spec = getModTargetSpecForTuning(target, tuningLength)
-      const targetModulator = createTargetModulator(modulator, spec, control.center, control.amount)
-      return `set ${target} ${JSON.stringify(targetModulator)}`
-    },
-    [tuningLength]
-  )
-
-  const buildModTargetCommands = useCallback(
-    (controls: Record<ModTarget, TargetControl>, modulator: ReturnType<typeof createMorphModulator>): string[] =>
-      MOD_TARGET_ORDER.filter((target) => controls[target].enabled).map((target) =>
-        buildModTargetCommand(target, controls[target], modulator)
-      ),
-    [buildModTargetCommand]
+    [activeModulator.targetControls, updateActiveTargetControl]
   )
 
   const handleWaveLerpChange = useCallback(
     (nextLerp: number): void => {
-      setWaveLerp(nextLerp)
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        nextLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+      const nextState = { ...activeModulator, waveLerp: nextLerp }
+      updateActiveModulator({ waveLerp: nextLerp })
+      emitEnabledTargetsForState(nextState)
     },
-    [
-      buildModTargetCommands,
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      scheduleLiveEmit,
-      setWaveLerp,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBPulseWidth,
-      waveBType,
-    ]
+    [activeModulator, emitEnabledTargetsForState, updateActiveModulator]
   )
 
   const handleWaveAPulseWidthChange = useCallback(
     (nextPulseWidth: number): void => {
-      setWaveAPulseWidth(nextPulseWidth)
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        nextPulseWidth,
-        waveBPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+      const nextState = { ...activeModulator, waveAPulseWidth: nextPulseWidth }
+      updateActiveModulator({ waveAPulseWidth: nextPulseWidth })
+      emitEnabledTargetsForState(nextState)
     },
-    [
-      buildModTargetCommands,
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      scheduleLiveEmit,
-      setWaveAPulseWidth,
-      targetControls,
-      waveAType,
-      waveBType,
-      waveBPulseWidth,
-      waveLerp,
-    ]
+    [activeModulator, emitEnabledTargetsForState, updateActiveModulator]
   )
 
   const handleWaveBPulseWidthChange = useCallback(
     (nextPulseWidth: number): void => {
-      setWaveBPulseWidth(nextPulseWidth)
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        nextPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+      const nextState = { ...activeModulator, waveBPulseWidth: nextPulseWidth }
+      updateActiveModulator({ waveBPulseWidth: nextPulseWidth })
+      emitEnabledTargetsForState(nextState)
     },
-    [
-      buildModTargetCommands,
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      scheduleLiveEmit,
-      setWaveBPulseWidth,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBType,
-      waveLerp,
-    ]
+    [activeModulator, emitEnabledTargetsForState, updateActiveModulator]
+  )
+
+  const resetTargetControl = useCallback(
+    (target: ModTarget): void => {
+      const spec = getModTargetSpecForTuning(target, tuningLength)
+      const control = activeModulator.targetControls[target]
+      const nextControl = {
+        ...control,
+        enabled: false,
+        center: spec.defaultCenter,
+        amount: 0,
+      }
+      updateActiveTargetControl(target, nextControl)
+      if (control.enabled) {
+        scheduleLiveEmit([
+          buildModulatorTargetCommand(
+            target,
+            {
+              ...nextControl,
+              enabled: true,
+            },
+            activeModulator,
+            tuningLength
+          ),
+        ])
+      }
+    },
+    [activeModulator, scheduleLiveEmit, tuningLength, updateActiveTargetControl]
+  )
+
+  const setTargetEnabled = useCallback(
+    (target: ModTarget, enabled: boolean): void => {
+      const nextControl = updateTargetControl(target, { enabled })
+      if (enabled) {
+        scheduleLiveEmit([
+          buildModulatorTargetCommand(target, nextControl, activeModulator, tuningLength),
+        ])
+      }
+    },
+    [activeModulator, scheduleLiveEmit, tuningLength, updateTargetControl]
+  )
+
+  const toggleTargetEnabled = useCallback(
+    (target: ModTarget): void => {
+      const enabled = !activeModulator.targetControls[target].enabled
+      setTargetEnabled(target, enabled)
+    },
+    [activeModulator.targetControls, setTargetEnabled]
   )
 
   const applyPadMotion = useCallback(
@@ -446,7 +267,7 @@ export function useModulatorController({
       const spec = getModTargetSpecForTuning(target, tuningLength)
       const bounds = host.getBoundingClientRect()
       const xRatio = clampNumber((clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
-      const currentControl = targetControls[target]
+      const currentControl = activeModulator.targetControls[target]
 
       if (mode === 'center') {
         const nextCenterRaw = spec.min + xRatio * (spec.max - spec.min)
@@ -462,8 +283,10 @@ export function useModulatorController({
           center: resolvedCenter,
           amount: resolvedAmount,
         }
-        updateTargetControl(target, nextControl)
-        scheduleLiveEmit([buildModTargetCommand(target, nextControl, baseMorphModulator)])
+        updateActiveTargetControl(target, nextControl)
+        scheduleLiveEmit([
+          buildModulatorTargetCommand(target, nextControl, activeModulator, tuningLength),
+        ])
         return
       }
 
@@ -480,10 +303,12 @@ export function useModulatorController({
         amountLimit
       )
       const nextControl = { ...currentControl, enabled: true, amount: nextAmount }
-      updateTargetControl(target, nextControl)
-      scheduleLiveEmit([buildModTargetCommand(target, nextControl, baseMorphModulator)])
+      updateActiveTargetControl(target, nextControl)
+      scheduleLiveEmit([
+        buildModulatorTargetCommand(target, nextControl, activeModulator, tuningLength),
+      ])
     },
-    [baseMorphModulator, buildModTargetCommand, scheduleLiveEmit, targetControls, tuningLength, updateTargetControl]
+    [activeModulator, scheduleLiveEmit, tuningLength, updateActiveTargetControl]
   )
 
   const getWaveHandlePosition = useCallback((frequency: number, phaseOffset: number) => {
@@ -496,15 +321,15 @@ export function useModulatorController({
   }, [])
 
   const waveHandleA = useMemo(
-    () => getWaveHandlePosition(lfoAFrequency, lfoAPhaseOffset),
-    [getWaveHandlePosition, lfoAFrequency, lfoAPhaseOffset]
+    () => getWaveHandlePosition(activeModulator.lfoAFrequency, activeModulator.lfoAPhaseOffset),
+    [activeModulator.lfoAFrequency, activeModulator.lfoAPhaseOffset, getWaveHandlePosition]
   )
   const waveHandleB = useMemo(
-    () => getWaveHandlePosition(lfoBFrequency, lfoBPhaseOffset),
-    [getWaveHandlePosition, lfoBFrequency, lfoBPhaseOffset]
+    () => getWaveHandlePosition(activeModulator.lfoBFrequency, activeModulator.lfoBPhaseOffset),
+    [activeModulator.lfoBFrequency, activeModulator.lfoBPhaseOffset, getWaveHandlePosition]
   )
-  const waveAOpacity = clampNumber(1 - waveLerp, 0, 1)
-  const waveBOpacity = clampNumber(waveLerp, 0, 1)
+  const waveAOpacity = clampNumber(1 - activeModulator.waveLerp, 0, 1)
+  const waveBOpacity = clampNumber(activeModulator.waveLerp, 0, 1)
 
   const applyWavePadMotion = useCallback(
     (
@@ -523,171 +348,83 @@ export function useModulatorController({
       const nextFrequency =
         lockMode === 'offset'
           ? wave === 'a'
-            ? lfoAFrequency
-            : lfoBFrequency
+            ? activeModulator.lfoAFrequency
+            : activeModulator.lfoBFrequency
           : rawNextFrequency
       const nextPhaseOffset =
         lockMode === 'frequency'
           ? wave === 'a'
-            ? lfoAPhaseOffset
-            : lfoBPhaseOffset
+            ? activeModulator.lfoAPhaseOffset
+            : activeModulator.lfoBPhaseOffset
           : rawNextPhaseOffset
-      const nextAFrequency = wave === 'a' ? nextFrequency : lfoAFrequency
-      const nextAPhaseOffset = wave === 'a' ? nextPhaseOffset : lfoAPhaseOffset
-      const nextBFrequency = wave === 'b' ? nextFrequency : lfoBFrequency
-      const nextBPhaseOffset = wave === 'b' ? nextPhaseOffset : lfoBPhaseOffset
-
-      if (wave === 'a') {
-        setLfoAFrequency(nextFrequency)
-        setLfoAPhaseOffset(nextPhaseOffset)
-      } else {
-        setLfoBFrequency(nextFrequency)
-        setLfoBPhaseOffset(nextPhaseOffset)
+      const nextState = {
+        ...activeModulator,
+        lfoAFrequency: wave === 'a' ? nextFrequency : activeModulator.lfoAFrequency,
+        lfoAPhaseOffset: wave === 'a' ? nextPhaseOffset : activeModulator.lfoAPhaseOffset,
+        lfoBFrequency: wave === 'b' ? nextFrequency : activeModulator.lfoBFrequency,
+        lfoBPhaseOffset: wave === 'b' ? nextPhaseOffset : activeModulator.lfoBPhaseOffset,
       }
-      lastWaveHandleUsedRef.current = wave
 
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        nextAFrequency,
-        toNormalizedPhase(nextAPhaseOffset),
-        nextBFrequency,
-        toNormalizedPhase(nextBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+      updateActiveModulator({
+        lfoAFrequency: nextState.lfoAFrequency,
+        lfoAPhaseOffset: nextState.lfoAPhaseOffset,
+        lfoBFrequency: nextState.lfoBFrequency,
+        lfoBPhaseOffset: nextState.lfoBPhaseOffset,
+      })
+      lastWaveHandleUsedRef.current = wave
+      emitEnabledTargetsForState(nextState)
     },
-    [
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      buildModTargetCommands,
-      scheduleLiveEmit,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBPulseWidth,
-      waveBType,
-      waveLerp,
-      lastWaveHandleUsedRef,
-      setLfoAFrequency,
-      setLfoAPhaseOffset,
-      setLfoBFrequency,
-      setLfoBPhaseOffset,
-    ]
+    [activeModulator, emitEnabledTargetsForState, lastWaveHandleUsedRef, updateActiveModulator]
   )
 
   const snapWaveToCenterGuides = useCallback(
     (wave: 'a' | 'b', options: { snapFrequency?: boolean; snapOffset?: boolean }): void => {
-      const nextAFrequency = wave === 'a' && options.snapFrequency ? 1 : lfoAFrequency
-      const nextBFrequency = wave === 'b' && options.snapFrequency ? 1 : lfoBFrequency
-      const nextAPhaseOffset = wave === 'a' && options.snapOffset ? 0 : lfoAPhaseOffset
-      const nextBPhaseOffset = wave === 'b' && options.snapOffset ? 0 : lfoBPhaseOffset
-
-      if (wave === 'a') {
-        if (options.snapFrequency) {
-          setLfoAFrequency(1)
-        }
-        if (options.snapOffset) {
-          setLfoAPhaseOffset(0)
-        }
-      } else {
-        if (options.snapFrequency) {
-          setLfoBFrequency(1)
-        }
-        if (options.snapOffset) {
-          setLfoBPhaseOffset(0)
-        }
+      const nextState = {
+        ...activeModulator,
+        lfoAFrequency: wave === 'a' && options.snapFrequency ? 1 : activeModulator.lfoAFrequency,
+        lfoAPhaseOffset: wave === 'a' && options.snapOffset ? 0 : activeModulator.lfoAPhaseOffset,
+        lfoBFrequency: wave === 'b' && options.snapFrequency ? 1 : activeModulator.lfoBFrequency,
+        lfoBPhaseOffset: wave === 'b' && options.snapOffset ? 0 : activeModulator.lfoBPhaseOffset,
       }
-      lastWaveHandleUsedRef.current = wave
 
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        nextAFrequency,
-        toNormalizedPhase(nextAPhaseOffset),
-        nextBFrequency,
-        toNormalizedPhase(nextBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+      updateActiveModulator({
+        lfoAFrequency: nextState.lfoAFrequency,
+        lfoAPhaseOffset: nextState.lfoAPhaseOffset,
+        lfoBFrequency: nextState.lfoBFrequency,
+        lfoBPhaseOffset: nextState.lfoBPhaseOffset,
+      })
+      lastWaveHandleUsedRef.current = wave
+      emitEnabledTargetsForState(nextState)
     },
-    [
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      buildModTargetCommands,
-      scheduleLiveEmit,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBPulseWidth,
-      waveBType,
-      waveLerp,
-      lastWaveHandleUsedRef,
-      setLfoAFrequency,
-      setLfoAPhaseOffset,
-      setLfoBFrequency,
-      setLfoBPhaseOffset,
-    ]
+    [activeModulator, emitEnabledTargetsForState, lastWaveHandleUsedRef, updateActiveModulator]
   )
 
   const selectWaveType = useCallback(
     (wave: 'a' | 'b', waveType: WaveType): void => {
-      const nextWaveAType = wave === 'a' ? waveType : waveAType
-      const nextWaveBType = wave === 'b' ? waveType : waveBType
-      if (wave === 'a') {
-        setWaveAType(waveType)
-      } else {
-        setWaveBType(waveType)
+      const nextState = {
+        ...activeModulator,
+        waveAType: wave === 'a' ? waveType : activeModulator.waveAType,
+        waveBType: wave === 'b' ? waveType : activeModulator.waveBType,
       }
+      updateActiveModulator({
+        waveAType: nextState.waveAType,
+        waveBType: nextState.waveBType,
+      })
       setOpenWaveMenu(null)
-      const liveBase = createMorphModulator(
-        nextWaveAType,
-        nextWaveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+      emitEnabledTargetsForState(nextState)
     },
-    [
-      buildModTargetCommands,
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      scheduleLiveEmit,
-      setOpenWaveMenu,
-      setWaveAType,
-      setWaveBType,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBPulseWidth,
-      waveBType,
-      waveLerp,
-    ]
+    [activeModulator, emitEnabledTargetsForState, setOpenWaveMenu, updateActiveModulator]
   )
 
   return {
     waveAPreviewPath,
     waveBPreviewPath,
     morphedWavePreviewPath,
-    baseMorphModulator,
     scheduleLiveEmit,
     updateTargetControl,
-    buildModTargetCommand,
+    setTargetEnabled,
+    toggleTargetEnabled,
+    resetTargetControl,
     handleWaveLerpChange,
     handleWaveAPulseWidthChange,
     handleWaveBPulseWidthChange,

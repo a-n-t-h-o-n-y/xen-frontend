@@ -9,7 +9,7 @@ import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { EditorState, KeymapResource, MessageLevel, ProjectSnapshot } from '../domain/models'
-import type { ModTarget, TargetControl } from '../domain/modulation'
+import type { ModTarget } from '../domain/modulation'
 
 type WorkspaceView = 'sequencer' | 'library'
 
@@ -26,9 +26,9 @@ type UseKeyboardControllerArgs = {
   installEditorState: (nextState: EditorState) => void
   setWorkspaceView: Dispatch<SetStateAction<WorkspaceView>>
   setIsModulatorMode: Dispatch<SetStateAction<boolean>>
-  setActiveModulatorTab: Dispatch<SetStateAction<number>>
+  selectActiveModulatorTab: (index: number) => void
   setOpenWaveMenu: Dispatch<SetStateAction<'a' | 'b' | null>>
-  setTargetControls: Dispatch<SetStateAction<Record<ModTarget, TargetControl>>>
+  toggleActiveModulatorTarget: (target: ModTarget) => void
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
 }
@@ -46,9 +46,9 @@ export function useKeyboardController({
   installEditorState,
   setWorkspaceView,
   setIsModulatorMode,
-  setActiveModulatorTab,
+  selectActiveModulatorTab,
   setOpenWaveMenu,
-  setTargetControls,
+  toggleActiveModulatorTarget,
   setStatusMessage,
   setStatusLevel,
 }: UseKeyboardControllerArgs) {
@@ -154,20 +154,13 @@ export function useKeyboardController({
             }
 
             if (matchedBinding.target.action === 'modulator.slot.select') {
-              setOpenWaveMenu(null)
-              setActiveModulatorTab(matchedBinding.target.arguments.slot - 1)
+              selectActiveModulatorTab(matchedBinding.target.arguments.slot - 1)
               return
             }
 
             if (matchedBinding.target.action === 'modulator.target.toggle') {
               const target = matchedBinding.target.arguments.target as ModTarget
-              setTargetControls((previous) => ({
-                ...previous,
-                [target]: {
-                  ...previous[target],
-                  enabled: !previous[target].enabled,
-                },
-              }))
+              toggleActiveModulatorTarget(target)
               return
             }
 
@@ -216,13 +209,13 @@ export function useKeyboardController({
     keymapRef,
     openCommandMode,
     projectRef,
-    setActiveModulatorTab,
+    selectActiveModulatorTab,
     setIsModulatorMode,
     setOpenWaveMenu,
     setStatusLevel,
     setStatusMessage,
-    setTargetControls,
     settingsOpen,
+    toggleActiveModulatorTarget,
     toggleWorkspaceView,
   ])
 
