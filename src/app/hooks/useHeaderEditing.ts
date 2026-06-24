@@ -13,8 +13,8 @@ import type { LibrarySnapshot } from '../domain/contracts'
 type UseHeaderEditingArgs = {
   bridgeUnavailableMessage: string | null
   timeSignature: string
-  keyDisplay: number
-  baseFrequency: number
+  keyDisplay: string | number
+  baseFrequency: string | number
   scaleName: string
   scaleSourceId: string | null
   scaleMode: number

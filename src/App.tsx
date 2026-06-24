@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { HeaderSection } from './app/sections/HeaderSection'
-import { useBridgeSession } from './app/hooks/useBridgeSession'
 import { useCommandState } from './app/hooks/useCommandState'
-import { recognizeCommandIds } from './app/domain/commandCompletion'
 import { useHeaderEditing } from './app/hooks/useHeaderEditing'
 import { useLibraryPanelState } from './app/hooks/useLibraryPanelState'
 import { useModulatorPanelState } from './app/hooks/useModulatorPanelState'
+import { useProjectSession } from './app/hooks/useProjectSession'
+import { useCommandController } from './app/hooks/useCommandController'
+import { useKeyboardController } from './app/hooks/useKeyboardController'
+import { useModulatorController } from './app/hooks/useModulatorController'
 import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
 import { SequencerSection } from './app/sections/SequencerSection'
@@ -15,25 +17,11 @@ import { SettingsOverlay } from './app/sections/SettingsOverlay'
 import { LibraryPanel } from './app/sections/bottom/LibraryPanel'
 import { ModulatorsPanel } from './app/sections/bottom/ModulatorsPanel'
 import {
-  MAX_COMMAND_HISTORY,
   DEFAULT_TUNING_LENGTH,
-  LFO_PHASE_OFFSET_MIN,
-  LFO_PHASE_OFFSET_MAX,
   clampNumber,
-  roundByStep,
-  toNormalizedPhase,
-  frequencyToRatio,
-  ratioToFrequency,
   createTransportState,
   getErrorMessage,
-  getPayloadError,
   formatOctaveForDisplay,
-  sampleWaveShape,
-  createMorphModulator,
-  createTargetModulator,
-  MOD_TARGET_ORDER,
-  getModTargetSpecForTuning,
-  isEditableTarget,
   getTuningRatios,
   generateValidPitches,
   mapPitchToScale,
@@ -47,55 +35,25 @@ import {
   getStatusCellMeta,
 } from './app/shared'
 import type {
-  MessageLevel,
-  TranslateDirection,
   Cell,
   EditorState,
   TransportState,
-  ModTarget,
-  WaveType,
-  TargetControl,
-  LeafCell,
-  StatusCellMetaItem,
-  SelectionStep,
 } from './app/shared'
-import {
-  expandNumericPlaceholders,
-  findKeymapBinding,
-  triggersEqual,
-} from './app/domain/keymap'
-import { isCommandUiActionId } from './app/domain/uiActions'
-import {
-  moveSelection,
-  projectRootCell,
-  resolveSelection,
-} from './app/domain/selection'
-import { parseKeymapResource } from './app/domain/contracts'
-import type {
-  KeymapResource,
-  KeymapTarget,
-  KeymapTrigger,
-  ProjectSnapshot,
-} from './app/domain/contracts'
+import { resolveSelection } from './app/domain/selection'
 
 type WorkspaceView = 'sequencer' | 'library'
+
+const EMPTY_ROOT_CELL: Cell = { weight: 1, elements: [] }
 
 function App() {
   const [editorState, setEditorState] = useState<EditorState>({
     selection: { path: [] },
     inputMode: 'pitch',
   })
-  const [statusMessage, setStatusMessage] = useState('')
-  const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
-  const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
-  const [projectSnapshot, setProjectSnapshot] = useState<ProjectSnapshot | null>(null)
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
-  const [keymapResource, setKeymapResource] = useState<KeymapResource | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('sequencer')
   const [isModulatorMode, setIsModulatorMode] = useState(false)
-  const [keymapBusy, setKeymapBusy] = useState(false)
-  const [keymapError, setKeymapError] = useState<string | null>(null)
   const {
     isCommandMode,
     commandText,
@@ -120,20 +78,12 @@ function App() {
     openCommandMode,
     closeCommandMode,
   } = useCommandState()
-  const eventTokenRef = useRef<unknown>(null)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const timeSignatureInputRef = useRef<HTMLInputElement>(null)
   const keyInputRef = useRef<HTMLInputElement>(null)
   const baseFrequencyInputRef = useRef<HTMLInputElement>(null)
   const scaleMenuRef = useRef<HTMLDivElement | null>(null)
-  const projectRef = useRef<ProjectSnapshot | null>(null)
   const editorStateRef = useRef<EditorState>(editorState)
-  const libraryRevisionRef = useRef(-1)
-  const keymapRef = useRef<KeymapResource | null>(null)
-  const pendingNumberRef = useRef('')
-  const lastShortcutCommandRef = useRef<{ command: 'copy' | 'cut' | 'paste'; at: number } | null>(
-    null
-  )
   const transportRef = useRef<TransportState>(createTransportState())
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
@@ -190,22 +140,29 @@ function App() {
     isSwitchingModTabRef,
     modulatorInstancesRef,
   } = useModulatorPanelState()
-  const { sendBridgeRequest, ingestKeymap, executeBackendCommand } = useBridgeSession({
-    eventTokenRef,
-    transportRef,
-    projectRef,
-    editorStateRef,
-    libraryRevisionRef,
-    keymapRef,
-    setProject: setProjectSnapshot,
-    setEditorState,
+  const {
+    projectState,
+    statusMessage,
+    statusLevel,
     setStatusMessage,
     setStatusLevel,
-    setBridgeUnavailableMessage,
+    bridgeUnavailableMessage,
+    projectRef,
+    keymapRef,
+    keymapResource,
+    keymapBusy,
+    keymapError,
+    setKeymapError,
+    mutateKeymap,
+    setKeymapOverride,
+    executeBackendCommand,
+  } = useProjectSession({
+    transportRef,
+    editorStateRef,
+    setEditorState,
     setSessionReference,
-    setKeymapResource,
-    setLibraryLoading,
     setLibrarySnapshot,
+    setLibraryLoading,
     setPlayheadPhase,
   })
 
@@ -214,390 +171,52 @@ function App() {
     setEditorState(nextState)
   }, [])
 
-  const refreshKeymap = useCallback(async (): Promise<void> => {
-    const response = await sendBridgeRequest('keymap.get', {})
-    const payloadError = getPayloadError(response.payload)
-    if (payloadError) throw new Error(payloadError)
-    ingestKeymap(response.payload)
-  }, [ingestKeymap, sendBridgeRequest])
+  const isProjectReady = projectState.status === 'ready'
+  const projectSnapshot = isProjectReady ? projectState.snapshot : null
+  const disabledReason = isProjectReady
+    ? null
+    : projectState.status === 'error'
+      ? projectState.message
+      : 'Project is loading'
 
-  const mutateKeymap = useCallback(async (
-    name: 'keymap.override.set' | 'keymap.override.remove' | 'keymap.reset',
-    payload: Record<string, unknown>
-  ): Promise<void> => {
-    const current = keymapRef.current
-    if (!current) throw new Error('Keymap is not loaded')
-    setKeymapBusy(true)
-    setKeymapError(null)
-    try {
-      const response = await sendBridgeRequest(name, {
-        expected_revision: current.revision,
-        ...payload,
-      })
-      const payloadError = getPayloadError(response.payload)
-      if (payloadError) {
-        const rawError = response.payload.error
-        const code = typeof rawError === 'object' && rawError !== null
-          ? (rawError as Record<string, unknown>).code
-          : null
-        if (code === 'invalid_request') {
-          await refreshKeymap()
-          throw new Error('Shortcuts changed elsewhere. The latest version was loaded; retry your edit.')
-        }
-        throw new Error(payloadError)
-      }
-      ingestKeymap(parseKeymapResource(response.payload))
-    } catch (error) {
-      const message = getErrorMessage(error)
-      setKeymapError(message)
-      throw error
-    } finally {
-      setKeymapBusy(false)
-    }
-  }, [ingestKeymap, keymapRef, refreshKeymap, sendBridgeRequest])
-
-  const setKeymapOverride = useCallback(async (
-    context: string,
-    trigger: KeymapTrigger,
-    target: KeymapTarget,
-    originalTrigger?: KeymapTrigger
-  ): Promise<void> => {
-    await mutateKeymap('keymap.override.set', { context, trigger, target })
-    if (!originalTrigger || triggersEqual(originalTrigger, trigger)) return
-
-    const originalWasOverride = keymapRef.current?.overrides.some((override) =>
-      override.context === context && triggersEqual(override.trigger, originalTrigger)
-    )
-    if (originalWasOverride) {
-      await mutateKeymap('keymap.override.remove', { context, trigger: originalTrigger })
-    } else {
-      await mutateKeymap('keymap.override.set', {
-        context,
-        trigger: originalTrigger,
-        target: null,
-      })
-    }
-  }, [mutateKeymap])
-
-  useEffect(() => {
-    if (!isCommandMode) {
-      return
-    }
-    const input = commandInputRef.current
-    if (!input) {
-      return
-    }
-
-    input.focus()
-    const textLength = input.value.length
-    input.setSelectionRange(textLength, textLength)
-  }, [isCommandMode])
-
-  const toggleWorkspaceView = useCallback((): void => {
-    setWorkspaceView((current) => current === 'sequencer' ? 'library' : 'sequencer')
-  }, [])
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (event: KeyboardEvent): void => {
-      const editableTarget = isEditableTarget(event.target)
-
-      if (bridgeUnavailableMessage !== null) {
-        return
-      }
-
-      if (settingsOpen) {
-        return
-      }
-
-      if (editableTarget) {
-        return
-      }
-
-      const isDigitKey =
-        event.key.length === 1 &&
-        event.key >= '0' &&
-        event.key <= '9' &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey
-
-      const matchedBinding = findKeymapBinding(
-        keymapRef.current,
-        'sequence',
-        event,
-        editorStateRef.current.inputMode
-      )
-
-      if (matchedBinding) {
-        event.preventDefault()
-        void (async () => {
-          try {
-            if (matchedBinding.target.type === 'command') {
-              const command = expandNumericPlaceholders(
-                matchedBinding.target.command,
-                pendingNumberRef.current
-              )
-              const normalizedCommand = command.trim().toLowerCase()
-              if (
-                normalizedCommand === 'copy' ||
-                normalizedCommand === 'cut' ||
-                normalizedCommand === 'paste'
-              ) {
-                lastShortcutCommandRef.current = {
-                  command: normalizedCommand,
-                  at: Date.now(),
-                }
-              }
-              await executeBackendCommand(command)
-              return
-            }
-
-            if (matchedBinding.target.action === 'selection.move') {
-              const project = projectRef.current
-              if (!project) return
-              const selection = moveSelection(
-                projectRootCell(project),
-                editorStateRef.current.selection,
-                matchedBinding.target.arguments.direction,
-                matchedBinding.target.arguments.amount
-              )
-              installEditorState({ ...editorStateRef.current, selection })
-              return
-            }
-
-            if (matchedBinding.target.action === 'input_mode.set') {
-              installEditorState({
-                ...editorStateRef.current,
-                inputMode: matchedBinding.target.arguments.mode,
-              })
-              return
-            }
-
-            if (matchedBinding.target.action === 'workspace.view.toggle') {
-              toggleWorkspaceView()
-              return
-            }
-
-            if (matchedBinding.target.action === 'modulator.mode.toggle') {
-              setIsModulatorMode((previous) => {
-                const next = !previous
-                if (!next) {
-                  setOpenWaveMenu(null)
-                }
-                return next
-              })
-              return
-            }
-
-            if (matchedBinding.target.action === 'modulator.slot.select') {
-              setOpenWaveMenu(null)
-              setActiveModulatorTab(matchedBinding.target.arguments.slot - 1)
-              return
-            }
-
-            if (matchedBinding.target.action === 'modulator.target.toggle') {
-              const target = matchedBinding.target.arguments.target as ModTarget
-              setTargetControls((previous) => ({
-                ...previous,
-                [target]: {
-                  ...previous[target],
-                  enabled: !previous[target].enabled,
-                },
-              }))
-              return
-            }
-
-            if (
-              isCommandUiActionId(matchedBinding.target.action) &&
-              matchedBinding.target.action === 'command.open'
-            ) {
-              openCommandMode()
-            }
-          } catch (error) {
-            setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-            setStatusLevel('error')
-          }
-        })()
-        pendingNumberRef.current = ''
-        return
-      }
-
-      if (!isCommandMode && isDigitKey) {
-        pendingNumberRef.current = `${pendingNumberRef.current}${event.key}`
-        event.preventDefault()
-        return
-      }
-
-      pendingNumberRef.current = ''
-
-      if (isCommandMode) {
-        return
-      }
-
-      if (event.key === ':' && !event.metaKey && !event.ctrlKey && !event.altKey) {
-        event.preventDefault()
-        openCommandMode()
-      }
-    }
-
-    window.addEventListener('keydown', handleGlobalKeyDown)
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [
+  useKeyboardController({
     bridgeUnavailableMessage,
-    executeBackendCommand,
-    installEditorState,
+    isProjectReady,
+    settingsOpen,
     isCommandMode,
     openCommandMode,
-    settingsOpen,
+    executeBackendCommand,
+    projectRef,
+    editorStateRef,
+    keymapRef,
+    installEditorState,
+    setWorkspaceView,
+    setIsModulatorMode,
     setActiveModulatorTab,
     setOpenWaveMenu,
     setTargetControls,
-    toggleWorkspaceView,
-  ])
+    setStatusMessage,
+    setStatusLevel,
+  })
 
-  useEffect(() => {
-    const handleClipboardCommand = (command: string, event: ClipboardEvent): void => {
-      const recentShortcut = lastShortcutCommandRef.current
-      if (
-        recentShortcut &&
-        recentShortcut.command === command &&
-        Date.now() - recentShortcut.at < 250
-      ) {
-        return
-      }
-
-      const editableTarget = isEditableTarget(event.target)
-
-      if (bridgeUnavailableMessage !== null || editableTarget || isCommandMode) {
-        return
-      }
-
-      event.preventDefault()
-
-      void executeBackendCommand(command).catch((error: unknown) => {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-      })
-    }
-
-    const handleCopy = (event: ClipboardEvent): void => {
-      handleClipboardCommand('copy', event)
-    }
-    const handleCut = (event: ClipboardEvent): void => {
-      handleClipboardCommand('cut', event)
-    }
-    const handlePaste = (event: ClipboardEvent): void => {
-      handleClipboardCommand('paste', event)
-    }
-
-    window.addEventListener('copy', handleCopy)
-    window.addEventListener('cut', handleCut)
-    window.addEventListener('paste', handlePaste)
-    return () => {
-      window.removeEventListener('copy', handleCopy)
-      window.removeEventListener('cut', handleCut)
-      window.removeEventListener('paste', handlePaste)
-    }
-  }, [
-    bridgeUnavailableMessage,
-    executeBackendCommand,
+  const { submitCommand } = useCommandController({
     isCommandMode,
-  ])
+    commandText,
+    commandInputRef,
+    setCommandHistory,
+    setHistoryIndex,
+    liveCommandBufferRef,
+    closeCommandMode,
+    setRecentCommandIds,
+    commands: sessionReference.commands,
+    executeBackendCommand,
+    setStatusMessage,
+    setStatusLevel,
+  })
 
-  const submitCommand = useCallback(
-    async (): Promise<void> => {
-      const command = commandText.trim()
-      if (!command) {
-        closeCommandMode({ preserveText: true })
-        return
-      }
-
-      setCommandHistory((previous) => [command, ...previous].slice(0, MAX_COMMAND_HISTORY))
-      const recognizedCommandIds = recognizeCommandIds(command, sessionReference.commands)
-      if (recognizedCommandIds.length > 0) {
-        setRecentCommandIds((previous) => [
-          ...recognizedCommandIds,
-          ...previous.filter((id) => !recognizedCommandIds.includes(id)),
-        ].slice(0, 20))
-      }
-      setHistoryIndex(-1)
-      liveCommandBufferRef.current = ''
-
-      let shouldClearCommandText = false
-
-      try {
-        await executeBackendCommand(command)
-
-        shouldClearCommandText = true
-      } catch (error) {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-      } finally {
-        closeCommandMode({ preserveText: !shouldClearCommandText })
-      }
-    },
-    [
-      closeCommandMode,
-      commandText,
-      executeBackendCommand,
-      liveCommandBufferRef,
-      sessionReference.commands,
-      setCommandHistory,
-      setHistoryIndex,
-      setRecentCommandIds,
-    ]
-  )
-
-  const {
-    tuningLength,
-    rootCell,
-    measureNumerator,
-    measureDenominator,
-    timeSignature,
-    scaleName,
-    scaleSourceId,
-    scaleMode,
-    scaleSize,
-    scaleTranslateDirection,
-    tuningName,
-    keyDisplay,
-    baseFrequency,
-    staffLineBandByPitch,
-    selectedCellMeta,
-    rulerRatios,
-    highlightedPitches,
-  } = useMemo(() => {
+  const projectViewModel = useMemo(() => {
     if (!projectSnapshot) {
-      const defaultStaffLineBand = Array.from(
-        { length: DEFAULT_TUNING_LENGTH },
-        (_, pitch) => (pitch % 2 === 0 ? 0 : 1)
-      )
-      return {
-        tuningLength: DEFAULT_TUNING_LENGTH,
-        patternScopeCellCount: 0,
-        leafPatternScopeIndices: [] as number[],
-        rootCell: { weight: 1, elements: [] } as Cell,
-        measureNumerator: 4,
-        measureDenominator: 4,
-        timeSignature: '4/4',
-        scaleName: 'major diatonic',
-        scaleSourceId: null as string | null,
-        scaleMode: 3,
-        scaleSize: 7,
-        scaleTranslateDirection: 'up' as TranslateDirection,
-        tuningName: '12EDO',
-        keyDisplay: 2,
-        baseFrequency: 440,
-        staffLineBandByPitch: defaultStaffLineBand,
-        leafCells: [] as LeafCell[],
-        selectedLeafFlags: [] as boolean[],
-        selectedCellMeta: [] as StatusCellMetaItem[],
-        rulerRatios: getTuningRatios(Array.from({ length: DEFAULT_TUNING_LENGTH }, (_, i) => i * 100)),
-        highlightedPitches: new Set<number>(),
-        selectedCellPath: [] as number[],
-        selectedElementIndex: null as number | null,
-        selectedElementKind: null as SelectionStep['kind'] | null,
-      }
+      return null
     }
 
     const pitchState = projectSnapshot.project.pitch
@@ -701,6 +320,24 @@ function App() {
     }
   }, [editorState.selection, projectSnapshot])
 
+  const tuningLength = projectViewModel?.tuningLength ?? DEFAULT_TUNING_LENGTH
+  const rootCell = projectViewModel?.rootCell ?? EMPTY_ROOT_CELL
+  const measureNumerator = projectViewModel?.measureNumerator ?? 0
+  const measureDenominator = projectViewModel?.measureDenominator ?? 0
+  const timeSignature = projectViewModel?.timeSignature ?? '--'
+  const scaleName = projectViewModel?.scaleName ?? '--'
+  const scaleSourceId = projectViewModel?.scaleSourceId ?? null
+  const scaleMode = projectViewModel?.scaleMode ?? 0
+  const scaleSize = projectViewModel?.scaleSize ?? 0
+  const scaleTranslateDirection = projectViewModel?.scaleTranslateDirection ?? 'up'
+  const tuningName = projectViewModel?.tuningName ?? '--'
+  const keyDisplay = projectViewModel?.keyDisplay ?? '--'
+  const baseFrequency = projectViewModel?.baseFrequency ?? '--'
+  const staffLineBandByPitch = projectViewModel?.staffLineBandByPitch ?? []
+  const selectedCellMeta = projectViewModel?.selectedCellMeta ?? []
+  const rulerRatios = projectViewModel?.rulerRatios ?? []
+  const highlightedPitches = projectViewModel?.highlightedPitches ?? new Set<number>()
+
   const {
     isTimeSignatureEditing,
     timeSignatureDraft,
@@ -728,7 +365,7 @@ function App() {
     applyScaleSelection,
     toggleTranslateDirection,
   } = useHeaderEditing({
-    bridgeUnavailableMessage,
+    bridgeUnavailableMessage: disabledReason,
     timeSignature,
     keyDisplay,
     baseFrequency,
@@ -770,210 +407,61 @@ function App() {
 
   const currentInputModeLetter = editorState.inputMode.charAt(0).toUpperCase()
 
-  const { waveAPreviewPath, waveBPreviewPath, morphedWavePreviewPath } = useMemo(() => {
-    const width = 420
-    const height = 140
-    const steps = 96
-    const waveAPoints: string[] = []
-    const waveBPoints: string[] = []
-    const mixedPoints: string[] = []
-    const normalizedWaveAPhase = toNormalizedPhase(lfoAPhaseOffset)
-    const normalizedWaveBPhase = toNormalizedPhase(lfoBPhaseOffset)
-
-    for (let index = 0; index <= steps; index += 1) {
-      const progress = index / steps
-      const x = progress * width
-      const waveA = sampleWaveShape(
-        waveAType,
-        progress * lfoAFrequency + normalizedWaveAPhase,
-        waveAPulseWidth
-      )
-      const waveB = sampleWaveShape(
-        waveBType,
-        progress * lfoBFrequency + normalizedWaveBPhase,
-        waveBPulseWidth
-      )
-      const mixed = clampNumber(waveA * (1 - waveLerp) + waveB * waveLerp, -1, 1)
-      const waveAY = (1 - (waveA + 1) / 2) * height
-      const waveBY = (1 - (waveB + 1) / 2) * height
-      const mixedY = (1 - (mixed + 1) / 2) * height
-      waveAPoints.push(`${x.toFixed(2)},${waveAY.toFixed(2)}`)
-      waveBPoints.push(`${x.toFixed(2)},${waveBY.toFixed(2)}`)
-      mixedPoints.push(`${x.toFixed(2)},${mixedY.toFixed(2)}`)
-    }
-
-    return {
-      waveAPreviewPath: waveAPoints.join(' '),
-      waveBPreviewPath: waveBPoints.join(' '),
-      morphedWavePreviewPath: mixedPoints.join(' '),
-    }
-  }, [
-    lfoAFrequency,
-    lfoAPhaseOffset,
-    lfoBFrequency,
-    lfoBPhaseOffset,
-    waveAType,
-    waveAPulseWidth,
-    waveBType,
-    waveBPulseWidth,
-    waveLerp,
-  ])
-
-  const baseMorphModulator = useMemo(
-    () =>
-      createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        waveLerp
-      ),
-    [
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      waveAType,
-      waveAPulseWidth,
-      waveBType,
-      waveBPulseWidth,
-      waveLerp,
-    ]
-  )
-
-  const emitCommandsNow = useCallback(
-    (commands: string[]): void => {
-      if (bridgeUnavailableMessage !== null || commands.length === 0) {
-        return
-      }
-
-      void executeBackendCommand(commands.join('; ')).catch((error: unknown) => {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-      })
-    },
-    [bridgeUnavailableMessage, executeBackendCommand]
-  )
-
-  const scheduleLiveEmit = useCallback(
-    (commands: string[]): void => {
-      if (bridgeUnavailableMessage !== null || commands.length === 0) {
-        return
-      }
-
-      liveEmitCommandsRef.current = commands
-      if (liveEmitFrameRef.current !== null) {
-        return
-      }
-
-      liveEmitFrameRef.current = requestAnimationFrame(() => {
-        liveEmitFrameRef.current = null
-        const pending = liveEmitCommandsRef.current
-        liveEmitCommandsRef.current = null
-        if (!pending || pending.length === 0) {
-          return
-        }
-        emitCommandsNow(pending)
-      })
-    },
-    [bridgeUnavailableMessage, emitCommandsNow, liveEmitCommandsRef, liveEmitFrameRef]
-  )
-
-  useEffect(
-    () => () => {
-      if (liveEmitFrameRef.current !== null) {
-        cancelAnimationFrame(liveEmitFrameRef.current)
-        liveEmitFrameRef.current = null
-      }
-      liveEmitCommandsRef.current = null
-    },
-    [liveEmitCommandsRef, liveEmitFrameRef]
-  )
-
-  useEffect(() => {
-    modulatorInstancesRef.current = modulatorInstances
-  }, [modulatorInstances, modulatorInstancesRef])
-
-  useEffect(() => {
-    const nextState = modulatorInstancesRef.current[activeModulatorTab]
-    if (!nextState) {
-      return
-    }
-
-    isSwitchingModTabRef.current = true
-    setWaveAType(nextState.waveAType)
-    setWaveBType(nextState.waveBType)
-    setWaveAPulseWidth(nextState.waveAPulseWidth)
-    setWaveBPulseWidth(nextState.waveBPulseWidth)
-    setWaveLerp(nextState.waveLerp)
-    setLfoAFrequency(nextState.lfoAFrequency)
-    setLfoAPhaseOffset(nextState.lfoAPhaseOffset)
-    setLfoBFrequency(nextState.lfoBFrequency)
-    setLfoBPhaseOffset(nextState.lfoBPhaseOffset)
-    setTargetControls(nextState.targetControls)
-
-    queueMicrotask(() => {
-      isSwitchingModTabRef.current = false
-    })
-  }, [
+  const {
+    waveAPreviewPath,
+    waveBPreviewPath,
+    morphedWavePreviewPath,
+    baseMorphModulator,
+    scheduleLiveEmit,
+    updateTargetControl,
+    buildModTargetCommand,
+    handleWaveLerpChange,
+    handleWaveAPulseWidthChange,
+    handleWaveBPulseWidthChange,
+    applyPadMotion,
+    waveHandleA,
+    waveHandleB,
+    waveAOpacity,
+    waveBOpacity,
+    applyWavePadMotion,
+    snapWaveToCenterGuides,
+    selectWaveType,
+  } = useModulatorController({
+    bridgeUnavailableMessage,
+    tuningLength,
+    executeBackendCommand,
+    setStatusMessage,
+    setStatusLevel,
+    modulatorInstances,
+    setModulatorInstances,
     activeModulatorTab,
+    waveAType,
+    setWaveAType,
+    waveBType,
+    setWaveBType,
+    waveAPulseWidth,
+    setWaveAPulseWidth,
+    waveBPulseWidth,
+    setWaveBPulseWidth,
+    waveLerp,
+    setWaveLerp,
+    lfoAFrequency,
+    setLfoAFrequency,
+    lfoAPhaseOffset,
+    setLfoAPhaseOffset,
+    lfoBFrequency,
+    setLfoBFrequency,
+    lfoBPhaseOffset,
+    setLfoBPhaseOffset,
+    targetControls,
+    setTargetControls,
+    setOpenWaveMenu,
+    lastWaveHandleUsedRef,
+    liveEmitFrameRef,
+    liveEmitCommandsRef,
     isSwitchingModTabRef,
     modulatorInstancesRef,
-    setLfoAFrequency,
-    setLfoAPhaseOffset,
-    setLfoBFrequency,
-    setLfoBPhaseOffset,
-    setTargetControls,
-    setWaveAPulseWidth,
-    setWaveAType,
-    setWaveBPulseWidth,
-    setWaveBType,
-    setWaveLerp,
-  ])
-
-  useEffect(() => {
-    if (isSwitchingModTabRef.current) {
-      return
-    }
-
-    setModulatorInstances((previous) =>
-      previous.map((instance, index) =>
-        index === activeModulatorTab
-          ? {
-              ...instance,
-              waveAType,
-              waveBType,
-              waveAPulseWidth,
-              waveBPulseWidth,
-              waveLerp,
-              lfoAFrequency,
-              lfoAPhaseOffset,
-              lfoBFrequency,
-              lfoBPhaseOffset,
-              targetControls,
-            }
-          : instance
-      )
-    )
-  }, [
-    activeModulatorTab,
-    lfoAFrequency,
-    lfoAPhaseOffset,
-    lfoBFrequency,
-    lfoBPhaseOffset,
-    targetControls,
-    waveAPulseWidth,
-    waveAType,
-    waveBPulseWidth,
-    waveBType,
-    waveLerp,
-    isSwitchingModTabRef,
-    setModulatorInstances,
-  ])
+  })
 
   useEffect(() => {
     if (openWaveMenu === null) {
@@ -1039,387 +527,9 @@ function App() {
     }
   }, [openScaleMenu])
 
-  const updateTargetControl = useCallback(
-    (target: ModTarget, update: Partial<TargetControl>): void => {
-      setTargetControls((previous) => ({
-        ...previous,
-        [target]: {
-          ...previous[target],
-          ...update,
-        },
-      }))
-    },
-    [setTargetControls]
-  )
-
-  const buildModTargetCommand = useCallback(
-    (target: ModTarget, control: TargetControl, modulator: ReturnType<typeof createMorphModulator>): string => {
-      const spec = getModTargetSpecForTuning(target, tuningLength)
-      const targetModulator = createTargetModulator(modulator, spec, control.center, control.amount)
-      return `set ${target} ${JSON.stringify(targetModulator)}`
-    },
-    [tuningLength]
-  )
-
-  const buildModTargetCommands = useCallback(
-    (controls: Record<ModTarget, TargetControl>, modulator: ReturnType<typeof createMorphModulator>): string[] =>
-      MOD_TARGET_ORDER.filter((target) => controls[target].enabled).map((target) =>
-        buildModTargetCommand(target, controls[target], modulator)
-      ),
-    [buildModTargetCommand]
-  )
-
-  const handleWaveLerpChange = useCallback(
-    (nextLerp: number): void => {
-      setWaveLerp(nextLerp)
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        nextLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
-    },
-    [
-      buildModTargetCommands,
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      scheduleLiveEmit,
-      setWaveLerp,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBPulseWidth,
-      waveBType,
-    ]
-  )
-
-  const handleWaveAPulseWidthChange = useCallback(
-    (nextPulseWidth: number): void => {
-      setWaveAPulseWidth(nextPulseWidth)
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        nextPulseWidth,
-        waveBPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
-    },
-    [
-      buildModTargetCommands,
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      scheduleLiveEmit,
-      setWaveAPulseWidth,
-      targetControls,
-      waveAType,
-      waveBType,
-      waveBPulseWidth,
-      waveLerp,
-    ]
-  )
-
-  const handleWaveBPulseWidthChange = useCallback(
-    (nextPulseWidth: number): void => {
-      setWaveBPulseWidth(nextPulseWidth)
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        nextPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
-    },
-    [
-      buildModTargetCommands,
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      scheduleLiveEmit,
-      setWaveBPulseWidth,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBType,
-      waveLerp,
-    ]
-  )
-
-  const applyPadMotion = useCallback(
-    (
-      target: ModTarget,
-      host: HTMLDivElement,
-      clientX: number,
-      clientY: number,
-      mode: 'amount' | 'center',
-      dragStart?: {
-        startClientX: number
-        startClientY: number
-        startAmount: number
-        startCenter: number
-      },
-      speedMode?: 'coarse' | 'fine'
-    ) => {
-      const spec = getModTargetSpecForTuning(target, tuningLength)
-      const bounds = host.getBoundingClientRect()
-      const xRatio = clampNumber((clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
-      const currentControl = targetControls[target]
-
-      if (mode === 'center') {
-        const nextCenterRaw = spec.min + xRatio * (spec.max - spec.min)
-        const nextCenter = roundByStep(nextCenterRaw, spec.step)
-        const resolvedCenter = clampNumber(nextCenter, spec.min, spec.max)
-        const maxPositiveSpan = spec.max - resolvedCenter
-        const maxNegativeSpan = resolvedCenter - spec.min
-        const amountLimit = Math.max(maxPositiveSpan, maxNegativeSpan)
-        const resolvedAmount = clampNumber(currentControl.amount, -amountLimit, amountLimit)
-        const nextControl = {
-          ...currentControl,
-          enabled: true,
-          center: resolvedCenter,
-          amount: resolvedAmount,
-        }
-        updateTargetControl(target, nextControl)
-        scheduleLiveEmit([buildModTargetCommand(target, nextControl, baseMorphModulator)])
-        return
-      }
-
-      const deltaY = dragStart ? dragStart.startClientY - clientY : 0
-      const sensitivityDivisor = speedMode === 'fine' ? 620 : 260
-      const targetRange = spec.max - spec.min
-      const amountCenter = clampNumber(dragStart?.startCenter ?? currentControl.center, spec.min, spec.max)
-      const maxPositiveSpan = spec.max - amountCenter
-      const maxNegativeSpan = amountCenter - spec.min
-      const amountLimit = Math.max(maxPositiveSpan, maxNegativeSpan)
-      const nextAmount = clampNumber(
-        (dragStart?.startAmount ?? currentControl.amount) + (deltaY / sensitivityDivisor) * targetRange,
-        -amountLimit,
-        amountLimit
-      )
-      const nextControl = { ...currentControl, enabled: true, amount: nextAmount }
-      updateTargetControl(target, nextControl)
-      scheduleLiveEmit([buildModTargetCommand(target, nextControl, baseMorphModulator)])
-    },
-    [baseMorphModulator, buildModTargetCommand, scheduleLiveEmit, targetControls, tuningLength, updateTargetControl]
-  )
-
-  const getWaveHandlePosition = useCallback((frequency: number, phaseOffset: number) => {
-    const clampedFrequencyRatio = frequencyToRatio(frequency)
-    const phaseRatio = 0.5 - phaseOffset
-    return {
-      x: clampedFrequencyRatio * 100,
-      y: clampNumber(phaseRatio, 0, 1) * 100,
-    }
-  }, [])
-
-  const waveHandleA = useMemo(
-    () => getWaveHandlePosition(lfoAFrequency, lfoAPhaseOffset),
-    [getWaveHandlePosition, lfoAFrequency, lfoAPhaseOffset]
-  )
-  const waveHandleB = useMemo(
-    () => getWaveHandlePosition(lfoBFrequency, lfoBPhaseOffset),
-    [getWaveHandlePosition, lfoBFrequency, lfoBPhaseOffset]
-  )
-  const waveAOpacity = clampNumber(1 - waveLerp, 0, 1)
-  const waveBOpacity = clampNumber(waveLerp, 0, 1)
-
-  const applyWavePadMotion = useCallback(
-    (
-      wave: 'a' | 'b',
-      host: HTMLDivElement,
-      clientX: number,
-      clientY: number,
-      lockMode?: 'none' | 'frequency' | 'offset'
-    ): void => {
-      const bounds = host.getBoundingClientRect()
-      const xRatio = clampNumber((clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
-      const yRatio = clampNumber((clientY - bounds.top) / Math.max(bounds.height, 1), 0, 1)
-      const rawNextFrequency = ratioToFrequency(xRatio)
-      const rawNextPhaseOffset = clampNumber(0.5 - yRatio, LFO_PHASE_OFFSET_MIN, LFO_PHASE_OFFSET_MAX)
-
-      const nextFrequency =
-        lockMode === 'offset'
-          ? wave === 'a'
-            ? lfoAFrequency
-            : lfoBFrequency
-          : rawNextFrequency
-      const nextPhaseOffset =
-        lockMode === 'frequency'
-          ? wave === 'a'
-            ? lfoAPhaseOffset
-            : lfoBPhaseOffset
-          : rawNextPhaseOffset
-      const nextAFrequency = wave === 'a' ? nextFrequency : lfoAFrequency
-      const nextAPhaseOffset = wave === 'a' ? nextPhaseOffset : lfoAPhaseOffset
-      const nextBFrequency = wave === 'b' ? nextFrequency : lfoBFrequency
-      const nextBPhaseOffset = wave === 'b' ? nextPhaseOffset : lfoBPhaseOffset
-
-      if (wave === 'a') {
-        setLfoAFrequency(nextFrequency)
-        setLfoAPhaseOffset(nextPhaseOffset)
-      } else {
-        setLfoBFrequency(nextFrequency)
-        setLfoBPhaseOffset(nextPhaseOffset)
-      }
-      lastWaveHandleUsedRef.current = wave
-
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        nextAFrequency,
-        toNormalizedPhase(nextAPhaseOffset),
-        nextBFrequency,
-        toNormalizedPhase(nextBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
-    },
-    [
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      buildModTargetCommands,
-      scheduleLiveEmit,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBPulseWidth,
-      waveBType,
-      waveLerp,
-      lastWaveHandleUsedRef,
-      setLfoAFrequency,
-      setLfoAPhaseOffset,
-      setLfoBFrequency,
-      setLfoBPhaseOffset,
-    ]
-  )
-
-  const snapWaveToCenterGuides = useCallback(
-    (wave: 'a' | 'b', options: { snapFrequency?: boolean; snapOffset?: boolean }): void => {
-      const nextAFrequency = wave === 'a' && options.snapFrequency ? 1 : lfoAFrequency
-      const nextBFrequency = wave === 'b' && options.snapFrequency ? 1 : lfoBFrequency
-      const nextAPhaseOffset = wave === 'a' && options.snapOffset ? 0 : lfoAPhaseOffset
-      const nextBPhaseOffset = wave === 'b' && options.snapOffset ? 0 : lfoBPhaseOffset
-
-      if (wave === 'a') {
-        if (options.snapFrequency) {
-          setLfoAFrequency(1)
-        }
-        if (options.snapOffset) {
-          setLfoAPhaseOffset(0)
-        }
-      } else {
-        if (options.snapFrequency) {
-          setLfoBFrequency(1)
-        }
-        if (options.snapOffset) {
-          setLfoBPhaseOffset(0)
-        }
-      }
-      lastWaveHandleUsedRef.current = wave
-
-      const liveBase = createMorphModulator(
-        waveAType,
-        waveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        nextAFrequency,
-        toNormalizedPhase(nextAPhaseOffset),
-        nextBFrequency,
-        toNormalizedPhase(nextBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
-    },
-    [
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      buildModTargetCommands,
-      scheduleLiveEmit,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBPulseWidth,
-      waveBType,
-      waveLerp,
-      lastWaveHandleUsedRef,
-      setLfoAFrequency,
-      setLfoAPhaseOffset,
-      setLfoBFrequency,
-      setLfoBPhaseOffset,
-    ]
-  )
-
-  const selectWaveType = useCallback(
-    (wave: 'a' | 'b', waveType: WaveType): void => {
-      const nextWaveAType = wave === 'a' ? waveType : waveAType
-      const nextWaveBType = wave === 'b' ? waveType : waveBType
-      if (wave === 'a') {
-        setWaveAType(waveType)
-      } else {
-        setWaveBType(waveType)
-      }
-      setOpenWaveMenu(null)
-      const liveBase = createMorphModulator(
-        nextWaveAType,
-        nextWaveBType,
-        waveAPulseWidth,
-        waveBPulseWidth,
-        lfoAFrequency,
-        toNormalizedPhase(lfoAPhaseOffset),
-        lfoBFrequency,
-        toNormalizedPhase(lfoBPhaseOffset),
-        waveLerp
-      )
-      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
-    },
-    [
-      buildModTargetCommands,
-      lfoAFrequency,
-      lfoAPhaseOffset,
-      lfoBFrequency,
-      lfoBPhaseOffset,
-      scheduleLiveEmit,
-      setOpenWaveMenu,
-      setWaveAType,
-      setWaveBType,
-      targetControls,
-      waveAPulseWidth,
-      waveAType,
-      waveBPulseWidth,
-      waveBType,
-      waveLerp,
-    ]
-  )
-
   const runLibraryCommand = useCallback(
     async (command: string): Promise<void> => {
-      if (!command || bridgeUnavailableMessage !== null) {
+      if (!command || bridgeUnavailableMessage !== null || !isProjectReady) {
         return
       }
 
@@ -1430,7 +540,7 @@ function App() {
         setStatusLevel('error')
       }
     },
-    [bridgeUnavailableMessage, executeBackendCommand]
+    [bridgeUnavailableMessage, executeBackendCommand, isProjectReady, setStatusLevel, setStatusMessage]
   )
 
   useEffect(() => {
@@ -1452,7 +562,7 @@ function App() {
         commitTimeSignature={commitTimeSignature}
         cancelTimeSignatureEdit={cancelTimeSignatureEdit}
         beginTimeSignatureEdit={beginTimeSignatureEdit}
-        bridgeUnavailableMessage={bridgeUnavailableMessage}
+        disabledReason={disabledReason}
         timeSignature={timeSignature}
         applyTimeSignatureScale={applyTimeSignatureScale}
         isKeyEditing={isKeyEditing}
@@ -1486,63 +596,78 @@ function App() {
         tuningName={tuningName}
       />
       <section className="workspaceSection" aria-label="Workspace">
-        <div
-          className="workspacePane"
-          hidden={workspaceView !== 'sequencer'}
-          aria-hidden={workspaceView !== 'sequencer'}
-        >
-          <SequencerSection
-            bridgeUnavailableMessage={bridgeUnavailableMessage}
-            pitchRows={pitchRows}
-            staffLineBandByPitch={staffLineBandByPitch}
-            backgroundOverlayStates={backgroundOverlayStates}
-            cellMuteWindow={cellMuteWindow}
-            sequenceDividerPositions={sequenceDividerPositions}
-            selectionSpans={selectionSpans}
-            tuningLength={tuningLength}
-            rollNotes={rollNotes}
-            playheadPhase={playheadPhase}
-            ratioToBottom={ratioToBottom}
-            rulerRatios={rulerRatios}
-            highlightedPitches={highlightedPitches}
-            isModulatorMode={isModulatorMode}
-            wavePadDragRef={wavePadDragRef}
-            clampNumber={clampNumber}
-            waveHandleA={waveHandleA}
-            waveHandleB={waveHandleB}
-            lastWaveHandleUsedRef={lastWaveHandleUsedRef}
-            snapWaveToCenterGuides={snapWaveToCenterGuides}
-            applyWavePadMotion={applyWavePadMotion}
-            waveAOpacity={waveAOpacity}
-            waveBOpacity={waveBOpacity}
-            waveAPreviewPath={waveAPreviewPath}
-            waveBPreviewPath={waveBPreviewPath}
-            morphedWavePreviewPath={morphedWavePreviewPath}
-          />
-        </div>
-        <div
-          className="workspacePane"
-          hidden={workspaceView !== 'library'}
-          aria-hidden={workspaceView !== 'library'}
-        >
-          <LibraryPanel
-            librarySnapshot={librarySnapshot}
-            activeTuningName={tuningName}
-            activeScaleId={scaleSourceId}
-            runLibraryCommand={runLibraryCommand}
-            tuningSearchInputRef={tuningSearchInputRef}
-            tuningSearch={tuningSearch}
-            setTuningSearch={setTuningSearch}
-            tuningSortMode={tuningSortMode}
-            setTuningSortMode={setTuningSortMode}
-            tuningHierarchyRows={tuningHierarchyRows}
-            formatOctaveForDisplay={formatOctaveForDisplay}
-            measureSearchInputRef={measureSearchInputRef}
-            measureSearch={measureSearch}
-            setMeasureSearch={setMeasureSearch}
-            measureHierarchyRows={measureHierarchyRows}
-          />
-        </div>
+        {!isProjectReady ? (
+          <div className="workspaceNotice" role="status" aria-live="polite">
+            <h1 className="workspaceNoticeTitle">
+              {projectState.status === 'error' ? 'Project unavailable' : 'Loading project'}
+            </h1>
+            <p className="workspaceNoticeBody">
+              {projectState.status === 'error'
+                ? projectState.message
+                : 'Waiting for the native session and project snapshot.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div
+              className="workspacePane"
+              hidden={workspaceView !== 'sequencer'}
+              aria-hidden={workspaceView !== 'sequencer'}
+            >
+              <SequencerSection
+                bridgeUnavailableMessage={bridgeUnavailableMessage}
+                pitchRows={pitchRows}
+                staffLineBandByPitch={staffLineBandByPitch}
+                backgroundOverlayStates={backgroundOverlayStates}
+                cellMuteWindow={cellMuteWindow}
+                sequenceDividerPositions={sequenceDividerPositions}
+                selectionSpans={selectionSpans}
+                tuningLength={tuningLength}
+                rollNotes={rollNotes}
+                playheadPhase={playheadPhase}
+                ratioToBottom={ratioToBottom}
+                rulerRatios={rulerRatios}
+                highlightedPitches={highlightedPitches}
+                isModulatorMode={isModulatorMode}
+                wavePadDragRef={wavePadDragRef}
+                clampNumber={clampNumber}
+                waveHandleA={waveHandleA}
+                waveHandleB={waveHandleB}
+                lastWaveHandleUsedRef={lastWaveHandleUsedRef}
+                snapWaveToCenterGuides={snapWaveToCenterGuides}
+                applyWavePadMotion={applyWavePadMotion}
+                waveAOpacity={waveAOpacity}
+                waveBOpacity={waveBOpacity}
+                waveAPreviewPath={waveAPreviewPath}
+                waveBPreviewPath={waveBPreviewPath}
+                morphedWavePreviewPath={morphedWavePreviewPath}
+              />
+            </div>
+            <div
+              className="workspacePane"
+              hidden={workspaceView !== 'library'}
+              aria-hidden={workspaceView !== 'library'}
+            >
+              <LibraryPanel
+                librarySnapshot={librarySnapshot}
+                activeTuningName={tuningName}
+                activeScaleId={scaleSourceId}
+                runLibraryCommand={runLibraryCommand}
+                tuningSearchInputRef={tuningSearchInputRef}
+                tuningSearch={tuningSearch}
+                setTuningSearch={setTuningSearch}
+                tuningSortMode={tuningSortMode}
+                setTuningSortMode={setTuningSortMode}
+                tuningHierarchyRows={tuningHierarchyRows}
+                formatOctaveForDisplay={formatOctaveForDisplay}
+                measureSearchInputRef={measureSearchInputRef}
+                measureSearch={measureSearch}
+                setMeasureSearch={setMeasureSearch}
+                measureHierarchyRows={measureHierarchyRows}
+              />
+            </div>
+          </>
+        )}
       </section>
       <StatusSection
         currentInputMode={editorState.inputMode}
@@ -1578,11 +703,14 @@ function App() {
         statusLevel={statusLevel}
         statusMessage={statusMessage}
         selectedCellMeta={selectedCellMeta}
+        commandDisabled={!isProjectReady}
+        workspaceDisabled={!isProjectReady}
+        modulatorDisabled={!isProjectReady || workspaceView !== 'sequencer'}
         onOpenSettings={() => {
           setKeymapError(null)
           setSettingsOpen(true)
         }}
-        modulatorRail={isModulatorMode && workspaceView === 'sequencer' ? (
+        modulatorRail={isProjectReady && isModulatorMode && workspaceView === 'sequencer' ? (
           <ModulatorsPanel
             activeModulatorTab={activeModulatorTab}
             setOpenWaveMenu={setOpenWaveMenu}

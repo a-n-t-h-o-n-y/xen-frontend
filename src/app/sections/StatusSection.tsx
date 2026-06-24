@@ -51,6 +51,9 @@ type StatusSectionProps = {
   statusLevel: MessageLevel
   statusMessage: string
   selectedCellMeta: StatusCellMetaItem[]
+  commandDisabled: boolean
+  workspaceDisabled: boolean
+  modulatorDisabled: boolean
   onOpenSettings: () => void
   modulatorRail: ReactNode
 }
@@ -89,6 +92,9 @@ export function StatusSection({
   statusLevel,
   statusMessage,
   selectedCellMeta,
+  commandDisabled,
+  workspaceDisabled,
+  modulatorDisabled,
   onOpenSettings,
   modulatorRail,
 }: StatusSectionProps) {
@@ -285,6 +291,7 @@ export function StatusSection({
             className={`workspaceSwitchButton${workspaceView === 'sequencer' ? ' workspaceSwitchButton-active' : ''}`}
             aria-pressed={workspaceView === 'sequencer'}
             onClick={() => setWorkspaceView('sequencer')}
+            disabled={workspaceDisabled}
           >
             Seq
           </button>
@@ -293,6 +300,7 @@ export function StatusSection({
             className={`workspaceSwitchButton${workspaceView === 'library' ? ' workspaceSwitchButton-active' : ''}`}
             aria-pressed={workspaceView === 'library'}
             onClick={() => setWorkspaceView('library')}
+            disabled={workspaceDisabled}
           >
             Lib
           </button>
@@ -302,6 +310,7 @@ export function StatusSection({
           className={`statusModeButton${isModulatorMode ? ' statusModeButton-active' : ''}`}
           aria-pressed={isModulatorMode}
           onClick={() => setIsModulatorMode((previous) => !previous)}
+          disabled={modulatorDisabled}
         >
           Mod
         </button>
@@ -318,6 +327,7 @@ export function StatusSection({
               className="statusCommandInput mono"
               type="text"
               value={commandText}
+              disabled={commandDisabled}
               onChange={(event) => {
                 const nextValue = event.target.value
                 if (historyIndex !== -1) {

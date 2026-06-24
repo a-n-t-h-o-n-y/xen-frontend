@@ -83,6 +83,32 @@
   display: none;
 }
 
+.workspaceNotice {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.workspaceNoticeTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.workspaceNoticeBody {
+  max-width: 32rem;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 /* =========================================================
    Section 3: Header Shell
    Purpose: Keep project controls compact without hiding behavior.

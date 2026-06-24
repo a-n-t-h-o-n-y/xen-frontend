@@ -1,17 +1,14 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { addXenBridgeListener, getXenBridgeRequest, removeXenBridgeListener } from '../../bridge/juceBridge'
+import { useCallback, useRef } from 'react'
+import { getXenBridgeRequest } from '../../bridge/juceBridge'
 import {
   BRIDGE_PROTOCOL,
-  parseBridgeEvent,
   parseCommandResponse,
   parseEnvelope,
   parseKeymapResource,
   parseLibrarySnapshot,
   parseProjectSnapshot,
-  parseSessionHello,
 } from '../domain/contracts'
 import { buildCommandContext, createSerialExecutor } from '../domain/commands'
-import { buildSessionReference } from '../domain/reference'
 import {
   ingestLibrarySnapshot,
   ingestKeymapResource,
@@ -19,12 +16,8 @@ import {
 } from '../domain/resources'
 import { projectRootCell, resolveSelection } from '../domain/selection'
 import {
-  FRONTEND_APP,
-  FRONTEND_VERSION,
   createRequestId,
-  getErrorMessage,
   getPayloadError,
-  normalizePhase,
 } from '../shared'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
@@ -37,13 +30,9 @@ import type {
 import type {
   EditorState,
   MessageLevel,
-  SessionReference,
-  TransportState,
 } from '../shared'
 
 type UseBridgeSessionArgs = {
-  eventTokenRef: MutableRefObject<unknown>
-  transportRef: MutableRefObject<TransportState>
   projectRef: MutableRefObject<ProjectSnapshot | null>
   editorStateRef: MutableRefObject<EditorState>
   libraryRevisionRef: MutableRefObject<number>
@@ -52,17 +41,11 @@ type UseBridgeSessionArgs = {
   setEditorState: Dispatch<SetStateAction<EditorState>>
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
-  setBridgeUnavailableMessage: Dispatch<SetStateAction<string | null>>
-  setSessionReference: Dispatch<SetStateAction<SessionReference>>
   setKeymapResource: Dispatch<SetStateAction<KeymapResource | null>>
-  setLibraryLoading: Dispatch<SetStateAction<boolean>>
   setLibrarySnapshot: Dispatch<SetStateAction<LibrarySnapshot>>
-  setPlayheadPhase: Dispatch<SetStateAction<number | null>>
 }
 
 export function useBridgeSession({
-  eventTokenRef,
-  transportRef,
   projectRef,
   editorStateRef,
   libraryRevisionRef,
@@ -71,12 +54,8 @@ export function useBridgeSession({
   setEditorState,
   setStatusMessage,
   setStatusLevel,
-  setBridgeUnavailableMessage,
-  setSessionReference,
   setKeymapResource,
-  setLibraryLoading,
   setLibrarySnapshot,
-  setPlayheadPhase,
 }: UseBridgeSessionArgs) {
   const serialExecutorRef = useRef(createSerialExecutor())
   const libraryRef = useRef<LibrarySnapshot | null>(null)
@@ -207,117 +186,9 @@ export function useBridgeSession({
     ]
   )
 
-  useEffect(() => {
-    let isMounted = true
-
-    const connect = async (): Promise<void> => {
-      try {
-        eventTokenRef.current = addXenBridgeListener((rawEvent) => {
-          try {
-            const event = parseBridgeEvent(rawEvent)
-            if (event.name === 'state.changed') {
-              ingestProject(event.payload)
-              return
-            }
-            if (event.name === 'library.changed') {
-              ingestLibrary(event.payload)
-              return
-            }
-            if (event.name === 'keymap.changed') {
-              ingestKeymap(event.payload)
-              return
-            }
-            if (event.name === 'transport.phase.sync') {
-              if (event.payload.bpm > 0) {
-                transportRef.current.bpm = event.payload.bpm
-              }
-              const phase = normalizePhase(event.payload.phase)
-              transportRef.current.phase = phase
-              transportRef.current.active = true
-              setPlayheadPhase(phase)
-              return
-            }
-            transportRef.current.active = false
-            setPlayheadPhase(null)
-          } catch (error) {
-            setStatusMessage(`Bridge event contract error: ${getErrorMessage(error)}`)
-            setStatusLevel('error')
-          }
-        })
-
-        const helloResponse = await sendBridgeRequest('session.hello', {
-          protocol: BRIDGE_PROTOCOL,
-          frontend_app: FRONTEND_APP,
-          frontend_version: FRONTEND_VERSION,
-        })
-        const helloError = getPayloadError(helloResponse.payload)
-        if (helloError) {
-          throw new Error(helloError)
-        }
-        const hello = parseSessionHello(helloResponse.payload)
-        if (!isMounted) {
-          return
-        }
-
-        setBridgeUnavailableMessage(null)
-        setSessionReference(buildSessionReference(hello.catalog))
-        ingestKeymap(hello.keymap)
-        setLibraryLoading(true)
-
-        const [stateResponse, libraryResponse] = await Promise.all([
-          sendBridgeRequest('state.get', {}),
-          sendBridgeRequest('library.get', {}),
-        ])
-        const stateError = getPayloadError(stateResponse.payload)
-        const libraryError = getPayloadError(libraryResponse.payload)
-        if (stateError || libraryError) {
-          throw new Error(stateError ?? libraryError ?? 'Initial resource request failed')
-        }
-        ingestProject(stateResponse.payload)
-        ingestLibrary(libraryResponse.payload)
-        setLibraryLoading(false)
-
-        await executeBackendCommand('welcome')
-      } catch (error) {
-        if (isMounted) {
-          setLibraryLoading(false)
-          const message = getErrorMessage(error)
-          if (message.startsWith('JUCE bridge unavailable:')) {
-            setBridgeUnavailableMessage(message)
-          } else {
-            setStatusMessage(`Bridge error: ${message}`)
-            setStatusLevel('error')
-          }
-        }
-      }
-    }
-
-    void connect()
-    return () => {
-      isMounted = false
-      if (eventTokenRef.current !== null) {
-        removeXenBridgeListener(eventTokenRef.current)
-        eventTokenRef.current = null
-      }
-    }
-  }, [
-    eventTokenRef,
-    executeBackendCommand,
-    ingestLibrary,
-    ingestKeymap,
-    ingestProject,
-    sendBridgeRequest,
-    setBridgeUnavailableMessage,
-    setLibraryLoading,
-    setPlayheadPhase,
-    setSessionReference,
-    setStatusLevel,
-    setStatusMessage,
-    transportRef,
-  ])
-
   return {
     sendBridgeRequest,
+    ingestProject,
     ingestLibrary,
     ingestKeymap,
     executeBackendCommand,

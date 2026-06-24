@@ -9,7 +9,7 @@ type HeaderSectionProps = {
   commitTimeSignature: (value: string) => Promise<unknown>
   cancelTimeSignatureEdit: () => void
   beginTimeSignatureEdit: () => void
-  bridgeUnavailableMessage: string | null
+  disabledReason: string | null
   timeSignature: string
   applyTimeSignatureScale: (mode: 'half' | 'double') => void
   isKeyEditing: boolean
@@ -51,7 +51,7 @@ export function HeaderSection({
   commitTimeSignature,
   cancelTimeSignatureEdit,
   beginTimeSignatureEdit,
-  bridgeUnavailableMessage,
+  disabledReason,
   timeSignature,
   applyTimeSignatureScale,
   isKeyEditing,
@@ -120,7 +120,7 @@ export function HeaderSection({
                 type="button"
                 className="timeSignatureDisplay fieldValue mono"
                 onClick={beginTimeSignatureEdit}
-                disabled={bridgeUnavailableMessage !== null}
+                disabled={disabledReason !== null}
                 aria-label={`Time signature ${timeSignature}. Click to edit`}
               >
                 {timeSignature}
@@ -133,7 +133,7 @@ export function HeaderSection({
               className="timeSignatureAction mono"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => applyTimeSignatureScale('half')}
-              disabled={bridgeUnavailableMessage !== null || isTimeSignatureEditing}
+              disabled={disabledReason !== null || isTimeSignatureEditing}
               aria-label="Halve time signature numerator"
             >
               /2
@@ -143,7 +143,7 @@ export function HeaderSection({
               className="timeSignatureAction mono"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => applyTimeSignatureScale('double')}
-              disabled={bridgeUnavailableMessage !== null || isTimeSignatureEditing}
+              disabled={disabledReason !== null || isTimeSignatureEditing}
               aria-label="Double time signature numerator"
             >
               x2
@@ -184,7 +184,7 @@ export function HeaderSection({
               type="button"
               className="headerEditableDisplay fieldValue mono"
               onClick={beginKeyEdit}
-              disabled={bridgeUnavailableMessage !== null}
+              disabled={disabledReason !== null}
               aria-label={`Key ${keyDisplay}. Click to edit`}
             >
               {keyDisplay}
@@ -225,7 +225,7 @@ export function HeaderSection({
               type="button"
               className="headerEditableDisplay fieldValue mono"
               onClick={beginBaseFrequencyEdit}
-              disabled={bridgeUnavailableMessage !== null}
+              disabled={disabledReason !== null}
               aria-label={`Zero frequency ${baseFrequency} hertz. Click to edit`}
             >
               {baseFrequency}
@@ -244,7 +244,7 @@ export function HeaderSection({
               type="button"
               className="waveSelectTrigger headerScaleTrigger fieldValue"
               onClick={() => setOpenScaleMenu((previous) => !previous)}
-              disabled={bridgeUnavailableMessage !== null || isScaleUpdating || scaleOptions.length === 0}
+              disabled={disabledReason !== null || isScaleUpdating || scaleOptions.length === 0}
               aria-haspopup="listbox"
               aria-expanded={openScaleMenu}
               aria-label="Select active scale"
@@ -280,7 +280,7 @@ export function HeaderSection({
             onClick={() => {
               void toggleTranslateDirection()
             }}
-            disabled={bridgeUnavailableMessage !== null}
+            disabled={disabledReason !== null}
             aria-label={`Translate direction ${scaleTranslateDirection}. Click to set ${
               scaleTranslateDirection === 'down' ? 'up' : 'down'
             }`}
@@ -302,7 +302,7 @@ export function HeaderSection({
                 onClick={() => {
                   void applyModeSelection(modeIndex)
                 }}
-                disabled={bridgeUnavailableMessage !== null}
+                disabled={disabledReason !== null}
                 role="option"
                 aria-selected={modeIndex === scaleMode}
                 aria-label={`Set mode ${modeIndex}`}
