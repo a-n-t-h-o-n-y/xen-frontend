@@ -1,4 +1,4 @@
-import type { KeymapResource, LibrarySnapshot, ProjectSnapshot, Selection } from './contracts'
+import type { KeymapResource, LibrarySnapshot, ProjectSnapshot, Selection } from './models'
 import { projectRootCell, reconcileSelection } from './selection'
 
 export type ProjectIngestion = {
@@ -12,7 +12,7 @@ export const ingestProjectSnapshot = (
   incoming: ProjectSnapshot,
   selection: Selection
 ): ProjectIngestion => {
-  if (current && incoming.project_revision <= current.project_revision) {
+  if (current && incoming.revision <= current.revision) {
     return { snapshot: current, selection, installed: false }
   }
   return {
@@ -26,7 +26,7 @@ export const ingestLibrarySnapshot = (
   current: LibrarySnapshot | null,
   incoming: LibrarySnapshot
 ): { snapshot: LibrarySnapshot; installed: boolean } => {
-  if (current && incoming.library_revision <= current.library_revision) {
+  if (current && incoming.revision <= current.revision) {
     return { snapshot: current, installed: false }
   }
   return { snapshot: incoming, installed: true }

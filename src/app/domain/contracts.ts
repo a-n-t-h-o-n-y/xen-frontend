@@ -344,34 +344,34 @@ export const bridgeEventSchema = z.discriminatedUnion('name', [
   }),
 ])
 
-export type Envelope = z.infer<typeof envelopeSchema>
-export type EnvelopePayload = Envelope['payload']
-export type SelectionStep = z.infer<typeof selectionStepSchema>
-export type Selection = z.infer<typeof selectionSchema>
-export type SelectionPath = Selection['path']
-export type Measure = z.infer<typeof measureSchema>
-export type ScaleDefinition = z.infer<typeof scaleDefinitionSchema>
-export type ProjectSnapshot = z.infer<typeof projectSnapshotSchema>
-export type LibrarySnapshot = z.infer<typeof librarySnapshotSchema>
-export type Catalog = z.infer<typeof catalogSchema>
-export type CatalogCommand = z.infer<typeof catalogCommandSchema>
-export type SessionHello = z.infer<typeof sessionHelloSchema>
-export type CommandExecuteResponse = z.infer<typeof commandResponseSchema>
-export type InputMode = z.infer<typeof inputModeSchema>
-export type KeymapTrigger = z.infer<typeof keymapTriggerSchema>
-export type KeymapTarget = z.infer<typeof keymapTargetSchema>
-export type KeymapBinding = z.infer<typeof keymapBindingSchema>
-export type KeymapOverride = z.infer<typeof keymapOverrideSchema>
-export type KeymapResource = z.infer<typeof keymapResourceSchema>
+export type EnvelopeDto = z.infer<typeof envelopeSchema>
+export type EnvelopePayloadDto = EnvelopeDto['payload']
+export type SelectionStepDto = z.infer<typeof selectionStepSchema>
+export type SelectionDto = z.infer<typeof selectionSchema>
+export type SelectionPathDto = SelectionDto['path']
+export type MeasureDto = z.infer<typeof measureSchema>
+export type ScaleDefinitionDto = z.infer<typeof scaleDefinitionSchema>
+export type ProjectSnapshotDto = z.infer<typeof projectSnapshotSchema>
+export type LibrarySnapshotDto = z.infer<typeof librarySnapshotSchema>
+export type CatalogDto = z.infer<typeof catalogSchema>
+export type CatalogCommandDto = z.infer<typeof catalogCommandSchema>
+export type SessionHelloDto = z.infer<typeof sessionHelloSchema>
+export type CommandExecuteResponseDto = z.infer<typeof commandResponseSchema>
+export type InputModeDto = z.infer<typeof inputModeSchema>
+export type KeymapTriggerDto = z.infer<typeof keymapTriggerSchema>
+export type KeymapTargetDto = z.infer<typeof keymapTargetSchema>
+export type KeymapBindingDto = z.infer<typeof keymapBindingSchema>
+export type KeymapOverrideDto = z.infer<typeof keymapOverrideSchema>
+export type KeymapResourceDto = z.infer<typeof keymapResourceSchema>
 
-export const parseEnvelope = (value: unknown): Envelope => envelopeSchema.parse(value)
-export const parseSessionHello = (value: unknown): SessionHello => sessionHelloSchema.parse(value)
-export const parseProjectSnapshot = (value: unknown): ProjectSnapshot =>
+export const parseEnvelope = (value: unknown): EnvelopeDto => envelopeSchema.parse(value)
+export const parseSessionHello = (value: unknown): SessionHelloDto => sessionHelloSchema.parse(value)
+export const parseProjectSnapshot = (value: unknown): ProjectSnapshotDto =>
   projectSnapshotSchema.parse(value)
-export const parseLibrarySnapshot = (value: unknown): LibrarySnapshot =>
+export const parseLibrarySnapshot = (value: unknown): LibrarySnapshotDto =>
   librarySnapshotSchema.parse(value)
-export const parseCommandResponse = (value: unknown): CommandExecuteResponse =>
+export const parseCommandResponse = (value: unknown): CommandExecuteResponseDto =>
   commandResponseSchema.parse(value)
 export const parseBridgeEvent = (value: unknown) => bridgeEventSchema.parse(value)
-export const parseKeymapResource = (value: unknown): KeymapResource =>
+export const parseKeymapResource = (value: unknown): KeymapResourceDto =>
   keymapResourceSchema.parse(value)

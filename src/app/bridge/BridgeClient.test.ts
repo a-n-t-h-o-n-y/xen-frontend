@@ -7,9 +7,9 @@ import {
   BridgeProtocolError,
   BridgeTimeoutError,
 } from './BridgeClient'
-import type { ProjectSnapshot } from '../domain/contracts'
+import type { ProjectSnapshotDto } from '../domain/contracts'
 
-const projectFixture = (): ProjectSnapshot => ({
+const projectFixture = (): ProjectSnapshotDto => ({
   schema_version: 1,
   history_entry_id: 2,
   project_revision: 3,

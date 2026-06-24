@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
-import { createInitialModulatorPanelState, createInitialTargetControls } from '../shared'
+import { createInitialModulatorPanelState, createInitialTargetControls } from '../domain/modulation'
 import type {
   ModTarget,
   ModulatorPanelState,
   TargetControl,
   WaveType,
-} from '../shared'
+} from '../domain/modulation'
 
 type PadDragState = {
   pointerId: number

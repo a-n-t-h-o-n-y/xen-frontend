@@ -1,4 +1,5 @@
-import { parsePatternPrefix, type CommandReferenceArgument, type CommandReferenceEntry } from '../shared'
+import { parsePatternPrefix } from '../presentation/viewModels'
+import type { CommandReferenceArgument, CommandReferenceEntry } from './models'
 
 export type CompletionMode = 'none' | 'commandSearch' | 'argumentAssist'
 

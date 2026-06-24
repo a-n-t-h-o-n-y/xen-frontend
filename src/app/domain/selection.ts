@@ -1,11 +1,11 @@
 import type {
   Cell,
   MusicElement,
-  ProjectSnapshot,
   Selection,
   SelectionPath,
   SelectionStep,
-} from './contracts'
+} from './music'
+import type { ProjectSnapshot } from './models'
 
 export type ResolvedSelection = {
   cellPath: number[]
@@ -169,5 +169,4 @@ export const moveSelection = (
 }
 
 export const projectRootCell = (snapshot: ProjectSnapshot): Cell =>
-  snapshot.project.measure.cell
-
+  snapshot.measure.cell

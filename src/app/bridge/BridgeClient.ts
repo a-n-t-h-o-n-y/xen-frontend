@@ -12,16 +12,16 @@ import {
   selectionSchema,
   sessionHelloSchema,
 } from '../domain/contracts'
-import { createRequestId } from '../shared'
-import type { CommandContext } from '../domain/commands'
+import { createRequestId } from '../utils/requestId'
 import type {
-  CommandExecuteResponse,
-  KeymapResource,
-  KeymapTarget,
-  KeymapTrigger,
-  LibrarySnapshot,
-  ProjectSnapshot,
-  SessionHello,
+  CommandExecuteResponseDto,
+  KeymapResourceDto,
+  KeymapTargetDto,
+  KeymapTriggerDto,
+  LibrarySnapshotDto,
+  ProjectSnapshotDto,
+  SelectionDto,
+  SessionHelloDto,
 } from '../domain/contracts'
 
 type NativeRequestFn = (requestJson: string) => Promise<unknown>
@@ -36,20 +36,23 @@ type EmptyRequest = Record<string, never>
 
 export type CommandExecuteRequest = {
   command: string
-  context: CommandContext
+  context: {
+    expected_project_revision: number
+    selection: SelectionDto
+  }
 }
 
 export type KeymapOverrideSetRequest = {
   expected_revision: number
   context: string
-  trigger: KeymapTrigger
-  target: KeymapTarget | null
+  trigger: KeymapTriggerDto
+  target: KeymapTargetDto | null
 }
 
 export type KeymapOverrideRemoveRequest = {
   expected_revision: number
   context: string
-  trigger: KeymapTrigger
+  trigger: KeymapTriggerDto
 }
 
 export type KeymapResetRequest = {
@@ -59,35 +62,35 @@ export type KeymapResetRequest = {
 export type BridgeMethodMap = {
   'session.hello': {
     request: SessionHelloRequest
-    response: SessionHello
+    response: SessionHelloDto
   }
   'state.get': {
     request: EmptyRequest
-    response: ProjectSnapshot
+    response: ProjectSnapshotDto
   }
   'library.get': {
     request: EmptyRequest
-    response: LibrarySnapshot
+    response: LibrarySnapshotDto
   }
   'command.execute': {
     request: CommandExecuteRequest
-    response: CommandExecuteResponse
+    response: CommandExecuteResponseDto
   }
   'keymap.get': {
     request: EmptyRequest
-    response: KeymapResource
+    response: KeymapResourceDto
   }
   'keymap.override.set': {
     request: KeymapOverrideSetRequest
-    response: KeymapResource
+    response: KeymapResourceDto
   }
   'keymap.override.remove': {
     request: KeymapOverrideRemoveRequest
-    response: KeymapResource
+    response: KeymapResourceDto
   }
   'keymap.reset': {
     request: KeymapResetRequest
-    response: KeymapResource
+    response: KeymapResourceDto
   }
 }
 

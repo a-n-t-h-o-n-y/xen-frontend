@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { TranslateDirection } from '../shared'
+import type { TranslateDirection } from '../domain/models'
 
 type HeaderSectionProps = {
   isTimeSignatureEditing: boolean

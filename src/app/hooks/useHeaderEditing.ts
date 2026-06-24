@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   formatTimeSignature,
-  getErrorMessage,
   parseIntegerInput,
   parsePositiveFloatInput,
   parseTimeSignatureInput,
-} from '../shared'
+} from '../presentation/viewModels'
+import { getErrorMessage } from '../utils/errors'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { MessageLevel, TranslateDirection } from '../shared'
-import type { LibrarySnapshot } from '../domain/contracts'
+import type { LibrarySnapshot, MessageLevel, TranslateDirection } from '../domain/models'
 
 type UseHeaderEditingArgs = {
   bridgeUnavailableMessage: string | null

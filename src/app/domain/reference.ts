@@ -1,5 +1,6 @@
-import type { Catalog } from './contracts'
-import type { CommandReferenceEntry, SessionReference } from '../shared'
+import { sessionReferenceFromCatalogDto } from './mappers'
+import type { CatalogDto } from './contracts'
+import type { CommandReferenceEntry, SessionReference } from './models'
 
 const commandSearchText = (command: CommandReferenceEntry): string => [
   command.id,
@@ -32,35 +33,5 @@ export const filterCommandReference = (
 }
 
 export const buildSessionReference = (
-  catalog: Catalog
-): SessionReference => ({
-  commands: catalog.commands.map((command) => {
-    const argumentsText = command.arguments.map((argument) => {
-      const label = argument.default_value === null
-        ? argument.display_name
-        : `${argument.display_name}=${argument.default_value}`
-      return argument.required ? `<${label}>` : `[${label}]`
-    })
-    const id = command.path.join(' ')
-    return {
-      id,
-      signature: [id, ...argumentsText].join(' '),
-      keywords: command.keywords,
-      description: command.description,
-      targetRequirement: command.target_requirement,
-      acceptsPatternPrefix: command.accepts_pattern_prefix,
-      arguments: command.arguments.map((argument) => ({
-        kind: argument.kind,
-        displayName: argument.display_name,
-        required: argument.required,
-        defaultValue: argument.default_value,
-        constraints: argument.constraints.map((constraint) => ({
-          kind: constraint.kind,
-          minimum: constraint.minimum,
-          maximum: constraint.maximum,
-          values: constraint.values,
-        })),
-      })),
-    }
-  }),
-})
+  catalog: CatalogDto
+): SessionReference => sessionReferenceFromCatalogDto(catalog)

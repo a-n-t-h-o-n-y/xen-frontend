@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { TransportState } from '../shared'
+import type { TransportState } from '../constants'
 
 type UseTransportPlayheadArgs = {
   measureNumerator: number

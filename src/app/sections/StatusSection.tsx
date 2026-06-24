@@ -12,8 +12,8 @@ import {
   isCommandUiActionId,
   runCommandUiAction,
 } from '../domain/uiActions'
-import type { KeymapResource } from '../domain/contracts'
-import type { CommandReferenceEntry, InputMode, MessageLevel, StatusCellMetaItem } from '../shared'
+import type { CommandReferenceEntry, InputMode, KeymapResource, MessageLevel } from '../domain/models'
+import type { StatusCellMetaItem } from '../presentation/viewModels'
 
 type WorkspaceView = 'sequencer' | 'library'
 

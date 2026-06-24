@@ -4,13 +4,12 @@ import {
   BRIDGE_PROTOCOL,
   parseBridgeEvent,
 } from '../domain/contracts'
-import { buildSessionReference } from '../domain/reference'
+import { keymapFromDto, libraryFromDto, projectFromDto, sessionReferenceFromCatalogDto } from '../domain/mappers'
 import {
-  FRONTEND_APP,
-  FRONTEND_VERSION,
-  getErrorMessage,
   normalizePhase,
-} from '../shared'
+} from '../domain/music'
+import { FRONTEND_APP, FRONTEND_VERSION } from '../constants'
+import { getErrorMessage } from '../utils/errors'
 import { bridgeClient } from '../bridge/BridgeClient'
 import { useBridgeSession } from './useBridgeSession'
 import { useKeymapController } from './useKeymapController'
@@ -20,15 +19,13 @@ import type {
   RequestOptions,
 } from '../bridge/BridgeClient'
 import type {
-  LibrarySnapshot,
-  ProjectSnapshot,
-} from '../domain/contracts'
-import type {
   EditorState,
+  LibrarySnapshot,
   MessageLevel,
+  ProjectSnapshot,
   SessionReference,
   TransportState,
-} from '../shared'
+} from '../domain/models'
 import type { ProjectSessionState } from '../types/session'
 
 type UseProjectSessionArgs = {
@@ -109,15 +106,15 @@ export function useProjectSession({
           try {
             const event = parseBridgeEvent(rawEvent)
             if (event.name === 'state.changed') {
-              ingestProject(event.payload)
+              ingestProject(projectFromDto(event.payload))
               return
             }
             if (event.name === 'library.changed') {
-              ingestLibrary(event.payload)
+              ingestLibrary(libraryFromDto(event.payload))
               return
             }
             if (event.name === 'keymap.changed') {
-              ingestKeymap(event.payload)
+              ingestKeymap(keymapFromDto(event.payload))
               return
             }
             if (event.name === 'transport.phase.sync') {
@@ -146,8 +143,8 @@ export function useProjectSession({
         if (!isMounted) return
 
         setBridgeUnavailableMessage(null)
-        setSessionReference(buildSessionReference(hello.catalog))
-        ingestKeymap(hello.keymap)
+        setSessionReference(sessionReferenceFromCatalogDto(hello.catalog))
+        ingestKeymap(keymapFromDto(hello.keymap))
         setStatusMessage('Connected')
         setLibraryLoading(true)
 

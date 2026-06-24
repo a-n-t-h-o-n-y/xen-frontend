@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { buildCommandContext, createSerialExecutor } from '../domain/commands'
+import { commandContextToDto, commandResponseFromDto, libraryFromDto, projectFromDto } from '../domain/mappers'
 import {
   ingestLibrarySnapshot,
   ingestProjectSnapshot,
@@ -8,13 +9,15 @@ import { projectRootCell, resolveSelection } from '../domain/selection'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { BridgeMethodMap, RequestOptions } from '../bridge/BridgeClient'
 import type {
-  LibrarySnapshot,
-  ProjectSnapshot,
+  LibrarySnapshotDto,
+  ProjectSnapshotDto,
 } from '../domain/contracts'
 import type {
   EditorState,
+  LibrarySnapshot,
   MessageLevel,
-} from '../shared'
+  ProjectSnapshot,
+} from '../domain/models'
 
 type UseBridgeSessionArgs = {
   request: <K extends keyof BridgeMethodMap>(
@@ -51,10 +54,11 @@ export function useBridgeSession({
     setEditorState(nextState)
   }, [editorStateRef, setEditorState])
 
-  const ingestProject = useCallback((snapshot: ProjectSnapshot): ProjectSnapshot => {
+  const ingestProject = useCallback((snapshot: ProjectSnapshot | ProjectSnapshotDto): ProjectSnapshot => {
+    const domainSnapshot = 'revision' in snapshot ? snapshot : projectFromDto(snapshot)
     const result = ingestProjectSnapshot(
       projectRef.current,
-      snapshot,
+      domainSnapshot,
       editorStateRef.current.selection
     )
     if (!result.installed) {
@@ -69,13 +73,14 @@ export function useBridgeSession({
     return result.snapshot
   }, [editorStateRef, installEditorState, projectRef, setProject])
 
-  const ingestLibrary = useCallback((snapshot: LibrarySnapshot): LibrarySnapshot | null => {
-    const result = ingestLibrarySnapshot(libraryRef.current, snapshot)
+  const ingestLibrary = useCallback((snapshot: LibrarySnapshot | LibrarySnapshotDto): LibrarySnapshot | null => {
+    const domainSnapshot = 'revision' in snapshot ? snapshot : libraryFromDto(snapshot)
+    const result = ingestLibrarySnapshot(libraryRef.current, domainSnapshot)
     if (!result.installed) {
       return null
     }
     libraryRef.current = result.snapshot
-    libraryRevisionRef.current = result.snapshot.library_revision
+    libraryRevisionRef.current = result.snapshot.revision
     setLibrarySnapshot(result.snapshot)
     return result.snapshot
   }, [libraryRevisionRef, setLibrarySnapshot])
@@ -93,21 +98,21 @@ export function useBridgeSession({
           installEditorState({ ...editorStateRef.current, selection })
         }
 
-        const commandResponse = await request('command.execute', {
+        const commandResponse = commandResponseFromDto(await request('command.execute', {
           command,
-          context,
-        })
+          context: commandContextToDto(context),
+        }))
         const installedProject = ingestProject(commandResponse.snapshot)
         if (
-          commandResponse.suggested_selection &&
+          commandResponse.suggestedSelection &&
           resolveSelection(
             projectRootCell(installedProject),
-            commandResponse.suggested_selection
+            commandResponse.suggestedSelection
           )
         ) {
           installEditorState({
             ...editorStateRef.current,
-            selection: commandResponse.suggested_selection,
+            selection: commandResponse.suggestedSelection,
           })
         }
 

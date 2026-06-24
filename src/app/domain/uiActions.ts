@@ -1,4 +1,4 @@
-import type { KeymapTarget } from './contracts'
+import type { KeymapTarget } from './keymap'
 
 export const commandUiActionIds = [
   'command.open',

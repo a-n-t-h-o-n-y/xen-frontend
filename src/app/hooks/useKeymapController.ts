@@ -1,12 +1,15 @@
 import { useCallback, useRef, useState } from 'react'
 import { BridgePayloadError } from '../bridge/BridgeClient'
+import {
+  keymapFromDto,
+  keymapOverrideRemoveRequestToDto,
+  keymapOverrideSetRequestToDto,
+} from '../domain/mappers'
 import { ingestKeymapResource } from '../domain/resources'
-import { getErrorMessage } from '../shared'
+import { getErrorMessage } from '../utils/errors'
 import { triggersEqual } from '../domain/keymap'
 import type {
   BridgeMethodMap,
-  KeymapOverrideRemoveRequest,
-  KeymapOverrideSetRequest,
   KeymapResetRequest,
   RequestOptions,
 } from '../bridge/BridgeClient'
@@ -14,7 +17,7 @@ import type {
   KeymapResource,
   KeymapTarget,
   KeymapTrigger,
-} from '../domain/contracts'
+} from '../domain/models'
 
 type BridgeRequest = <K extends keyof BridgeMethodMap>(
   name: K,
@@ -28,8 +31,15 @@ type KeymapMutationMethod =
   | 'keymap.reset'
 
 type KeymapMutationPayload = {
-  'keymap.override.set': Omit<KeymapOverrideSetRequest, 'expected_revision'>
-  'keymap.override.remove': Omit<KeymapOverrideRemoveRequest, 'expected_revision'>
+  'keymap.override.set': {
+    context: string
+    trigger: KeymapTrigger
+    target: KeymapTarget | null
+  }
+  'keymap.override.remove': {
+    context: string
+    trigger: KeymapTrigger
+  }
   'keymap.reset': Omit<KeymapResetRequest, 'expected_revision'>
 }
 
@@ -57,7 +67,7 @@ export function useKeymapController({ request }: UseKeymapControllerArgs) {
   }, [])
 
   const refresh = useCallback(async (): Promise<void> => {
-    ingestKeymap(await request('keymap.get', {}))
+    ingestKeymap(keymapFromDto(await request('keymap.get', {})))
   }, [ingestKeymap, request])
 
   const mutate = useCallback(async <K extends KeymapMutationMethod>(
@@ -69,11 +79,16 @@ export function useKeymapController({ request }: UseKeymapControllerArgs) {
     setBusy(true)
     setError(null)
     try {
-      const response = await request(name, {
-        expected_revision: current.revision,
-        ...payload,
-      } as BridgeMethodMap[K]['request'])
-      ingestKeymap(response)
+      const requestPayload = name === 'keymap.override.set'
+        ? keymapOverrideSetRequestToDto(current.revision, payload as KeymapMutationPayload['keymap.override.set'])
+        : name === 'keymap.override.remove'
+          ? keymapOverrideRemoveRequestToDto(
+              current.revision,
+              payload as KeymapMutationPayload['keymap.override.remove']
+            )
+          : { expected_revision: current.revision }
+      const response = await request(name, requestPayload as BridgeMethodMap[K]['request'])
+      ingestKeymap(keymapFromDto(response))
     } catch (caught) {
       if (caught instanceof BridgePayloadError && caught.code === 'invalid_request') {
         await refresh()

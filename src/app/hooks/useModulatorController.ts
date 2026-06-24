@@ -3,25 +3,26 @@ import {
   LFO_PHASE_OFFSET_MAX,
   LFO_PHASE_OFFSET_MIN,
   MOD_TARGET_ORDER,
-  clampNumber,
   createMorphModulator,
   createTargetModulator,
   frequencyToRatio,
-  getErrorMessage,
   getModTargetSpecForTuning,
   ratioToFrequency,
   sampleWaveShape,
   toNormalizedPhase,
-  roundByStep,
-} from '../shared'
+} from '../domain/modulation'
+import { clampNumber, roundByStep } from '../domain/music'
+import { getErrorMessage } from '../utils/errors'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   MessageLevel,
+} from '../domain/models'
+import type {
   ModTarget,
   ModulatorPanelState,
   TargetControl,
   WaveType,
-} from '../shared'
+} from '../domain/modulation'
 
 type UseModulatorControllerArgs = {
   bridgeUnavailableMessage: string | null
@@ -700,4 +701,3 @@ export function useModulatorController({
     selectWaveType,
   }
 }
-

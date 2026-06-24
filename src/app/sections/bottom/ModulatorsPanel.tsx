@@ -8,7 +8,7 @@ import {
   type Modulator,
   type TargetControl,
   type WaveType,
-} from '../../shared'
+} from '../../domain/modulation'
 
 type PadDragState = {
   pointerId: number

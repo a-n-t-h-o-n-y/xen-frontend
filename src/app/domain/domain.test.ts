@@ -16,6 +16,14 @@ import {
 } from './contracts'
 import { buildCommandContext, createSerialExecutor } from './commands'
 import {
+  commandContextToDto,
+  keymapFromDto,
+  keymapOverrideRemoveRequestToDto,
+  keymapOverrideSetRequestToDto,
+  libraryFromDto,
+  projectFromDto,
+} from './mappers'
+import {
   expandNumericPlaceholders,
   findKeymapBinding,
   findKeymapTriggerConflict,
@@ -32,7 +40,8 @@ import {
   getCommandKeymapContext,
   runCommandUiAction,
 } from './uiActions'
-import type { Cell, LibrarySnapshot, ProjectSnapshot, Selection } from './contracts'
+import type { LibrarySnapshotDto, ProjectSnapshotDto } from './contracts'
+import type { Cell, Selection } from './music'
 
 const nestedCell: Cell = {
   weight: 1,
@@ -65,7 +74,7 @@ const nestedCell: Cell = {
   ],
 }
 
-const projectFixture = (revision = 3): ProjectSnapshot => ({
+const projectFixture = (revision = 3): ProjectSnapshotDto => ({
   schema_version: 1,
   history_entry_id: 2,
   project_revision: revision,
@@ -98,7 +107,7 @@ const projectFixture = (revision = 3): ProjectSnapshot => ({
   },
 })
 
-const libraryFixture = (revision = 4): LibrarySnapshot => ({
+const libraryFixture = (revision = 4): LibrarySnapshotDto => ({
   schema_version: 1,
   library_revision: revision,
   paths: { library: '/library', sequences: '/library/sequences', tunings: '/library/tunings' },
@@ -245,6 +254,37 @@ describe('schema 2 contract validation', () => {
       payload: libraryFixture(),
     }).name).toBe('library.changed')
     expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 4 })).toThrow()
+  })
+})
+
+describe('DTO to domain mappers', () => {
+  it('maps project snapshots to camelCase while preserving revision and pitch fields', () => {
+    const project = projectFromDto(projectFixture(9))
+
+    expect(project.revision).toBe(9)
+    expect(project.historyEntryId).toBe(2)
+    expect(project.measure.timeSignature).toEqual({ numerator: 4, denominator: 4 })
+    expect(project.pitch.scale?.sourceId).toBe('scale:major')
+    expect(project.pitch.scale?.definition.tuningLength).toBe(12)
+    expect(project.pitch.translationDirection).toBe('up')
+    expect(project.pitch.baseFrequency).toBe(440)
+  })
+
+  it('maps library snapshots to camelCase resources and commands', () => {
+    const library = libraryFromDto(libraryFixture(7))
+
+    expect(library.revision).toBe(7)
+    expect(library.measures[0]?.relativePath).toBe('measure.xen')
+    expect(library.tunings).toEqual([])
+    expect(library.scales[1]).toMatchObject({
+      id: 'scale:major',
+      definition: { tuningLength: 12 },
+    })
+    expect(library.commands).toEqual({
+      reloadScales: 'load scales',
+      reloadChords: 'load chords',
+      libraryDirectory: 'libraryDirectory',
+    })
   })
 })
 
@@ -472,29 +512,39 @@ describe('command completion', () => {
 describe('revision ingestion', () => {
   it('installs first and newer projects while ignoring older and equal revisions', () => {
     const selection = { path: [{ kind: 'element' as const, index: 0 }] }
-    const first = ingestProjectSnapshot(null, projectFixture(2), selection)
+    const first = ingestProjectSnapshot(null, projectFromDto(projectFixture(2)), selection)
     expect(first.installed).toBe(true)
-    expect(ingestProjectSnapshot(first.snapshot, projectFixture(1), selection).installed).toBe(false)
-    expect(ingestProjectSnapshot(first.snapshot, projectFixture(2), selection).installed).toBe(false)
-    expect(ingestProjectSnapshot(first.snapshot, projectFixture(3), selection).installed).toBe(true)
+    expect(ingestProjectSnapshot(first.snapshot, projectFromDto(projectFixture(1)), selection).installed)
+      .toBe(false)
+    expect(ingestProjectSnapshot(first.snapshot, projectFromDto(projectFixture(2)), selection).installed)
+      .toBe(false)
+    expect(ingestProjectSnapshot(first.snapshot, projectFromDto(projectFixture(3)), selection).installed)
+      .toBe(true)
   })
 
   it('reconciles invalid selections and tracks library revisions independently', () => {
     const invalid = { path: [{ kind: 'element' as const, index: 99 }] }
-    expect(ingestProjectSnapshot(null, projectFixture(), invalid).selection).toEqual({ path: [] })
-    const project = projectFixture(9)
-    const library = libraryFixture(2)
+    expect(ingestProjectSnapshot(null, projectFromDto(projectFixture()), invalid).selection)
+      .toEqual({ path: [] })
+    const project = projectFromDto(projectFixture(9))
+    const library = libraryFromDto(libraryFixture(2))
     expect(ingestLibrarySnapshot(null, library).installed).toBe(true)
-    expect(ingestLibrarySnapshot(library, libraryFixture(1)).installed).toBe(false)
-    expect(project.project_revision).toBe(9)
+    expect(ingestLibrarySnapshot(library, libraryFromDto(libraryFixture(1))).installed).toBe(false)
+    expect(project.revision).toBe(9)
   })
 })
 
 describe('command execution primitives', () => {
   it('builds context from the latest revision and reconciles selection', () => {
-    expect(buildCommandContext(projectFixture(12), {
+    expect(buildCommandContext(projectFromDto(projectFixture(12)), {
       path: [{ kind: 'element', index: 99 }],
     })).toEqual({
+      expectedProjectRevision: 12,
+      selection: { path: [] },
+    })
+    expect(commandContextToDto(buildCommandContext(projectFromDto(projectFixture(12)), {
+      path: [{ kind: 'element', index: 99 }],
+    }))).toEqual({
       expected_project_revision: 12,
       selection: { path: [] },
     })
@@ -570,7 +620,7 @@ describe('strict selection and local navigation', () => {
 })
 
 describe('keymap routing', () => {
-  const resource = parseKeymapResource({
+  const resource = keymapFromDto(parseKeymapResource({
     schema_version: 1,
     revision: 4,
     key_semantics: 'KeyboardEvent.key',
@@ -628,7 +678,7 @@ describe('keymap routing', () => {
       ],
     },
     overrides: [],
-  })
+  }))
 
   it('normalizes only ASCII capital letters and expands numeric placeholders', () => {
     expect(normalizeKey('H')).toBe('h')
@@ -689,6 +739,26 @@ describe('keymap routing', () => {
     expect(formatKeymapContext('command.completions')).toBe('Command Completions')
     expect(getCommandKeymapContext(false)).toBe('command.input')
     expect(getCommandKeymapContext(true)).toBe('command.completions')
+  })
+
+  it('maps keymap override requests back to DTO trigger conditions', () => {
+    const trigger = resource.bindings.sequence[0]!.trigger
+    expect(keymapOverrideSetRequestToDto(4, {
+      context: 'sequence',
+      trigger,
+      target: resource.bindings.sequence[0]!.target,
+    })).toMatchObject({
+      expected_revision: 4,
+      context: 'sequence',
+      trigger: { when: { input_mode: 'pitch' } },
+    })
+    expect(keymapOverrideRemoveRequestToDto(4, {
+      context: 'sequence',
+      trigger,
+    })).toMatchObject({
+      expected_revision: 4,
+      trigger: { when: { input_mode: 'pitch' } },
+    })
   })
 
   it('parses no-argument workspace UI actions', () => {

@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { LibraryHierarchyRow, TuningSortMode } from '../../shared'
-import type { LibrarySnapshot } from '../../domain/contracts'
+import type { LibrarySnapshot } from '../../domain/models'
+import type { LibraryHierarchyRow, TuningSortMode } from '../../presentation/viewModels'
 
 type LibraryPanelProps = {
   librarySnapshot: LibrarySnapshot

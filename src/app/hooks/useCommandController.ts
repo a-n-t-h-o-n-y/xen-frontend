@@ -1,8 +1,9 @@
 import { useCallback, useEffect } from 'react'
 import { recognizeCommandIds } from '../domain/commandCompletion'
-import { MAX_COMMAND_HISTORY, getErrorMessage } from '../shared'
+import { MAX_COMMAND_HISTORY } from '../constants'
+import { getErrorMessage } from '../utils/errors'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { CommandReferenceEntry, MessageLevel } from '../shared'
+import type { CommandReferenceEntry, MessageLevel } from '../domain/models'
 
 type UseCommandControllerArgs = {
   isCommandMode: boolean

@@ -1,16 +1,11 @@
-import type { ProjectSnapshot, Selection } from './contracts'
+import type { CommandContext, ProjectSnapshot, Selection } from './models'
 import { projectRootCell, reconcileSelection } from './selection'
-
-export type CommandContext = {
-  expected_project_revision: number
-  selection: Selection
-}
 
 export const buildCommandContext = (
   project: ProjectSnapshot,
   selection: Selection
 ): CommandContext => ({
-  expected_project_revision: project.project_revision,
+  expectedProjectRevision: project.revision,
   selection: reconcileSelection(projectRootCell(project), selection),
 })
 
@@ -22,4 +17,3 @@ export const createSerialExecutor = () => {
     return result
   }
 }
-

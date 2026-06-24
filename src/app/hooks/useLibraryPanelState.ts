@@ -1,16 +1,14 @@
 import { useMemo, useRef, useState } from 'react'
-import { getHierarchyRows } from '../shared'
+import { getHierarchyRows } from '../presentation/viewModels'
 import type {
   SessionReference,
-  TuningSortMode,
-  LibraryHierarchyRow,
   LibraryCommandEntry,
-} from '../shared'
-import type { LibrarySnapshot } from '../domain/contracts'
+  LibrarySnapshot,
+} from '../domain/models'
+import type { LibraryHierarchyRow, TuningSortMode } from '../presentation/viewModels'
 
 const createInitialLibrarySnapshot = (): LibrarySnapshot => ({
-  schema_version: 1,
-  library_revision: 0,
+  revision: 0,
   paths: {
     library: '',
     sequences: '',
@@ -21,9 +19,9 @@ const createInitialLibrarySnapshot = (): LibrarySnapshot => ({
   scales: [],
   chords: [],
   commands: {
-    reload_scales: '',
-    reload_chords: '',
-    library_directory: '',
+    reloadScales: '',
+    reloadChords: '',
+    libraryDirectory: '',
   },
 })
 
@@ -51,11 +49,11 @@ export function useLibraryPanelState() {
             stem: tuning.stem,
             path: tuning.path,
             command: tuning.command,
-            relativePath: tuning.relative_path,
+            relativePath: tuning.relativePath,
             description: tuning.description,
             intervals: tuning.intervals,
             octave: tuning.octave,
-            noteCount: tuning.note_count,
+            noteCount: tuning.noteCount,
           }))
         : librarySnapshot.tunings
             .filter((tuning) => tuning.stem.toLowerCase().includes(query))
@@ -64,11 +62,11 @@ export function useLibraryPanelState() {
               stem: tuning.stem,
               path: tuning.path,
               command: tuning.command,
-              relativePath: tuning.relative_path,
+              relativePath: tuning.relativePath,
               description: tuning.description,
               intervals: tuning.intervals,
               octave: tuning.octave,
-              noteCount: tuning.note_count,
+              noteCount: tuning.noteCount,
             }))
 
     const sortedTunings = [...tunings].sort((a, b) => {
@@ -117,7 +115,7 @@ export function useLibraryPanelState() {
             stem: measure.stem,
             path: measure.path,
             command: measure.command,
-            relativePath: measure.relative_path,
+            relativePath: measure.relativePath,
             description: '',
             intervals: [],
             octave: null,
@@ -130,7 +128,7 @@ export function useLibraryPanelState() {
               stem: measure.stem,
               path: measure.path,
               command: measure.command,
-              relativePath: measure.relative_path,
+              relativePath: measure.relativePath,
               description: '',
               intervals: [],
               octave: null,

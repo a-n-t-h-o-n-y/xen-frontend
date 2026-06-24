@@ -19,8 +19,9 @@ import type {
   KeymapResource,
   KeymapTarget,
   KeymapTrigger,
-} from '../domain/contracts'
-import type { CommandReferenceEntry, ModTarget } from '../shared'
+} from '../domain/models'
+import type { CommandReferenceEntry } from '../domain/models'
+import type { ModTarget } from '../domain/modulation'
 
 type SettingsOverlayProps = {
   open: boolean
@@ -100,7 +101,7 @@ const editorFromBinding = (context: string, binding?: KeymapBinding): EditorStat
     modTarget: target?.type === 'ui_action' && target.action === 'modulator.target.toggle'
       ? target.arguments.target
       : 'pitch',
-    whenMode: binding?.trigger.when?.input_mode ?? '',
+    whenMode: binding?.trigger.when?.inputMode ?? '',
   }
 }
 
@@ -234,7 +235,7 @@ export function SettingsOverlay({
     if (!editor?.trigger) return
     const trigger: KeymapTrigger = {
       ...editor.trigger,
-      when: editor.whenMode ? { input_mode: editor.whenMode } : undefined,
+      when: editor.whenMode ? { inputMode: editor.whenMode } : undefined,
     }
     const context = editor.context.trim()
     const existing = findKeymapTriggerConflict(resource, context, trigger, editor.originalTrigger)
@@ -535,7 +536,7 @@ export function SettingsOverlay({
               >
                 {capturing ? 'Press a shortcut…' : editor.trigger ? formatKeymapTrigger({
                   ...editor.trigger,
-                  when: editor.whenMode ? { input_mode: editor.whenMode } : undefined,
+                  when: editor.whenMode ? { inputMode: editor.whenMode } : undefined,
                 }) : 'Click to record'}
               </button>
             </label>

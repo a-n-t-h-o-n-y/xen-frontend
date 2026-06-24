@@ -5,8 +5,9 @@ import {
   getCellWeight,
   getLargestElement,
   normalizePitch,
-} from '../shared'
-import type { BgOverlayState, Cell, SelectionPath, SequenceElement } from '../shared'
+} from '../domain/music'
+import type { Cell, SelectionPath, SequenceElement } from '../domain/music'
+import type { BgOverlayState } from '../presentation/viewModels'
 
 type RollNoteSpan = {
   x: number

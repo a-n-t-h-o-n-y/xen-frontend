@@ -1,6 +1,6 @@
 import { useMemo, type CSSProperties } from 'react'
-import { REFERENCE_RATIOS } from '../shared'
-import type { BgOverlayState } from '../shared'
+import { REFERENCE_RATIOS } from '../domain/music'
+import type { BgOverlayState } from '../presentation/viewModels'
 
 type RollNoteSpan = {
   x: number

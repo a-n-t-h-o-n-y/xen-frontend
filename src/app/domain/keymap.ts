@@ -1,12 +1,88 @@
-import { usesMetaForCommand } from '../shared'
-import type {
-  InputMode,
-  KeymapBinding,
-  KeymapResource,
-  KeymapTarget,
-  KeymapTrigger,
-} from './contracts'
+import { usesMetaForCommand } from '../platform'
 import { formatUiActionTarget } from './uiActions'
+import type { KeymapResource } from './models'
+
+export type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
+
+export type KeymapTrigger = {
+  key: string
+  modifiers: {
+    shift: boolean
+    command: boolean
+    alt: boolean
+  }
+  when?: {
+    inputMode: InputMode
+  }
+}
+
+export type CommandKeymapTarget = {
+  type: 'command'
+  command: string
+}
+
+export type UiActionKeymapTarget =
+  | {
+      type: 'ui_action'
+      action: 'selection.move'
+      arguments: {
+        direction: 'left' | 'right' | 'up' | 'down'
+        amount: number
+      }
+    }
+  | {
+      type: 'ui_action'
+      action: 'input_mode.set'
+      arguments: {
+        mode: InputMode
+      }
+    }
+  | {
+      type: 'ui_action'
+      action: 'workspace.view.toggle' | 'modulator.mode.toggle' | 'command.cancel'
+      arguments: Record<string, never>
+    }
+  | {
+      type: 'ui_action'
+      action: 'modulator.slot.select'
+      arguments: {
+        slot: 1 | 2 | 3 | 4
+      }
+    }
+  | {
+      type: 'ui_action'
+      action: 'modulator.target.toggle'
+      arguments: {
+        target: 'pitch' | 'velocity' | 'delay' | 'gate' | 'weights'
+      }
+    }
+  | {
+      type: 'ui_action'
+      action:
+        | 'command.open'
+        | 'command.submit'
+        | 'command.close_if_empty'
+        | 'command.history.previous'
+        | 'command.history.next'
+        | 'command.completion.accept'
+        | 'command.completion.dismiss'
+        | 'command.completion.previous'
+        | 'command.completion.next'
+      arguments: Record<string, never>
+    }
+
+export type KeymapTarget = CommandKeymapTarget | UiActionKeymapTarget
+
+export type KeymapBinding = {
+  trigger: KeymapTrigger
+  target: KeymapTarget
+}
+
+export type KeymapOverride = {
+  context: string
+  trigger: KeymapTrigger
+  target: KeymapTarget | null
+}
 
 export const expandNumericPlaceholders = (command: string, pendingDigits: string): string =>
   command.replace(/:N=(\d+):/g, (_, defaultValue: string) =>
@@ -30,7 +106,7 @@ export const triggerIdentity = (trigger: KeymapTrigger): string => [
   trigger.modifiers.shift ? '1' : '0',
   trigger.modifiers.command ? '1' : '0',
   trigger.modifiers.alt ? '1' : '0',
-  trigger.when?.input_mode ?? '',
+  trigger.when?.inputMode ?? '',
 ].join('\u0000')
 
 export const triggersEqual = (left: KeymapTrigger, right: KeymapTrigger): boolean =>
@@ -46,7 +122,7 @@ export const matchesKeymapTrigger = (
     trigger.modifiers.shift === eventTrigger.modifiers.shift &&
     trigger.modifiers.command === eventTrigger.modifiers.command &&
     trigger.modifiers.alt === eventTrigger.modifiers.alt &&
-    (trigger.when === undefined || trigger.when.input_mode === inputMode)
+    (trigger.when === undefined || trigger.when.inputMode === inputMode)
 }
 
 export const findKeymapBinding = (
@@ -88,7 +164,7 @@ export const formatKeymapTrigger = (trigger: KeymapTrigger): string => {
   if (trigger.modifiers.alt) parts.push(usesMetaForCommand ? 'Option' : 'Alt')
   if (trigger.modifiers.shift) parts.push('Shift')
   parts.push(displayKey(trigger.key))
-  if (trigger.when) parts.push(`in ${trigger.when.input_mode}`)
+  if (trigger.when) parts.push(`in ${trigger.when.inputMode}`)
   return parts.join(' + ')
 }
 

@@ -5,10 +5,11 @@ import {
 } from '../domain/keymap'
 import { isCommandUiActionId } from '../domain/uiActions'
 import { moveSelection, projectRootCell } from '../domain/selection'
-import { getErrorMessage, isEditableTarget } from '../shared'
+import { isEditableTarget } from '../presentation/viewModels'
+import { getErrorMessage } from '../utils/errors'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { KeymapResource, ProjectSnapshot } from '../domain/contracts'
-import type { EditorState, MessageLevel, ModTarget, TargetControl } from '../shared'
+import type { EditorState, KeymapResource, MessageLevel, ProjectSnapshot } from '../domain/models'
+import type { ModTarget, TargetControl } from '../domain/modulation'
 
 type WorkspaceView = 'sequencer' | 'library'
 

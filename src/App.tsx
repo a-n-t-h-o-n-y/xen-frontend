@@ -18,27 +18,31 @@ import { LibraryPanel } from './app/sections/bottom/LibraryPanel'
 import { ModulatorsPanel } from './app/sections/bottom/ModulatorsPanel'
 import {
   DEFAULT_TUNING_LENGTH,
-  clampNumber,
   createTransportState,
-  getErrorMessage,
-  formatOctaveForDisplay,
+} from './app/constants'
+import { getErrorMessage } from './app/utils/errors'
+import {
+  clampNumber,
   getTuningRatios,
   generateValidPitches,
   mapPitchToScale,
   collectNotePitches,
-  collectLeafCells,
   getChildCells,
   getSelectedElement,
   normalizePitch,
+} from './app/domain/music'
+import {
+  collectLeafCells,
+  formatOctaveForDisplay,
   isPathPrefix,
   getCellAtPath,
   getStatusCellMeta,
-} from './app/shared'
+} from './app/presentation/viewModels'
 import type {
   Cell,
   EditorState,
   TransportState,
-} from './app/shared'
+} from './app/domain/models'
 import { resolveSelection } from './app/domain/selection'
 
 type WorkspaceView = 'sequencer' | 'library'
@@ -215,15 +219,15 @@ function App() {
       return null
     }
 
-    const pitchState = projectSnapshot.project.pitch
+    const pitchState = projectSnapshot.pitch
     const activeScale = pitchState.scale
     const rawTuningLength = pitchState.tuning.definition.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
-    const measure = projectSnapshot.project.measure
+    const measure = projectSnapshot.measure
     const scaleValidPitches = activeScale
       ? generateValidPitches(activeScale.definition, derivedTuningLength)
       : []
-    const translateDirection = pitchState.translation_direction
+    const translateDirection = pitchState.translationDirection
 
     const mapPitch = (pitch: number): number =>
       mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
@@ -253,9 +257,9 @@ function App() {
       }
     }
 
-    const signature = `${measure.time_signature.numerator}/${measure.time_signature.denominator}`
-    const selectedNumerator = measure.time_signature.numerator
-    const selectedDenominator = measure.time_signature.denominator
+    const signature = `${measure.timeSignature.numerator}/${measure.timeSignature.denominator}`
+    const selectedNumerator = measure.timeSignature.numerator
+    const selectedDenominator = measure.timeSignature.denominator
     const directLeafCells = collectLeafCells(rootCell)
     const selection = resolveSelection(rootCell, editorState.selection)
     const selectedCellPath = selection?.cellPath ?? []
@@ -297,13 +301,13 @@ function App() {
       measureDenominator: selectedDenominator,
       timeSignature: signature,
       scaleName: activeScale?.definition.name ?? 'chromatic',
-      scaleSourceId: activeScale?.source_id ?? 'chromatic',
+      scaleSourceId: activeScale?.sourceId ?? 'chromatic',
       scaleMode: activeScale?.definition.mode ?? 0,
       scaleSize: activeScale?.definition.intervals.length ?? 0,
-      scaleTranslateDirection: pitchState.translation_direction,
+      scaleTranslateDirection: pitchState.translationDirection,
       tuningName: pitchState.tuning.name,
       keyDisplay: pitchState.transposition,
-      baseFrequency: pitchState.base_frequency,
+      baseFrequency: pitchState.baseFrequency,
       staffLineBandByPitch: staffLineBands,
       leafCells: directLeafCells,
       selectedLeafFlags: selectionFlags,
