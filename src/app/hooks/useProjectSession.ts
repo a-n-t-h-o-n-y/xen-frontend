@@ -4,7 +4,6 @@ import {
   BRIDGE_PROTOCOL,
   parseBridgeEvent,
 } from '../domain/contracts'
-import { BridgePayloadError } from '../bridge/BridgeClient'
 import { buildSessionReference } from '../domain/reference'
 import {
   FRONTEND_APP,
@@ -12,19 +11,15 @@ import {
   getErrorMessage,
   normalizePhase,
 } from '../shared'
-import { triggersEqual } from '../domain/keymap'
+import { bridgeClient } from '../bridge/BridgeClient'
 import { useBridgeSession } from './useBridgeSession'
+import { useKeymapController } from './useKeymapController'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   BridgeMethodMap,
-  KeymapOverrideRemoveRequest,
-  KeymapOverrideSetRequest,
-  KeymapResetRequest,
+  RequestOptions,
 } from '../bridge/BridgeClient'
 import type {
-  KeymapResource,
-  KeymapTarget,
-  KeymapTrigger,
   LibrarySnapshot,
   ProjectSnapshot,
 } from '../domain/contracts'
@@ -58,14 +53,21 @@ export function useProjectSession({
   const eventTokenRef = useRef<unknown>(null)
   const projectRef = useRef<ProjectSnapshot | null>(null)
   const libraryRevisionRef = useRef(-1)
-  const keymapRef = useRef<KeymapResource | null>(null)
   const [projectState, setProjectState] = useState<ProjectSessionState>({ status: 'idle' })
   const [statusMessage, setStatusMessage] = useState('')
   const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
   const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
-  const [keymapResource, setKeymapResource] = useState<KeymapResource | null>(null)
-  const [keymapBusy, setKeymapBusy] = useState(false)
-  const [keymapError, setKeymapError] = useState<string | null>(null)
+
+  const request = useCallback(<K extends keyof BridgeMethodMap>(
+    name: K,
+    payload: BridgeMethodMap[K]['request'],
+    options?: RequestOptions
+  ): Promise<BridgeMethodMap[K]['response']> =>
+    bridgeClient.request(name, payload, options),
+  [])
+
+  const keymapController = useKeymapController({ request })
+  const { ingestKeymap } = keymapController
 
   const setProjectSnapshot = useCallback((nextSnapshot: SetStateAction<ProjectSnapshot | null>): void => {
     setProjectState((current) => {
@@ -78,92 +80,20 @@ export function useProjectSession({
   }, [])
 
   const {
-    request,
     ingestProject,
     ingestLibrary,
-    ingestKeymap,
     executeBackendCommand,
   } = useBridgeSession({
+    request,
     projectRef,
     editorStateRef,
     libraryRevisionRef,
-    keymapRef,
     setProject: setProjectSnapshot,
     setEditorState,
     setStatusMessage,
     setStatusLevel,
-    setKeymapResource,
     setLibrarySnapshot,
   })
-
-  const refreshKeymap = useCallback(async (): Promise<void> => {
-    ingestKeymap(await request('keymap.get', {}))
-  }, [ingestKeymap, request])
-
-  type KeymapMutationMethod =
-    | 'keymap.override.set'
-    | 'keymap.override.remove'
-    | 'keymap.reset'
-
-  type KeymapMutationPayload = {
-    'keymap.override.set': Omit<KeymapOverrideSetRequest, 'expected_revision'>
-    'keymap.override.remove': Omit<KeymapOverrideRemoveRequest, 'expected_revision'>
-    'keymap.reset': Omit<KeymapResetRequest, 'expected_revision'>
-  }
-
-  const mutateKeymap = useCallback(async <K extends KeymapMutationMethod>(
-    name: K,
-    payload: KeymapMutationPayload[K]
-  ): Promise<void> => {
-    const current = keymapRef.current
-    if (!current) throw new Error('Keymap is not loaded')
-    setKeymapBusy(true)
-    setKeymapError(null)
-    try {
-      const response = await request(name, {
-        expected_revision: current.revision,
-        ...payload,
-      } as BridgeMethodMap[K]['request'])
-      ingestKeymap(response)
-    } catch (error) {
-      if (error instanceof BridgePayloadError && error.code === 'invalid_request') {
-        await refreshKeymap()
-        const retryError = new Error(
-          'Shortcuts changed elsewhere. The latest version was loaded; retry your edit.'
-        )
-        setKeymapError(retryError.message)
-        throw retryError
-      }
-      const message = getErrorMessage(error)
-      setKeymapError(message)
-      throw error
-    } finally {
-      setKeymapBusy(false)
-    }
-  }, [ingestKeymap, refreshKeymap, request])
-
-  const setKeymapOverride = useCallback(async (
-    context: string,
-    trigger: KeymapTrigger,
-    target: KeymapTarget,
-    originalTrigger?: KeymapTrigger
-  ): Promise<void> => {
-    await mutateKeymap('keymap.override.set', { context, trigger, target })
-    if (!originalTrigger || triggersEqual(originalTrigger, trigger)) return
-
-    const originalWasOverride = keymapRef.current?.overrides.some((override) =>
-      override.context === context && triggersEqual(override.trigger, originalTrigger)
-    )
-    if (originalWasOverride) {
-      await mutateKeymap('keymap.override.remove', { context, trigger: originalTrigger })
-    } else {
-      await mutateKeymap('keymap.override.set', {
-        context,
-        trigger: originalTrigger,
-        target: null,
-      })
-    }
-  }, [mutateKeymap])
 
   useEffect(() => {
     let isMounted = true
@@ -276,14 +206,8 @@ export function useProjectSession({
     setStatusLevel,
     bridgeUnavailableMessage,
     projectRef,
-    keymapRef,
-    keymapResource,
-    keymapBusy,
-    keymapError,
-    setKeymapError,
-    refreshKeymap,
-    mutateKeymap,
-    setKeymapOverride,
+    keymapRef: keymapController.keymapRef,
+    keymapController,
     request,
     executeBackendCommand,
   }

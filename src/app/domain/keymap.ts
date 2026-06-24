@@ -59,6 +59,17 @@ export const findKeymapBinding = (
     matchesKeymapTrigger(binding.trigger, event, inputMode)
   ) ?? null
 
+export const findKeymapTriggerConflict = (
+  resource: KeymapResource | null,
+  context: string,
+  trigger: KeymapTrigger,
+  originalTrigger?: KeymapTrigger
+): KeymapBinding | null =>
+  resource?.bindings[context]?.find((binding) =>
+    triggersEqual(binding.trigger, trigger) &&
+    (!originalTrigger || !triggersEqual(binding.trigger, originalTrigger))
+  ) ?? null
+
 const displayKey = (key: string): string => {
   const labels: Record<string, string> = {
     ' ': 'Space',

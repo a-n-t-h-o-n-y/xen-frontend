@@ -52,6 +52,7 @@ function App() {
   })
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsOpenerRef = useRef<HTMLElement | null>(null)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('sequencer')
   const [isModulatorMode, setIsModulatorMode] = useState(false)
   const {
@@ -149,12 +150,7 @@ function App() {
     bridgeUnavailableMessage,
     projectRef,
     keymapRef,
-    keymapResource,
-    keymapBusy,
-    keymapError,
-    setKeymapError,
-    mutateKeymap,
-    setKeymapOverride,
+    keymapController,
     executeBackendCommand,
   } = useProjectSession({
     transportRef,
@@ -678,7 +674,7 @@ function App() {
         setIsModulatorMode={setIsModulatorMode}
         isCommandMode={isCommandMode}
         submitCommand={submitCommand}
-        keymapResource={keymapResource}
+        keymapResource={keymapController.resource}
         commandInputRef={commandInputRef}
         commandText={commandText}
         setCommandText={setCommandText}
@@ -707,7 +703,10 @@ function App() {
         workspaceDisabled={!isProjectReady}
         modulatorDisabled={!isProjectReady || workspaceView !== 'sequencer'}
         onOpenSettings={() => {
-          setKeymapError(null)
+          settingsOpenerRef.current = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null
+          keymapController.clearError()
           setSettingsOpen(true)
         }}
         modulatorRail={isProjectReady && isModulatorMode && workspaceView === 'sequencer' ? (
@@ -740,19 +739,21 @@ function App() {
       />
       <SettingsOverlay
         open={settingsOpen}
-        resource={keymapResource}
+        resource={keymapController.resource}
         commands={sessionReference.commands}
-        busy={keymapBusy}
-        error={keymapError}
-        onClose={() => setSettingsOpen(false)}
-        onSetOverride={setKeymapOverride}
-        onDisable={(context, trigger) =>
-          mutateKeymap('keymap.override.set', { context, trigger, target: null })
-        }
-        onRestore={(context, trigger) =>
-          mutateKeymap('keymap.override.remove', { context, trigger })
-        }
-        onReset={() => mutateKeymap('keymap.reset', {})}
+        busy={keymapController.busy}
+        error={keymapController.error}
+        onClose={() => {
+          setSettingsOpen(false)
+          window.requestAnimationFrame(() => {
+            const opener = settingsOpenerRef.current
+            if (opener?.isConnected) opener.focus()
+          })
+        }}
+        onSetOverride={keymapController.setOverride}
+        onDisable={keymapController.disable}
+        onRestore={keymapController.restore}
+        onReset={keymapController.reset}
       />
     </div>
   )

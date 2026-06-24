@@ -18,6 +18,7 @@ import { buildCommandContext, createSerialExecutor } from './commands'
 import {
   expandNumericPlaceholders,
   findKeymapBinding,
+  findKeymapTriggerConflict,
   formatKeymapTarget,
   formatKeymapTrigger,
   normalizeKey,
@@ -663,6 +664,18 @@ describe('keymap routing', () => {
       .toMatchObject({ type: 'ui_action', action: 'command.cancel', arguments: {} })
     expect(findKeymapBinding(resource, 'command.completions', event, 'pitch')?.target)
       .toMatchObject({ type: 'ui_action', action: 'command.completion.dismiss', arguments: {} })
+  })
+
+  it('finds trigger conflicts only inside the requested context', () => {
+    const escapeTrigger = resource.bindings['command.input']![0]!.trigger
+    const conflict = findKeymapTriggerConflict(resource, 'command.input', escapeTrigger)
+    expect(conflict?.target).toMatchObject({ type: 'ui_action', action: 'command.cancel' })
+    expect(findKeymapTriggerConflict(resource, 'sequence', escapeTrigger)).toBeNull()
+  })
+
+  it('does not conflict with the binding original trigger', () => {
+    const trigger = resource.bindings.sequence[1]!.trigger
+    expect(findKeymapTriggerConflict(resource, 'sequence', trigger, trigger)).toBeNull()
   })
 
   it('formats typed triggers and targets with stable identities', () => {

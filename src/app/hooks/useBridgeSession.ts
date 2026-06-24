@@ -1,16 +1,13 @@
 import { useCallback, useRef } from 'react'
-import { bridgeClient } from '../bridge/BridgeClient'
 import { buildCommandContext, createSerialExecutor } from '../domain/commands'
 import {
   ingestLibrarySnapshot,
-  ingestKeymapResource,
   ingestProjectSnapshot,
 } from '../domain/resources'
 import { projectRootCell, resolveSelection } from '../domain/selection'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { RequestOptions } from '../bridge/BridgeClient'
+import type { BridgeMethodMap, RequestOptions } from '../bridge/BridgeClient'
 import type {
-  KeymapResource,
   LibrarySnapshot,
   ProjectSnapshot,
 } from '../domain/contracts'
@@ -20,28 +17,30 @@ import type {
 } from '../shared'
 
 type UseBridgeSessionArgs = {
+  request: <K extends keyof BridgeMethodMap>(
+    name: K,
+    payload: BridgeMethodMap[K]['request'],
+    options?: RequestOptions
+  ) => Promise<BridgeMethodMap[K]['response']>
   projectRef: MutableRefObject<ProjectSnapshot | null>
   editorStateRef: MutableRefObject<EditorState>
   libraryRevisionRef: MutableRefObject<number>
-  keymapRef: MutableRefObject<KeymapResource | null>
   setProject: Dispatch<SetStateAction<ProjectSnapshot | null>>
   setEditorState: Dispatch<SetStateAction<EditorState>>
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
-  setKeymapResource: Dispatch<SetStateAction<KeymapResource | null>>
   setLibrarySnapshot: Dispatch<SetStateAction<LibrarySnapshot>>
 }
 
 export function useBridgeSession({
+  request,
   projectRef,
   editorStateRef,
   libraryRevisionRef,
-  keymapRef,
   setProject,
   setEditorState,
   setStatusMessage,
   setStatusLevel,
-  setKeymapResource,
   setLibrarySnapshot,
 }: UseBridgeSessionArgs) {
   const serialExecutorRef = useRef(createSerialExecutor())
@@ -51,11 +50,6 @@ export function useBridgeSession({
     editorStateRef.current = nextState
     setEditorState(nextState)
   }, [editorStateRef, setEditorState])
-
-  const request: typeof bridgeClient.request = useCallback(
-    (name, payload, options?: RequestOptions) => bridgeClient.request(name, payload, options),
-    []
-  )
 
   const ingestProject = useCallback((snapshot: ProjectSnapshot): ProjectSnapshot => {
     const result = ingestProjectSnapshot(
@@ -85,15 +79,6 @@ export function useBridgeSession({
     setLibrarySnapshot(result.snapshot)
     return result.snapshot
   }, [libraryRevisionRef, setLibrarySnapshot])
-
-  const ingestKeymap = useCallback((resource: KeymapResource): KeymapResource => {
-    const result = ingestKeymapResource(keymapRef.current, resource)
-    if (result.installed) {
-      keymapRef.current = result.resource
-      setKeymapResource(result.resource)
-    }
-    return result.resource
-  }, [keymapRef, setKeymapResource])
 
   const executeBackendCommand = useCallback(
     (command: string): Promise<void> => {
@@ -146,10 +131,8 @@ export function useBridgeSession({
   )
 
   return {
-    request,
     ingestProject,
     ingestLibrary,
-    ingestKeymap,
     executeBackendCommand,
   }
 }

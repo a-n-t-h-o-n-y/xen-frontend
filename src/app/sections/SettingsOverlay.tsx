@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  findKeymapTriggerConflict,
   formatKeymapTarget,
   formatKeymapTrigger,
   triggerFromKeyboardEvent,
   triggersEqual,
 } from '../domain/keymap'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import { filterCommandReference } from '../domain/reference'
 import {
   formatKeymapContext,
@@ -158,6 +160,10 @@ export function SettingsOverlay({
   const [conflict, setConflict] = useState<KeymapBinding | null>(null)
   const [activeSection, setActiveSection] = useState<'shortcuts' | 'commands'>('shortcuts')
   const [commandSearch, setCommandSearch] = useState('')
+  const settingsPanelRef = useRef<HTMLElement | null>(null)
+  const shortcutEditorRef = useRef<HTMLElement | null>(null)
+  const shortcutEditorOpenerRef = useRef<HTMLElement | null>(null)
+  const captureButtonRef = useRef<HTMLButtonElement | null>(null)
 
   const contexts = useMemo(() => {
     if (!resource) return []
@@ -171,27 +177,56 @@ export function SettingsOverlay({
     [commandSearch, commands]
   )
 
-  const closeOverlay = (): void => {
+  const closeEditor = useCallback((restoreFocus = true): void => {
     setEditor(null)
     setCapturing(false)
     setConflict(null)
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => {
+        const opener = shortcutEditorOpenerRef.current
+        if (opener?.isConnected) opener.focus()
+      })
+    }
+  }, [])
+
+  const closeOverlay = useCallback((): void => {
+    closeEditor(false)
     onClose()
-  }
+  }, [closeEditor, onClose])
+
+  const openEditor = useCallback((nextEditor: EditorState, opener: HTMLElement): void => {
+    shortcutEditorOpenerRef.current = opener
+    setConflict(null)
+    setCapturing(false)
+    setEditor(nextEditor)
+  }, [])
+
+  const startCapture = useCallback((): void => {
+    setCapturing(true)
+    window.requestAnimationFrame(() => captureButtonRef.current?.focus())
+  }, [])
+
+  useFocusTrap(open && !editor, settingsPanelRef)
+  useFocusTrap(open && editor !== null, shortcutEditorRef)
 
   useEffect(() => {
     if (!open) return
     const handleEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || capturing) return
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      if (capturing) {
+        setCapturing(false)
+        return
+      }
       if (editor) {
-        setEditor(null)
-        setConflict(null)
+        closeEditor()
       } else {
-        onClose()
+        closeOverlay()
       }
     }
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
-  }, [capturing, editor, onClose, open])
+  }, [capturing, closeEditor, closeOverlay, editor, open])
 
   if (!open) return null
 
@@ -202,18 +237,14 @@ export function SettingsOverlay({
       when: editor.whenMode ? { input_mode: editor.whenMode } : undefined,
     }
     const context = editor.context.trim()
-    const existing = resource?.bindings[context]?.find((binding) =>
-      triggersEqual(binding.trigger, trigger) &&
-      (!editor.originalTrigger || !triggersEqual(binding.trigger, editor.originalTrigger))
-    )
+    const existing = findKeymapTriggerConflict(resource, context, trigger, editor.originalTrigger)
     if (existing && !replaceConflict) {
       setConflict(existing)
       return
     }
     try {
       await onSetOverride(context, trigger, targetFromEditor(editor), editor.originalTrigger)
-      setEditor(null)
-      setConflict(null)
+      closeEditor()
     } catch {
       // Mutation errors are rendered by the parent settings surface.
     }
@@ -223,7 +254,14 @@ export function SettingsOverlay({
     <div className="settingsBackdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) closeOverlay()
     }}>
-      <section className="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <section
+        className="settingsPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        ref={settingsPanelRef}
+        tabIndex={-1}
+      >
         <header className="settingsHeader">
           <div>
             <p className="settingsEyebrow">Preferences</p>
@@ -267,7 +305,10 @@ export function SettingsOverlay({
                       type="button"
                       className="settingsButton"
                       disabled={!resource || busy}
-                      onClick={() => setEditor(editorFromBinding(contexts[0] ?? 'sequence'))}
+                      onClick={(event) => openEditor(
+                        editorFromBinding(contexts[0] ?? 'sequence'),
+                        event.currentTarget
+                      )}
                     >
                       Add shortcut
                     </button>
@@ -306,7 +347,10 @@ export function SettingsOverlay({
                               <button
                                 type="button"
                                 className="shortcutMain"
-                                onClick={() => setEditor(editorFromBinding(context, binding))}
+                                onClick={(event) => openEditor(
+                                  editorFromBinding(context, binding),
+                                  event.currentTarget
+                                )}
                               >
                                 <span className="shortcutTrigger mono">{formatKeymapTrigger(binding.trigger)}</span>
                                 <span className="shortcutTarget mono">{formatKeymapTarget(binding.target)}</span>
@@ -445,13 +489,20 @@ export function SettingsOverlay({
 
       {editor ? (
         <div className="shortcutEditorBackdrop">
-          <section className="shortcutEditor" role="dialog" aria-modal="true" aria-labelledby="shortcut-editor-title">
+          <section
+            className="shortcutEditor"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shortcut-editor-title"
+            ref={shortcutEditorRef}
+            tabIndex={-1}
+          >
             <div className="shortcutEditorHeader">
               <div>
                 <p className="settingsEyebrow">{editor.originalTrigger ? 'Edit binding' : 'New binding'}</p>
                 <h3 id="shortcut-editor-title">Configure shortcut</h3>
               </div>
-              <button type="button" className="settingsClose" onClick={() => setEditor(null)} aria-label="Close editor">×</button>
+              <button type="button" className="settingsClose" onClick={() => closeEditor()} aria-label="Close editor">×</button>
             </div>
             <label className="settingsField">
               <span>Context</span>
@@ -466,7 +517,8 @@ export function SettingsOverlay({
               <button
                 type="button"
                 className={`shortcutCapture${capturing ? ' shortcutCapture-active' : ''}`}
-                onClick={() => setCapturing(true)}
+                ref={captureButtonRef}
+                onClick={startCapture}
                 onKeyDown={(event) => {
                   if (!capturing) return
                   event.preventDefault()
@@ -589,7 +641,7 @@ export function SettingsOverlay({
               </div>
             ) : null}
             <div className="shortcutEditorFooter">
-              <button type="button" className="settingsButton" onClick={() => setEditor(null)}>Cancel</button>
+              <button type="button" className="settingsButton" onClick={() => closeEditor()}>Cancel</button>
               <button
                 type="button"
                 className="settingsButton settingsButton-primary"
