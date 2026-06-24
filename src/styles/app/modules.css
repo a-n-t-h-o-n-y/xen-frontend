@@ -31,7 +31,7 @@
 
 .bottomModulesSummaryTitle {
   margin: 0;
-  font-size: 0.74rem;
+  font-size: var(--font-sm);
   line-height: 1;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -41,7 +41,7 @@
 .bottomModulesSummaryIcon {
   flex: 0 0 auto;
   color: var(--text-secondary);
-  font-size: 0.68rem;
+  font-size: var(--font-xs);
   line-height: 1;
   transition: transform 180ms ease;
 }
@@ -126,7 +126,7 @@
   border-radius: 999px;
   background: rgb(255 255 255 / 4%);
   color: var(--text-secondary);
-  font-size: 0.64rem;
+  font-size: var(--font-xs);
   line-height: 1;
   padding: 0.24rem 0.46rem;
   white-space: nowrap;
@@ -179,13 +179,13 @@
   gap: 0.35rem;
   min-height: 1.45rem;
   color: rgb(255 255 255 / 66%);
-  font-size: 0.68rem;
+  font-size: var(--font-xs);
   line-height: 1;
 }
 
 .libraryDirectoryCaret {
   color: rgb(255 255 255 / 45%);
-  font-size: 0.6rem;
+  font-size: 0.7rem;
 }
 
 .libraryDirectoryName {
@@ -196,7 +196,7 @@
 
 .libraryItemName {
   min-width: 0;
-  font-size: 0.74rem;
+  font-size: var(--font-sm);
   line-height: 1.2;
   color: var(--text-primary);
   white-space: nowrap;
@@ -214,7 +214,7 @@
 
 .libraryItemMeta {
   min-width: 0;
-  font-size: 0.64rem;
+  font-size: var(--font-xs);
   line-height: 1.25;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -231,7 +231,7 @@
 
 .libraryPlaceholder {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
 }
 
@@ -297,7 +297,7 @@
 }
 
 .modulatorFieldLabel {
-  font-size: 0.68rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -311,7 +311,7 @@
   border-radius: var(--radius-1);
   background: rgb(255 255 255 / 6%);
   color: var(--text-primary);
-  font-size: 0.78rem;
+  font-size: var(--font-sm);
   padding: 0.3rem 0.4rem;
 }
 
@@ -328,13 +328,13 @@
   border-radius: var(--radius-1);
   background: rgb(255 255 255 / 6%);
   color: var(--text-primary);
-  font-size: 0.78rem;
+  font-size: var(--font-sm);
   padding: 0.32rem 0.45rem;
 }
 
 .waveSelectChevron {
   color: rgb(255 255 255 / 62%);
-  font-size: 0.65rem;
+  font-size: var(--font-xs);
 }
 
 .waveSelectMenu {
@@ -359,7 +359,7 @@
   border-radius: 5px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   text-align: left;
   padding: 0.28rem 0.35rem;
 }
@@ -518,7 +518,7 @@
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
 }
 
 .modTargetLed {
@@ -562,7 +562,7 @@
   background: rgb(255 255 255 / 3%);
   color: var(--text-secondary);
   padding: 0.25rem 0.45rem;
-  font-size: 0.7rem;
+  font-size: var(--font-xs);
 }
 
 .modTargetMode-active {
@@ -628,7 +628,7 @@
 
 .modulatorPreviewLabel {
   margin: 0;
-  font-size: 0.66rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -640,7 +640,7 @@
   border: 1px solid rgb(255 255 255 / 18%);
   border-radius: var(--radius-1);
   background: rgb(255 255 255 / 2%);
-  font-size: 0.68rem;
+  font-size: var(--font-xs);
   line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-word;
@@ -651,7 +651,7 @@
   border-radius: var(--radius-1);
   background: rgb(245 196 90 / 14%);
   color: rgb(252 245 223);
-  font-size: 0.78rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   padding: 0.45rem 0.6rem;
 }
@@ -687,9 +687,9 @@
 }
 
 .modRailWaveTrigger {
-  min-height: 1.45rem;
-  padding: 0.2rem 0.38rem;
-  font-size: 0.68rem;
+  min-height: var(--control-height-sm);
+  padding: 0.22rem 0.42rem;
+  font-size: var(--font-xs);
   gap: 0.26rem;
 }
 
@@ -710,7 +710,7 @@
   padding: 0.28rem 0.35rem 0.35rem;
   border-top: 1px solid rgb(255 255 255 / 10%);
   color: var(--text-secondary);
-  font-size: 0.66rem;
+  font-size: var(--font-xs);
 }
 
 .modRailPulseLabel {
@@ -728,7 +728,7 @@
 
 .modRailLerpValue {
   color: var(--text-secondary);
-  font-size: 0.66rem;
+  font-size: var(--font-xs);
   text-align: right;
 }
 
@@ -746,8 +746,8 @@
   grid-template-columns: auto minmax(2.25rem, auto) 1rem 2rem;
   align-items: center;
   gap: 0.22rem;
-  min-height: 1.55rem;
-  padding: 0 0.26rem;
+  min-height: var(--control-height-md);
+  padding: 0 0.32rem;
   border: 1px solid rgb(255 255 255 / 18%);
   border-radius: var(--radius-1);
   background: rgb(255 255 255 / 4%);
@@ -777,7 +777,7 @@
 }
 
 .modTargetChipLabel {
-  font-size: 0.66rem;
+  font-size: var(--font-xs);
   line-height: 1;
   white-space: nowrap;
 }
@@ -785,7 +785,7 @@
 .modTargetChipAmount {
   min-width: 0;
   color: rgb(255 255 255 / 72%);
-  font-size: 0.63rem;
+  font-size: var(--font-xs);
   line-height: 1;
   text-align: right;
 }
@@ -879,7 +879,7 @@
 
 .bottomModuleLabel {
   margin: 0;
-  font-size: 0.7rem;
+  font-size: var(--font-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-secondary);
@@ -893,13 +893,13 @@
 .modTab {
   display: inline-grid;
   place-items: center;
-  width: 1.2rem;
-  height: 1.2rem;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
   border: 1px solid rgb(255 255 255 / 24%);
   border-radius: 4px;
   background: rgb(255 255 255 / 6%);
   color: var(--text-secondary);
-  font-size: 0.66rem;
+  font-size: var(--font-xs);
   line-height: 1;
   padding: 0;
   text-align: center;
@@ -935,7 +935,7 @@
   border-radius: 0;
   background: transparent;
   color: var(--text-primary);
-  font-size: 0.68rem;
+  font-size: var(--font-xs);
   line-height: 1.2;
   padding: 0.34rem 0.3rem 0.34rem 0.48rem;
   min-width: 0;
@@ -960,15 +960,15 @@
 .referenceCommandSearchClear {
   display: inline-grid;
   place-items: center;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.3rem;
+  height: 1.3rem;
   margin-right: 0.28rem;
   padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: rgb(255 255 255 / 56%);
-  font-size: 0.72rem;
+  font-size: var(--font-sm);
   line-height: 1;
   cursor: pointer;
 }

@@ -53,7 +53,7 @@
 .settingsEyebrow {
   margin: 0 0 0.3rem;
   color: #f5c45a;
-  font-size: 0.66rem;
+  font-size: var(--font-xs);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -164,7 +164,7 @@
   background: rgb(255 255 255 / 5%);
   color: var(--text-primary);
   font: inherit;
-  font-size: 0.72rem;
+  font-size: var(--font-xs);
   cursor: pointer;
 }
 
@@ -261,7 +261,7 @@
 
 .commandReferenceDescription {
   color: var(--text-secondary);
-  font-size: 0.74rem;
+  font-size: var(--font-xs);
   line-height: 1.45;
 }
 
@@ -300,7 +300,7 @@
 .commandReferenceMetadata dt,
 .commandArgumentMetadata dt {
   color: rgb(255 255 255 / 42%);
-  font-size: 0.62rem;
+  font-size: var(--font-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -309,7 +309,7 @@
 .commandArgumentMetadata dd {
   margin: 0;
   color: var(--text-primary);
-  font-size: 0.72rem;
+  font-size: var(--font-xs);
 }
 
 .commandArguments {
@@ -319,7 +319,7 @@
 
 .commandArguments h4 {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--font-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -335,12 +335,12 @@
   justify-content: space-between;
   gap: 0.75rem;
   color: #fff2ce;
-  font-size: 0.74rem;
+  font-size: var(--font-xs);
 }
 
 .commandArgumentHeader span:last-child {
   color: var(--text-secondary);
-  font-size: 0.66rem;
+  font-size: var(--font-xs);
 }
 
 .commandArgumentMetadata {
@@ -353,14 +353,14 @@
   margin: 0.65rem 0 0;
   padding-left: 1rem;
   color: var(--text-secondary);
-  font-size: 0.68rem;
+  font-size: var(--font-xs);
 }
 
 .commandNoArguments,
 .commandNoConstraints {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 0.7rem;
+  font-size: var(--font-xs);
 }
 
 .commandNoConstraints {
@@ -386,7 +386,7 @@
 
 .shortcutGroupHeader span {
   color: rgb(255 255 255 / 38%);
-  font-size: 0.68rem;
+  font-size: var(--font-xs);
 }
 
 .shortcutTable {
@@ -443,7 +443,7 @@ button.shortcutMain {
 
 .shortcutTarget {
   color: var(--text-secondary);
-  font-size: 0.72rem;
+  font-size: var(--font-xs);
 }
 
 .shortcutOrigin {
@@ -452,7 +452,7 @@ button.shortcutMain {
   border-radius: 999px;
   background: rgb(255 255 255 / 6%);
   color: rgb(255 255 255 / 45%);
-  font-size: 0.62rem;
+  font-size: var(--font-xs);
 }
 
 .shortcutOrigin-custom {
@@ -472,7 +472,7 @@ button.shortcutMain {
   min-height: 1.75rem;
   padding: 0.35rem 0.5rem;
   color: var(--text-secondary);
-  font-size: 0.65rem;
+  font-size: var(--font-xs);
 }
 
 /* Shortcut editor */
@@ -554,7 +554,7 @@ button.shortcutMain {
   border: 1px solid rgb(245 196 90 / 28%);
   border-radius: 8px;
   background: rgb(245 196 90 / 7%);
-  font-size: 0.74rem;
+  font-size: var(--font-xs);
 }
 
 .shortcutConflict div {

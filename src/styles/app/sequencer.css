@@ -33,7 +33,7 @@
 .pitchIndexRow {
   display: grid;
   place-items: center;
-  font-size: 0.72rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
 }
 
@@ -344,7 +344,7 @@
 .rollNoteOctave {
   position: relative;
   z-index: 1;
-  font-size: 0.82rem;
+  font-size: var(--font-md);
   font-weight: 700;
   line-height: 1;
   color: var(--seq-note-text);
@@ -440,11 +440,11 @@
 
 @media (max-width: 860px) {
   .sequencerShell {
-    grid-template-columns: 2rem 1fr 2rem;
+    grid-template-columns: 2.25rem 1fr 2.25rem;
   }
 
   .pitchIndexRow {
-    font-size: 0.65rem;
+    font-size: var(--font-xs);
   }
 
   .rulerMark-reference,
