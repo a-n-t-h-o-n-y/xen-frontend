@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { HeaderSection } from './app/sections/HeaderSection'
-import { BottomModulesSection } from './app/sections/BottomModulesSection'
 import { useBridgeSession } from './app/hooks/useBridgeSession'
 import { useCommandState } from './app/hooks/useCommandState'
 import { recognizeCommandIds } from './app/domain/commandCompletion'
@@ -14,6 +13,7 @@ import { SequencerSection } from './app/sections/SequencerSection'
 import { StatusSection } from './app/sections/StatusSection'
 import { SettingsOverlay } from './app/sections/SettingsOverlay'
 import { LibraryPanel } from './app/sections/bottom/LibraryPanel'
+import { ModulatorsPanel } from './app/sections/bottom/ModulatorsPanel'
 import {
   MAX_COMMAND_HISTORY,
   DEFAULT_TUNING_LENGTH,
@@ -93,6 +93,7 @@ function App() {
   const [keymapResource, setKeymapResource] = useState<KeymapResource | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('sequencer')
+  const [isModulatorMode, setIsModulatorMode] = useState(false)
   const [keymapBusy, setKeymapBusy] = useState(false)
   const [keymapError, setKeymapError] = useState<string | null>(null)
   const {
@@ -377,6 +378,35 @@ function App() {
               return
             }
 
+            if (matchedBinding.target.action === 'modulator.mode.toggle') {
+              setIsModulatorMode((previous) => {
+                const next = !previous
+                if (!next) {
+                  setOpenWaveMenu(null)
+                }
+                return next
+              })
+              return
+            }
+
+            if (matchedBinding.target.action === 'modulator.slot.select') {
+              setOpenWaveMenu(null)
+              setActiveModulatorTab(matchedBinding.target.arguments.slot - 1)
+              return
+            }
+
+            if (matchedBinding.target.action === 'modulator.target.toggle') {
+              const target = matchedBinding.target.arguments.target as ModTarget
+              setTargetControls((previous) => ({
+                ...previous,
+                [target]: {
+                  ...previous[target],
+                  enabled: !previous[target].enabled,
+                },
+              }))
+              return
+            }
+
             if (
               isCommandUiActionId(matchedBinding.target.action) &&
               matchedBinding.target.action === 'command.open'
@@ -419,6 +449,9 @@ function App() {
     isCommandMode,
     openCommandMode,
     settingsOpen,
+    setActiveModulatorTab,
+    setOpenWaveMenu,
+    setTargetControls,
     toggleWorkspaceView,
   ])
 
@@ -972,6 +1005,12 @@ function App() {
   }, [openWaveMenu, setOpenWaveMenu, waveMenuRef])
 
   useEffect(() => {
+    if (!isModulatorMode) {
+      setOpenWaveMenu(null)
+    }
+  }, [isModulatorMode, setOpenWaveMenu])
+
+  useEffect(() => {
     if (!openScaleMenu) {
       return
     }
@@ -1062,6 +1101,70 @@ function App() {
     ]
   )
 
+  const handleWaveAPulseWidthChange = useCallback(
+    (nextPulseWidth: number): void => {
+      setWaveAPulseWidth(nextPulseWidth)
+      const liveBase = createMorphModulator(
+        waveAType,
+        waveBType,
+        nextPulseWidth,
+        waveBPulseWidth,
+        lfoAFrequency,
+        toNormalizedPhase(lfoAPhaseOffset),
+        lfoBFrequency,
+        toNormalizedPhase(lfoBPhaseOffset),
+        waveLerp
+      )
+      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+    },
+    [
+      buildModTargetCommands,
+      lfoAFrequency,
+      lfoAPhaseOffset,
+      lfoBFrequency,
+      lfoBPhaseOffset,
+      scheduleLiveEmit,
+      setWaveAPulseWidth,
+      targetControls,
+      waveAType,
+      waveBType,
+      waveBPulseWidth,
+      waveLerp,
+    ]
+  )
+
+  const handleWaveBPulseWidthChange = useCallback(
+    (nextPulseWidth: number): void => {
+      setWaveBPulseWidth(nextPulseWidth)
+      const liveBase = createMorphModulator(
+        waveAType,
+        waveBType,
+        waveAPulseWidth,
+        nextPulseWidth,
+        lfoAFrequency,
+        toNormalizedPhase(lfoAPhaseOffset),
+        lfoBFrequency,
+        toNormalizedPhase(lfoBPhaseOffset),
+        waveLerp
+      )
+      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+    },
+    [
+      buildModTargetCommands,
+      lfoAFrequency,
+      lfoAPhaseOffset,
+      lfoBFrequency,
+      lfoBPhaseOffset,
+      scheduleLiveEmit,
+      setWaveBPulseWidth,
+      targetControls,
+      waveAPulseWidth,
+      waveAType,
+      waveBType,
+      waveLerp,
+    ]
+  )
+
   const applyPadMotion = useCallback(
     (
       target: ModTarget,
@@ -1090,14 +1193,14 @@ function App() {
         const maxNegativeSpan = resolvedCenter - spec.min
         const amountLimit = Math.max(maxPositiveSpan, maxNegativeSpan)
         const resolvedAmount = clampNumber(currentControl.amount, -amountLimit, amountLimit)
-        updateTargetControl(target, { center: resolvedCenter, amount: resolvedAmount })
-        scheduleLiveEmit([
-          buildModTargetCommand(
-            target,
-            { ...currentControl, enabled: true, center: resolvedCenter, amount: resolvedAmount },
-            baseMorphModulator
-          ),
-        ])
+        const nextControl = {
+          ...currentControl,
+          enabled: true,
+          center: resolvedCenter,
+          amount: resolvedAmount,
+        }
+        updateTargetControl(target, nextControl)
+        scheduleLiveEmit([buildModTargetCommand(target, nextControl, baseMorphModulator)])
         return
       }
 
@@ -1113,10 +1216,9 @@ function App() {
         -amountLimit,
         amountLimit
       )
-      updateTargetControl(target, { amount: nextAmount })
-      scheduleLiveEmit([
-        buildModTargetCommand(target, { ...currentControl, enabled: true, amount: nextAmount }, baseMorphModulator),
-      ])
+      const nextControl = { ...currentControl, enabled: true, amount: nextAmount }
+      updateTargetControl(target, nextControl)
+      scheduleLiveEmit([buildModTargetCommand(target, nextControl, baseMorphModulator)])
     },
     [baseMorphModulator, buildModTargetCommand, scheduleLiveEmit, targetControls, tuningLength, updateTargetControl]
   )
@@ -1273,14 +1375,47 @@ function App() {
     ]
   )
 
-  const selectWaveType = useCallback((wave: 'a' | 'b', waveType: WaveType): void => {
-    if (wave === 'a') {
-      setWaveAType(waveType)
-    } else {
-      setWaveBType(waveType)
-    }
-    setOpenWaveMenu(null)
-  }, [setOpenWaveMenu, setWaveAType, setWaveBType])
+  const selectWaveType = useCallback(
+    (wave: 'a' | 'b', waveType: WaveType): void => {
+      const nextWaveAType = wave === 'a' ? waveType : waveAType
+      const nextWaveBType = wave === 'b' ? waveType : waveBType
+      if (wave === 'a') {
+        setWaveAType(waveType)
+      } else {
+        setWaveBType(waveType)
+      }
+      setOpenWaveMenu(null)
+      const liveBase = createMorphModulator(
+        nextWaveAType,
+        nextWaveBType,
+        waveAPulseWidth,
+        waveBPulseWidth,
+        lfoAFrequency,
+        toNormalizedPhase(lfoAPhaseOffset),
+        lfoBFrequency,
+        toNormalizedPhase(lfoBPhaseOffset),
+        waveLerp
+      )
+      scheduleLiveEmit(buildModTargetCommands(targetControls, liveBase))
+    },
+    [
+      buildModTargetCommands,
+      lfoAFrequency,
+      lfoAPhaseOffset,
+      lfoBFrequency,
+      lfoBPhaseOffset,
+      scheduleLiveEmit,
+      setOpenWaveMenu,
+      setWaveAType,
+      setWaveBType,
+      targetControls,
+      waveAPulseWidth,
+      waveAType,
+      waveBPulseWidth,
+      waveBType,
+      waveLerp,
+    ]
+  )
 
   const runLibraryCommand = useCallback(
     async (command: string): Promise<void> => {
@@ -1370,6 +1505,19 @@ function App() {
             ratioToBottom={ratioToBottom}
             rulerRatios={rulerRatios}
             highlightedPitches={highlightedPitches}
+            isModulatorMode={isModulatorMode}
+            wavePadDragRef={wavePadDragRef}
+            clampNumber={clampNumber}
+            waveHandleA={waveHandleA}
+            waveHandleB={waveHandleB}
+            lastWaveHandleUsedRef={lastWaveHandleUsedRef}
+            snapWaveToCenterGuides={snapWaveToCenterGuides}
+            applyWavePadMotion={applyWavePadMotion}
+            waveAOpacity={waveAOpacity}
+            waveBOpacity={waveBOpacity}
+            waveAPreviewPath={waveAPreviewPath}
+            waveBPreviewPath={waveBPreviewPath}
+            morphedWavePreviewPath={morphedWavePreviewPath}
           />
         </div>
         <div
@@ -1396,47 +1544,13 @@ function App() {
           />
         </div>
       </section>
-      <BottomModulesSection
-        activeModulatorTab={activeModulatorTab}
-        setOpenWaveMenu={setOpenWaveMenu}
-        setActiveModulatorTab={setActiveModulatorTab}
-        waveMenuRef={waveMenuRef}
-        openWaveMenu={openWaveMenu}
-        waveAType={waveAType}
-        waveBType={waveBType}
-        selectWaveType={selectWaveType}
-        waveLerp={waveLerp}
-        onWaveLerpChange={handleWaveLerpChange}
-        waveAPulseWidth={waveAPulseWidth}
-        setWaveAPulseWidth={setWaveAPulseWidth}
-        waveBPulseWidth={waveBPulseWidth}
-        setWaveBPulseWidth={setWaveBPulseWidth}
-        wavePadDragRef={wavePadDragRef}
-        clampNumber={clampNumber}
-        waveHandleA={waveHandleA}
-        waveHandleB={waveHandleB}
-        lastWaveHandleUsedRef={lastWaveHandleUsedRef}
-        snapWaveToCenterGuides={snapWaveToCenterGuides}
-        applyWavePadMotion={applyWavePadMotion}
-        waveAOpacity={waveAOpacity}
-        waveBOpacity={waveBOpacity}
-        waveAPreviewPath={waveAPreviewPath}
-        waveBPreviewPath={waveBPreviewPath}
-        morphedWavePreviewPath={morphedWavePreviewPath}
-        targetControls={targetControls}
-        updateTargetControl={updateTargetControl}
-        padDragRef={padDragRef}
-        applyPadMotion={applyPadMotion}
-        scheduleLiveEmit={scheduleLiveEmit}
-        buildCommandForTarget={buildModTargetCommand}
-        baseMorphModulator={baseMorphModulator}
-        tuningLength={tuningLength}
-      />
       <StatusSection
         currentInputMode={editorState.inputMode}
         currentInputModeLetter={currentInputModeLetter}
         workspaceView={workspaceView}
         setWorkspaceView={setWorkspaceView}
+        isModulatorMode={isModulatorMode}
+        setIsModulatorMode={setIsModulatorMode}
         isCommandMode={isCommandMode}
         submitCommand={submitCommand}
         keymapResource={keymapResource}
@@ -1468,6 +1582,33 @@ function App() {
           setKeymapError(null)
           setSettingsOpen(true)
         }}
+        modulatorRail={isModulatorMode && workspaceView === 'sequencer' ? (
+          <ModulatorsPanel
+            activeModulatorTab={activeModulatorTab}
+            setOpenWaveMenu={setOpenWaveMenu}
+            setActiveModulatorTab={setActiveModulatorTab}
+            waveMenuRef={waveMenuRef}
+            openWaveMenu={openWaveMenu}
+            waveAType={waveAType}
+            waveBType={waveBType}
+            selectWaveType={selectWaveType}
+            waveLerp={waveLerp}
+            onWaveLerpChange={handleWaveLerpChange}
+            waveAPulseWidth={waveAPulseWidth}
+            setWaveAPulseWidth={handleWaveAPulseWidthChange}
+            waveBPulseWidth={waveBPulseWidth}
+            setWaveBPulseWidth={handleWaveBPulseWidthChange}
+            clampNumber={clampNumber}
+            targetControls={targetControls}
+            updateTargetControl={updateTargetControl}
+            padDragRef={padDragRef}
+            applyPadMotion={applyPadMotion}
+            scheduleLiveEmit={scheduleLiveEmit}
+            buildCommandForTarget={buildModTargetCommand}
+            baseMorphModulator={baseMorphModulator}
+            tuningLength={tuningLength}
+          />
+        ) : null}
       />
       <SettingsOverlay
         open={settingsOpen}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
+import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import {
   analyzeCommandCompletion,
   applyCommandCompletion,
@@ -22,6 +22,8 @@ type StatusSectionProps = {
   currentInputModeLetter: string
   workspaceView: WorkspaceView
   setWorkspaceView: Dispatch<SetStateAction<WorkspaceView>>
+  isModulatorMode: boolean
+  setIsModulatorMode: Dispatch<SetStateAction<boolean>>
   isCommandMode: boolean
   submitCommand: () => void
   keymapResource: KeymapResource | null
@@ -50,6 +52,7 @@ type StatusSectionProps = {
   statusMessage: string
   selectedCellMeta: StatusCellMetaItem[]
   onOpenSettings: () => void
+  modulatorRail: ReactNode
 }
 
 export function StatusSection({
@@ -57,6 +60,8 @@ export function StatusSection({
   currentInputModeLetter,
   workspaceView,
   setWorkspaceView,
+  isModulatorMode,
+  setIsModulatorMode,
   isCommandMode,
   submitCommand,
   keymapResource,
@@ -85,6 +90,7 @@ export function StatusSection({
   statusMessage,
   selectedCellMeta,
   onOpenSettings,
+  modulatorRail,
 }: StatusSectionProps) {
   const activeCompletionRowRef = useRef<HTMLButtonElement | null>(null)
   const completion = useMemo(
@@ -259,7 +265,7 @@ export function StatusSection({
           ) : null}
         </div>
       ) : null}
-      <div className="statusBar">
+      <div className={`statusBar${modulatorRail ? ' statusBar-modulatorDocked' : ''}`}>
       <div className="statusLeft">
         <span className="modeBadge mono" aria-label={`Input mode ${currentInputMode}`}>
           {currentInputModeLetter}
@@ -291,6 +297,14 @@ export function StatusSection({
             Lib
           </button>
         </div>
+        <button
+          type="button"
+          className={`statusModeButton${isModulatorMode ? ' statusModeButton-active' : ''}`}
+          aria-pressed={isModulatorMode}
+          onClick={() => setIsModulatorMode((previous) => !previous)}
+        >
+          Mod
+        </button>
       </div>
       {isCommandMode ? (
         <form className="statusCommandForm" onSubmit={(event) => {
@@ -449,6 +463,11 @@ export function StatusSection({
               <span className="statusMetaValue">{item.value}</span>
             </span>
           ))}
+        </div>
+      ) : null}
+      {modulatorRail ? (
+        <div className="statusModulatorDock">
+          {modulatorRail}
         </div>
       ) : null}
       </div>

@@ -19,13 +19,16 @@ export type FrontendUiActionId =
   | 'selection.move'
   | 'input_mode.set'
   | 'workspace.view.toggle'
+  | 'modulator.mode.toggle'
+  | 'modulator.slot.select'
+  | 'modulator.target.toggle'
   | CommandUiActionId
 
 type UiActionMetadata = {
   id: FrontendUiActionId
   label: string
   section: string
-  argumentKind: 'none' | 'selectionDirection' | 'inputMode'
+  argumentKind: 'none' | 'selectionDirection' | 'inputMode' | 'modulatorSlot' | 'modTarget'
 }
 
 export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
@@ -46,6 +49,24 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     label: 'Toggle workspace view',
     section: 'Workspace',
     argumentKind: 'none',
+  },
+  'modulator.mode.toggle': {
+    id: 'modulator.mode.toggle',
+    label: 'Toggle modulator mode',
+    section: 'Modulators',
+    argumentKind: 'none',
+  },
+  'modulator.slot.select': {
+    id: 'modulator.slot.select',
+    label: 'Select modulator slot',
+    section: 'Modulators',
+    argumentKind: 'modulatorSlot',
+  },
+  'modulator.target.toggle': {
+    id: 'modulator.target.toggle',
+    label: 'Toggle modulator target',
+    section: 'Modulators',
+    argumentKind: 'modTarget',
   },
   'command.open': {
     id: 'command.open',
@@ -134,6 +155,12 @@ export const formatUiActionTarget = (
   }
   if (target.action === 'input_mode.set') {
     return `Set input mode to ${target.arguments.mode}`
+  }
+  if (target.action === 'modulator.slot.select') {
+    return `Select modulator slot ${target.arguments.slot}`
+  }
+  if (target.action === 'modulator.target.toggle') {
+    return `Toggle ${target.arguments.target} modulator`
   }
   return uiActionRegistry[target.action].label
 }

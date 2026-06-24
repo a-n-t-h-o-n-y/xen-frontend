@@ -30,6 +30,15 @@ type RollSequenceDivider = {
   depth: number
 }
 
+type WavePadDragState = {
+  pointerId: number
+  wave: 'a' | 'b'
+  host: HTMLDivElement
+  startClientX: number
+  startClientY: number
+  moved: boolean
+}
+
 type SequencerSectionProps = {
   bridgeUnavailableMessage: string | null
   pitchRows: number[]
@@ -44,6 +53,28 @@ type SequencerSectionProps = {
   ratioToBottom: (ratio: number) => number
   rulerRatios: number[]
   highlightedPitches: Set<number>
+  isModulatorMode: boolean
+  wavePadDragRef: { current: WavePadDragState | null }
+  clampNumber: (value: number, min: number, max: number) => number
+  waveHandleA: { x: number; y: number }
+  waveHandleB: { x: number; y: number }
+  lastWaveHandleUsedRef: { current: 'a' | 'b' }
+  snapWaveToCenterGuides: (
+    wave: 'a' | 'b',
+    options: { snapFrequency: boolean; snapOffset: boolean }
+  ) => void
+  applyWavePadMotion: (
+    wave: 'a' | 'b',
+    host: HTMLDivElement,
+    clientX: number,
+    clientY: number,
+    lockMode: 'frequency' | 'offset' | 'none'
+  ) => void
+  waveAOpacity: number
+  waveBOpacity: number
+  waveAPreviewPath: string
+  waveBPreviewPath: string
+  morphedWavePreviewPath: string
 }
 
 function getNoteFillColor(velocity: number): string {
@@ -52,6 +83,189 @@ function getNoteFillColor(velocity: number): string {
   const green = Math.round(98 + normalizedVelocity * 40)
   const blue = Math.round(146 + normalizedVelocity * 54)
   return `rgb(${red} ${green} ${blue} / 1)`
+}
+
+function ModulatorOverlay({
+  selectedOutline,
+  wavePadDragRef,
+  clampNumber,
+  waveHandleA,
+  waveHandleB,
+  lastWaveHandleUsedRef,
+  snapWaveToCenterGuides,
+  applyWavePadMotion,
+  waveAOpacity,
+  waveBOpacity,
+  waveAPreviewPath,
+  waveBPreviewPath,
+  morphedWavePreviewPath,
+}: {
+  selectedOutline: RollSelectionSpan | null
+  wavePadDragRef: { current: WavePadDragState | null }
+  clampNumber: (value: number, min: number, max: number) => number
+  waveHandleA: { x: number; y: number }
+  waveHandleB: { x: number; y: number }
+  lastWaveHandleUsedRef: { current: 'a' | 'b' }
+  snapWaveToCenterGuides: (
+    wave: 'a' | 'b',
+    options: { snapFrequency: boolean; snapOffset: boolean }
+  ) => void
+  applyWavePadMotion: (
+    wave: 'a' | 'b',
+    host: HTMLDivElement,
+    clientX: number,
+    clientY: number,
+    lockMode: 'frequency' | 'offset' | 'none'
+  ) => void
+  waveAOpacity: number
+  waveBOpacity: number
+  waveAPreviewPath: string
+  waveBPreviewPath: string
+  morphedWavePreviewPath: string
+}) {
+  const hasSelection = selectedOutline !== null && selectedOutline.width > 0
+  const overlaySpan = hasSelection ? selectedOutline : { x: 0, width: 1 }
+  const overlayStyle = {
+    left: `${overlaySpan.x * 100}%`,
+    width: `${overlaySpan.width * 100}%`,
+  } as CSSProperties
+
+  return (
+    <div className="rollModulatorOverlayLayer" aria-hidden="true">
+      <div
+        className={`rollModulatorOverlay${hasSelection ? '' : ' rollModulatorOverlay-previewOnly'}`}
+        style={overlayStyle}
+        onPointerDown={
+          hasSelection
+            ? (event) => {
+                if (!(event.currentTarget instanceof HTMLDivElement)) {
+                  return
+                }
+                const bounds = event.currentTarget.getBoundingClientRect()
+                const xRatio = clampNumber((event.clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
+                const yRatio = clampNumber((event.clientY - bounds.top) / Math.max(bounds.height, 1), 0, 1)
+                const distanceA = Math.hypot(xRatio - waveHandleA.x / 100, yRatio - waveHandleA.y / 100)
+                const distanceB = Math.hypot(xRatio - waveHandleB.x / 100, yRatio - waveHandleB.y / 100)
+                const selectedWave: 'a' | 'b' = distanceA <= distanceB ? 'a' : 'b'
+                wavePadDragRef.current = {
+                  pointerId: event.pointerId,
+                  wave: selectedWave,
+                  host: event.currentTarget,
+                  startClientX: event.clientX,
+                  startClientY: event.clientY,
+                  moved: false,
+                }
+                event.currentTarget.setPointerCapture(event.pointerId)
+              }
+            : undefined
+        }
+        onPointerMove={
+          hasSelection
+            ? (event) => {
+                const drag = wavePadDragRef.current
+                if (!drag || drag.pointerId !== event.pointerId) {
+                  return
+                }
+                const movedDistance = Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY)
+                if (!drag.moved && movedDistance >= 3) {
+                  drag.moved = true
+                }
+                if (!drag.moved) {
+                  return
+                }
+                const lockMode = event.shiftKey ? 'frequency' : event.altKey ? 'offset' : 'none'
+                applyWavePadMotion(drag.wave, drag.host, event.clientX, event.clientY, lockMode)
+              }
+            : undefined
+        }
+        onPointerUp={
+          hasSelection
+            ? (event) => {
+                const drag = wavePadDragRef.current
+                if (drag?.pointerId === event.pointerId) {
+                  if (!drag.moved) {
+                    const clickWave = lastWaveHandleUsedRef.current
+                    const bounds = drag.host.getBoundingClientRect()
+                    const xRatio = clampNumber((event.clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
+                    const yRatio = clampNumber((event.clientY - bounds.top) / Math.max(bounds.height, 1), 0, 1)
+                    const isNearFreqCenterLine = Math.abs(xRatio - 0.5) <= 0.06
+                    const isNearCenterLine = Math.abs(yRatio - 0.5) <= 0.06
+                    if (isNearCenterLine || isNearFreqCenterLine) {
+                      snapWaveToCenterGuides(clickWave, {
+                        snapFrequency: isNearFreqCenterLine,
+                        snapOffset: isNearCenterLine,
+                      })
+                    } else {
+                      const lockMode = event.shiftKey ? 'frequency' : event.altKey ? 'offset' : 'none'
+                      applyWavePadMotion(clickWave, drag.host, event.clientX, event.clientY, lockMode)
+                    }
+                  }
+                  wavePadDragRef.current = null
+                }
+              }
+            : undefined
+        }
+        onPointerCancel={
+          hasSelection
+            ? (event) => {
+                if (wavePadDragRef.current?.pointerId === event.pointerId) {
+                  wavePadDragRef.current = null
+                }
+              }
+            : undefined
+        }
+        title="Drag handle: horizontal = frequency, vertical = phase offset. Shift=frequency only. Option/Alt=offset only."
+      >
+        <svg viewBox="-2 -2 424 144" preserveAspectRatio="none">
+          <line x1="0" y1="70" x2="420" y2="70" className="modWaveAxis" />
+          <line x1="210" y1="0" x2="210" y2="140" className="modWaveAxis" />
+          <line
+            x1={`${waveHandleA.x * 4.2}`}
+            y1="0"
+            x2={`${waveHandleA.x * 4.2}`}
+            y2="140"
+            className="modWaveGuide modWaveGuide-a"
+            style={{ opacity: waveAOpacity }}
+          />
+          <line
+            x1="0"
+            y1={`${waveHandleA.y * 1.4}`}
+            x2="420"
+            y2={`${waveHandleA.y * 1.4}`}
+            className="modWaveGuide modWaveGuide-a"
+            style={{ opacity: waveAOpacity }}
+          />
+          <line
+            x1={`${waveHandleB.x * 4.2}`}
+            y1="0"
+            x2={`${waveHandleB.x * 4.2}`}
+            y2="140"
+            className="modWaveGuide modWaveGuide-b"
+            style={{ opacity: waveBOpacity }}
+          />
+          <line
+            x1="0"
+            y1={`${waveHandleB.y * 1.4}`}
+            x2="420"
+            y2={`${waveHandleB.y * 1.4}`}
+            className="modWaveGuide modWaveGuide-b"
+            style={{ opacity: waveBOpacity }}
+          />
+          <polyline points={waveAPreviewPath} className="modWaveLine modWaveLine-a" style={{ opacity: waveAOpacity }} />
+          <polyline points={waveBPreviewPath} className="modWaveLine modWaveLine-b" style={{ opacity: waveBOpacity }} />
+          <polyline points={morphedWavePreviewPath} className="modWaveLine modWaveLine-mix" />
+        </svg>
+        <span
+          className="modWaveHandle modWaveHandle-a"
+          style={{ left: `${waveHandleA.x}%`, top: `${waveHandleA.y}%`, opacity: waveAOpacity }}
+        />
+        <span
+          className="modWaveHandle modWaveHandle-b"
+          style={{ left: `${waveHandleB.x}%`, top: `${waveHandleB.y}%`, opacity: waveBOpacity }}
+        />
+      </div>
+    </div>
+  )
 }
 
 export function SequencerSection({
@@ -68,6 +282,19 @@ export function SequencerSection({
   ratioToBottom,
   rulerRatios,
   highlightedPitches: _highlightedPitches,
+  isModulatorMode,
+  wavePadDragRef,
+  clampNumber,
+  waveHandleA,
+  waveHandleB,
+  lastWaveHandleUsedRef,
+  snapWaveToCenterGuides,
+  applyWavePadMotion,
+  waveAOpacity,
+  waveBOpacity,
+  waveAPreviewPath,
+  waveBPreviewPath,
+  morphedWavePreviewPath,
 }: SequencerSectionProps) {
   void [_backgroundOverlayStates, _highlightedPitches]
   const rollRowTemplate = useMemo(() => {
@@ -191,6 +418,23 @@ export function SequencerSection({
                 )
               })}
             </div>
+            {isModulatorMode ? (
+              <ModulatorOverlay
+                selectedOutline={selectedOutline}
+                wavePadDragRef={wavePadDragRef}
+                clampNumber={clampNumber}
+                waveHandleA={waveHandleA}
+                waveHandleB={waveHandleB}
+                lastWaveHandleUsedRef={lastWaveHandleUsedRef}
+                snapWaveToCenterGuides={snapWaveToCenterGuides}
+                applyWavePadMotion={applyWavePadMotion}
+                waveAOpacity={waveAOpacity}
+                waveBOpacity={waveBOpacity}
+                waveAPreviewPath={waveAPreviewPath}
+                waveBPreviewPath={waveBPreviewPath}
+                morphedWavePreviewPath={morphedWavePreviewPath}
+              />
+            ) : null}
             {playheadPhase !== null ? (
               <div
                 className="rollPlayhead"

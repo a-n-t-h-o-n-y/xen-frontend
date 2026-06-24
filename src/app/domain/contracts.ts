@@ -8,6 +8,7 @@ export const KEYMAP_SCHEMA_VERSION = 1
 
 const finiteNumber = z.number().finite()
 const nonNegativeInteger = z.number().int().nonnegative()
+const modTargetIdSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'weights'])
 
 export const selectionStepSchema = z.object({
   kind: z.enum(['element', 'cell']),
@@ -224,6 +225,25 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
     type: z.literal('ui_action'),
     action: z.literal('workspace.view.toggle'),
     arguments: z.object({}).strict(),
+  }),
+  z.object({
+    type: z.literal('ui_action'),
+    action: z.literal('modulator.mode.toggle'),
+    arguments: z.object({}).strict(),
+  }),
+  z.object({
+    type: z.literal('ui_action'),
+    action: z.literal('modulator.slot.select'),
+    arguments: z.object({
+      slot: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    }),
+  }),
+  z.object({
+    type: z.literal('ui_action'),
+    action: z.literal('modulator.target.toggle'),
+    arguments: z.object({
+      target: modTargetIdSchema,
+    }),
   }),
   z.object({
     type: z.literal('ui_action'),

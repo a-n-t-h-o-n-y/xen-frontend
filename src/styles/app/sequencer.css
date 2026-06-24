@@ -181,7 +181,66 @@
   box-shadow: 0 0 0 1px rgb(8 15 24 / 28%);
   transform: translateX(-1px);
   pointer-events: none;
-  z-index: 6;
+  z-index: 9;
+}
+
+.rollModulatorOverlayLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.rollModulatorOverlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+  background: rgb(245 196 90 / 4%);
+  box-shadow:
+    inset 1px 0 0 rgb(245 196 90 / 28%),
+    inset -1px 0 0 rgb(245 196 90 / 28%);
+}
+
+.rollModulatorOverlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.rollModulatorOverlay .modWaveAxis,
+.rollModulatorOverlay .modWaveGuide,
+.rollModulatorOverlay .modWaveLine {
+  vector-effect: non-scaling-stroke;
+}
+
+.rollModulatorOverlay .modWaveHandle {
+  position: absolute;
+  width: 0.58rem;
+  height: 0.58rem;
+  border: 1px solid rgb(7 12 18 / 86%);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 24%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.rollModulatorOverlay .modWaveHandle-a {
+  background: rgb(103 232 249 / 94%);
+}
+
+.rollModulatorOverlay .modWaveHandle-b {
+  background: rgb(248 113 113 / 94%);
+}
+
+.rollModulatorOverlay-previewOnly {
+  pointer-events: none;
+  opacity: 0.34;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* =========================================================

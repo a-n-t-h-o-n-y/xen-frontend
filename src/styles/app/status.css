@@ -98,6 +98,32 @@
   color: rgb(252 245 223);
 }
 
+.statusModeButton {
+  height: 1.25rem;
+  min-width: 2.35rem;
+  padding: 0 0.4rem;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 4%);
+  color: rgb(255 255 255 / 52%);
+  font-size: 0.64rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.statusModeButton:hover,
+.statusModeButton:focus-visible {
+  border-color: rgb(255 255 255 / 30%);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.statusModeButton-active {
+  border-color: rgb(245 196 90 / 58%);
+  background: rgb(245 196 90 / 16%);
+  color: rgb(252 245 223);
+}
+
 .statusText {
   flex: 1;
   min-width: 0;
@@ -130,6 +156,29 @@
 
 .statusMetaValue {
   color: rgb(255 255 255 / 62%);
+}
+
+.statusModulatorDock {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.statusBar-modulatorDocked .statusCommandForm,
+.statusBar-modulatorDocked .statusText {
+  flex: 1 1 auto;
+}
+
+.statusBar-modulatorDocked .statusMeta {
+  flex: 0 1 auto;
+  margin-left: 0;
+}
+
+.statusBar-modulatorDocked .statusModulatorDock {
+  flex: 0 0 clamp(42rem, 68vw, 64rem);
+  margin-left: 0;
 }
 
 /* Notes: Semantic colors map directly to status message severity. */

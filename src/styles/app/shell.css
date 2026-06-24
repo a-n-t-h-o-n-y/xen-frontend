@@ -41,12 +41,12 @@
 /* =========================================================
    Section 2: App Layout
    Purpose: Define the high-level vertical frame for the app.
-   Notes: Rows are header, workspace, lower modules, then command/status bar.
+   Notes: Rows are header, workspace, then command/status bar.
    ========================================================= */
 
 .app {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--space-3);
 
   min-height: 300px;
