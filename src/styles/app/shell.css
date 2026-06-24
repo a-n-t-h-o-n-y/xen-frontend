@@ -41,7 +41,7 @@
 /* =========================================================
    Section 2: App Layout
    Purpose: Define the high-level vertical frame for the app.
-   Notes: Rows are header, sequencer, lower modules, then command/status bar.
+   Notes: Rows are header, workspace, lower modules, then command/status bar.
    ========================================================= */
 
 .app {
@@ -59,6 +59,22 @@
   user-select: none;
   -webkit-user-select: none;
   cursor: default;
+}
+
+.workspaceSection {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+}
+
+.workspacePane {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+}
+
+.workspacePane[hidden] {
+  display: none;
 }
 
 /* =========================================================

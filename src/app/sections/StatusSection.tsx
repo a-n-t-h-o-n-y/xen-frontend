@@ -15,9 +15,13 @@ import {
 import type { KeymapResource } from '../domain/contracts'
 import type { CommandReferenceEntry, InputMode, MessageLevel, StatusCellMetaItem } from '../shared'
 
+type WorkspaceView = 'sequencer' | 'library'
+
 type StatusSectionProps = {
   currentInputMode: InputMode
   currentInputModeLetter: string
+  workspaceView: WorkspaceView
+  setWorkspaceView: Dispatch<SetStateAction<WorkspaceView>>
   isCommandMode: boolean
   submitCommand: () => void
   keymapResource: KeymapResource | null
@@ -51,6 +55,8 @@ type StatusSectionProps = {
 export function StatusSection({
   currentInputMode,
   currentInputModeLetter,
+  workspaceView,
+  setWorkspaceView,
   isCommandMode,
   submitCommand,
   keymapResource,
@@ -267,6 +273,24 @@ export function StatusSection({
         >
           <span aria-hidden="true">⚙</span>
         </button>
+        <div className="workspaceSwitch" role="group" aria-label="Workspace view">
+          <button
+            type="button"
+            className={`workspaceSwitchButton${workspaceView === 'sequencer' ? ' workspaceSwitchButton-active' : ''}`}
+            aria-pressed={workspaceView === 'sequencer'}
+            onClick={() => setWorkspaceView('sequencer')}
+          >
+            Seq
+          </button>
+          <button
+            type="button"
+            className={`workspaceSwitchButton${workspaceView === 'library' ? ' workspaceSwitchButton-active' : ''}`}
+            aria-pressed={workspaceView === 'library'}
+            onClick={() => setWorkspaceView('library')}
+          >
+            Lib
+          </button>
+        </div>
       </div>
       {isCommandMode ? (
         <form className="statusCommandForm" onSubmit={(event) => {

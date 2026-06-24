@@ -1,9 +1,7 @@
 import type { ComponentProps } from 'react'
-import { LibraryPanel } from './bottom/LibraryPanel'
 import { ModulatorsPanel } from './bottom/ModulatorsPanel'
 
-type BottomModulesSectionProps = ComponentProps<typeof ModulatorsPanel> &
-  ComponentProps<typeof LibraryPanel>
+type BottomModulesSectionProps = ComponentProps<typeof ModulatorsPanel>
 
 export function BottomModulesSection(props: BottomModulesSectionProps) {
   return (
@@ -50,29 +48,6 @@ export function BottomModulesSection(props: BottomModulesSectionProps) {
           buildCommandForTarget={props.buildCommandForTarget}
           baseMorphModulator={props.baseMorphModulator}
           tuningLength={props.tuningLength}
-        />
-        <div
-          className="bottomModule-rowItem bottomModule-referenceSpacer"
-          aria-hidden="true"
-        />
-        <LibraryPanel
-          activeLibraryTab={props.activeLibraryTab}
-          setActiveLibraryTab={props.setActiveLibraryTab}
-          librarySnapshot={props.librarySnapshot}
-          activeTuningName={props.activeTuningName}
-          activeScaleId={props.activeScaleId}
-          runLibraryCommand={props.runLibraryCommand}
-          tuningSearchInputRef={props.tuningSearchInputRef}
-          tuningSearch={props.tuningSearch}
-          setTuningSearch={props.setTuningSearch}
-          tuningSortMode={props.tuningSortMode}
-          setTuningSortMode={props.setTuningSortMode}
-          tuningHierarchyRows={props.tuningHierarchyRows}
-          formatOctaveForDisplay={props.formatOctaveForDisplay}
-          measureSearchInputRef={props.measureSearchInputRef}
-          measureSearch={props.measureSearch}
-          setMeasureSearch={props.setMeasureSearch}
-          measureHierarchyRows={props.measureHierarchyRows}
         />
       </div>
     </details>

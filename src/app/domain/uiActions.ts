@@ -18,6 +18,7 @@ export type CommandUiActionId = typeof commandUiActionIds[number]
 export type FrontendUiActionId =
   | 'selection.move'
   | 'input_mode.set'
+  | 'workspace.view.toggle'
   | CommandUiActionId
 
 type UiActionMetadata = {
@@ -39,6 +40,12 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     label: 'Set input mode',
     section: 'Sequencer',
     argumentKind: 'inputMode',
+  },
+  'workspace.view.toggle': {
+    id: 'workspace.view.toggle',
+    label: 'Toggle workspace view',
+    section: 'Workspace',
+    argumentKind: 'none',
   },
   'command.open': {
     id: 'command.open',

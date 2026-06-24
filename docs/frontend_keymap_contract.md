@@ -172,6 +172,11 @@ Command UI action meanings:
 - `command.completion.previous`: move to the previous completion;
 - `command.completion.next`: move to the next completion.
 
+Workspace UI action meanings:
+
+- `workspace.view.toggle`: toggle the main workspace between the sequencer and
+  library views. Arguments must be `{}`.
+
 The old semicolon-based mixed local/backend routing is obsolete. Each binding has one
 typed target.
 

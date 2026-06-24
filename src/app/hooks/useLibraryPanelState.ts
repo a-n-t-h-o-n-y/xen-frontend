@@ -38,10 +38,6 @@ export function useLibraryPanelState() {
   const measureSearchInputRef = useRef<HTMLInputElement>(null)
 
   const [tuningSortMode, setTuningSortMode] = useState<TuningSortMode>('name')
-  const [activeLibraryTab, setActiveLibraryTab] = useState<'tunings' | 'measures' | 'scales' | 'chords'>(
-    'tunings'
-  )
-
   const [sessionReference, setSessionReference] = useState<SessionReference>(createInitialSessionReference)
   const [librarySnapshot, setLibrarySnapshot] = useState<LibrarySnapshot>(createInitialLibrarySnapshot)
   const [libraryLoading, setLibraryLoading] = useState(false)
@@ -152,8 +148,6 @@ export function useLibraryPanelState() {
     measureSearchInputRef,
     tuningSortMode,
     setTuningSortMode,
-    activeLibraryTab,
-    setActiveLibraryTab,
     sessionReference,
     setSessionReference,
     librarySnapshot,

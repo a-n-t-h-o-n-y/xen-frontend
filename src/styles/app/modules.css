@@ -70,18 +70,48 @@
   gap: var(--space-2);
 }
 
-.bottomModule-library {
-  min-height: var(--extras-row-height);
-}
-
 /* =========================================================
    Section 2: Library Panel
-   Purpose: Tabs, sort chips, hierarchy rows, and list presentation.
+   Purpose: Full workspace library columns, sort chips, and hierarchy rows.
    ========================================================= */
 
-.libraryTabs {
-  display: inline-flex;
-  gap: 0.3rem;
+.libraryWorkspacePanel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: var(--space-3);
+  border: var(--border-subtle);
+  border-radius: var(--radius-2);
+  background: var(--seq-shell-bg);
+  overflow: hidden;
+}
+
+.libraryColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-3);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: var(--radius-2);
+  background: var(--surface-1);
+}
+
+.libraryColumnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.libraryColumnControls {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .librarySortChips {
@@ -108,25 +138,10 @@
   color: rgb(252 245 223);
 }
 
-.libraryTab {
-  border: 1px solid rgb(255 255 255 / 22%);
-  border-radius: 6px;
-  background: rgb(255 255 255 / 4%);
-  color: var(--text-secondary);
-  font-size: 0.68rem;
-  line-height: 1;
-  padding: 0.3rem 0.5rem;
-}
-
-.libraryTab-active {
-  border-color: rgb(245 196 90 / 58%);
-  background: rgb(245 196 90 / 14%);
-  color: rgb(252 245 223);
-}
-
 .libraryList {
   display: grid;
   align-content: start;
+  flex: 1 1 auto;
   gap: 0.35rem;
   width: 100%;
   min-height: 0;
@@ -222,7 +237,7 @@
 
 .bottomModuleRow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: var(--space-3);
   padding: 0 var(--space-3) var(--space-3);
@@ -234,10 +249,6 @@
   max-height: calc(var(--extras-row-height) + var(--square-module-label-offset));
   min-height: calc(var(--extras-row-height) + var(--square-module-label-offset));
   overflow: hidden;
-}
-
-.bottomModule-referenceSpacer {
-  visibility: hidden;
 }
 
 /* =========================================================
@@ -813,12 +824,9 @@
    ========================================================= */
 
 @media (max-width: 860px) {
-  .bottomModuleRow {
-    grid-template-columns: 1fr;
-  }
-
-  .bottomModule-referenceSpacer {
-    display: none;
+  .libraryWorkspacePanel {
+    grid-template-columns: repeat(4, minmax(10rem, 1fr));
+    overflow-x: auto;
   }
 
   .modulatorRow {

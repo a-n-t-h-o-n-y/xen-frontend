@@ -587,6 +587,17 @@ describe('keymap routing', () => {
             arguments: { direction: 'left', amount: 2 },
           },
         },
+        {
+          trigger: {
+            key: 'l',
+            modifiers: { shift: true, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'workspace.view.toggle',
+            arguments: {},
+          },
+        },
       ],
       'command.input': [
         {
@@ -656,13 +667,24 @@ describe('keymap routing', () => {
 
   it('formats typed triggers and targets with stable identities', () => {
     const binding = resource.bindings.sequence[0]!
+    const workspaceBinding = resource.bindings.sequence[1]!
     expect(triggerIdentity(binding.trigger)).toContain('h')
     expect(formatKeymapTrigger(binding.trigger)).toContain('Shift')
     expect(formatKeymapTarget(binding.target)).toBe('Move left by 2')
+    expect(formatKeymapTarget(workspaceBinding.target)).toBe('Toggle workspace view')
     expect(formatKeymapTarget(resource.bindings['command.input']![0]!.target)).toBe('Cancel command')
     expect(formatKeymapContext('command.completions')).toBe('Command Completions')
     expect(getCommandKeymapContext(false)).toBe('command.input')
     expect(getCommandKeymapContext(true)).toBe('command.completions')
+  })
+
+  it('parses no-argument workspace UI actions', () => {
+    const binding = resource.bindings.sequence[1]!
+    expect(binding.target).toMatchObject({
+      type: 'ui_action',
+      action: 'workspace.view.toggle',
+      arguments: {},
+    })
   })
 
   it('installs only newer keymap revisions', () => {

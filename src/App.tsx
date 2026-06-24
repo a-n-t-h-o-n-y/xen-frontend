@@ -13,6 +13,7 @@ import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { StatusSection } from './app/sections/StatusSection'
 import { SettingsOverlay } from './app/sections/SettingsOverlay'
+import { LibraryPanel } from './app/sections/bottom/LibraryPanel'
 import {
   MAX_COMMAND_HISTORY,
   DEFAULT_TUNING_LENGTH,
@@ -76,6 +77,9 @@ import type {
   KeymapTrigger,
   ProjectSnapshot,
 } from './app/domain/contracts'
+
+type WorkspaceView = 'sequencer' | 'library'
+
 function App() {
   const [editorState, setEditorState] = useState<EditorState>({
     selection: { path: [] },
@@ -88,6 +92,7 @@ function App() {
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
   const [keymapResource, setKeymapResource] = useState<KeymapResource | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('sequencer')
   const [keymapBusy, setKeymapBusy] = useState(false)
   const [keymapError, setKeymapError] = useState<string | null>(null)
   const {
@@ -140,13 +145,10 @@ function App() {
     measureSearchInputRef,
     tuningSortMode,
     setTuningSortMode,
-    activeLibraryTab,
-    setActiveLibraryTab,
     sessionReference,
     setSessionReference,
     librarySnapshot,
     setLibrarySnapshot,
-    libraryLoading,
     setLibraryLoading,
     tuningHierarchyRows,
     measureHierarchyRows,
@@ -187,7 +189,7 @@ function App() {
     isSwitchingModTabRef,
     modulatorInstancesRef,
   } = useModulatorPanelState()
-  const { sendBridgeRequest, ingestLibrary, ingestKeymap, executeBackendCommand } = useBridgeSession({
+  const { sendBridgeRequest, ingestKeymap, executeBackendCommand } = useBridgeSession({
     eventTokenRef,
     transportRef,
     projectRef,
@@ -290,6 +292,10 @@ function App() {
     input.setSelectionRange(textLength, textLength)
   }, [isCommandMode])
 
+  const toggleWorkspaceView = useCallback((): void => {
+    setWorkspaceView((current) => current === 'sequencer' ? 'library' : 'sequencer')
+  }, [])
+
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent): void => {
       const editableTarget = isEditableTarget(event.target)
@@ -366,6 +372,11 @@ function App() {
               return
             }
 
+            if (matchedBinding.target.action === 'workspace.view.toggle') {
+              toggleWorkspaceView()
+              return
+            }
+
             if (
               isCommandUiActionId(matchedBinding.target.action) &&
               matchedBinding.target.action === 'command.open'
@@ -393,6 +404,18 @@ function App() {
         return
       }
 
+      if (
+        event.key.toLowerCase() === 'l' &&
+        event.shiftKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      ) {
+        event.preventDefault()
+        toggleWorkspaceView()
+        return
+      }
+
       if (event.key === ':' && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.preventDefault()
         openCommandMode()
@@ -408,6 +431,7 @@ function App() {
     isCommandMode,
     openCommandMode,
     settingsOpen,
+    toggleWorkspaceView,
   ])
 
   useEffect(() => {
@@ -1270,29 +1294,6 @@ function App() {
     setOpenWaveMenu(null)
   }, [setOpenWaveMenu, setWaveAType, setWaveBType])
 
-  const refreshLibraryView = useCallback(async (): Promise<void> => {
-    if (bridgeUnavailableMessage !== null || libraryLoading) {
-      return
-    }
-
-    setLibraryLoading(true)
-    try {
-      const libraryResponse = await sendBridgeRequest('library.get', {})
-      ingestLibrary(libraryResponse.payload)
-    } catch (error) {
-      setStatusMessage(`Library refresh failed: ${getErrorMessage(error)}`)
-      setStatusLevel('error')
-    } finally {
-      setLibraryLoading(false)
-    }
-  }, [
-    bridgeUnavailableMessage,
-    libraryLoading,
-    sendBridgeRequest,
-    setLibraryLoading,
-    ingestLibrary,
-  ])
-
   const runLibraryCommand = useCallback(
     async (command: string): Promise<void> => {
       if (!command || bridgeUnavailableMessage !== null) {
@@ -1308,16 +1309,6 @@ function App() {
     },
     [bridgeUnavailableMessage, executeBackendCommand]
   )
-
-  const previousLibraryTabRef = useRef(activeLibraryTab)
-
-  useEffect(() => {
-    if (previousLibraryTabRef.current === activeLibraryTab) {
-      return
-    }
-    previousLibraryTabRef.current = activeLibraryTab
-    void refreshLibraryView()
-  }, [activeLibraryTab, refreshLibraryView])
 
   useEffect(() => {
     const handleContextMenu = (event: MouseEvent): void => {
@@ -1371,21 +1362,52 @@ function App() {
         applyModeSelection={applyModeSelection}
         tuningName={tuningName}
       />
-      <SequencerSection
-        bridgeUnavailableMessage={bridgeUnavailableMessage}
-        pitchRows={pitchRows}
-        staffLineBandByPitch={staffLineBandByPitch}
-        backgroundOverlayStates={backgroundOverlayStates}
-        cellMuteWindow={cellMuteWindow}
-        sequenceDividerPositions={sequenceDividerPositions}
-        selectionSpans={selectionSpans}
-        tuningLength={tuningLength}
-        rollNotes={rollNotes}
-        playheadPhase={playheadPhase}
-        ratioToBottom={ratioToBottom}
-        rulerRatios={rulerRatios}
-        highlightedPitches={highlightedPitches}
-      />
+      <section className="workspaceSection" aria-label="Workspace">
+        <div
+          className="workspacePane"
+          hidden={workspaceView !== 'sequencer'}
+          aria-hidden={workspaceView !== 'sequencer'}
+        >
+          <SequencerSection
+            bridgeUnavailableMessage={bridgeUnavailableMessage}
+            pitchRows={pitchRows}
+            staffLineBandByPitch={staffLineBandByPitch}
+            backgroundOverlayStates={backgroundOverlayStates}
+            cellMuteWindow={cellMuteWindow}
+            sequenceDividerPositions={sequenceDividerPositions}
+            selectionSpans={selectionSpans}
+            tuningLength={tuningLength}
+            rollNotes={rollNotes}
+            playheadPhase={playheadPhase}
+            ratioToBottom={ratioToBottom}
+            rulerRatios={rulerRatios}
+            highlightedPitches={highlightedPitches}
+          />
+        </div>
+        <div
+          className="workspacePane"
+          hidden={workspaceView !== 'library'}
+          aria-hidden={workspaceView !== 'library'}
+        >
+          <LibraryPanel
+            librarySnapshot={librarySnapshot}
+            activeTuningName={tuningName}
+            activeScaleId={scaleSourceId}
+            runLibraryCommand={runLibraryCommand}
+            tuningSearchInputRef={tuningSearchInputRef}
+            tuningSearch={tuningSearch}
+            setTuningSearch={setTuningSearch}
+            tuningSortMode={tuningSortMode}
+            setTuningSortMode={setTuningSortMode}
+            tuningHierarchyRows={tuningHierarchyRows}
+            formatOctaveForDisplay={formatOctaveForDisplay}
+            measureSearchInputRef={measureSearchInputRef}
+            measureSearch={measureSearch}
+            setMeasureSearch={setMeasureSearch}
+            measureHierarchyRows={measureHierarchyRows}
+          />
+        </div>
+      </section>
       <BottomModulesSection
         activeModulatorTab={activeModulatorTab}
         setOpenWaveMenu={setOpenWaveMenu}
@@ -1421,27 +1443,12 @@ function App() {
         buildCommandForTarget={buildModTargetCommand}
         baseMorphModulator={baseMorphModulator}
         tuningLength={tuningLength}
-        activeLibraryTab={activeLibraryTab}
-        setActiveLibraryTab={setActiveLibraryTab}
-        librarySnapshot={librarySnapshot}
-        activeTuningName={tuningName}
-        activeScaleId={scaleSourceId}
-        runLibraryCommand={runLibraryCommand}
-        tuningSearchInputRef={tuningSearchInputRef}
-        tuningSearch={tuningSearch}
-        setTuningSearch={setTuningSearch}
-        tuningSortMode={tuningSortMode}
-        setTuningSortMode={setTuningSortMode}
-        tuningHierarchyRows={tuningHierarchyRows}
-        formatOctaveForDisplay={formatOctaveForDisplay}
-        measureSearchInputRef={measureSearchInputRef}
-        measureSearch={measureSearch}
-        setMeasureSearch={setMeasureSearch}
-        measureHierarchyRows={measureHierarchyRows}
       />
       <StatusSection
         currentInputMode={editorState.inputMode}
         currentInputModeLetter={currentInputModeLetter}
+        workspaceView={workspaceView}
+        setWorkspaceView={setWorkspaceView}
         isCommandMode={isCommandMode}
         submitCommand={submitCommand}
         keymapResource={keymapResource}

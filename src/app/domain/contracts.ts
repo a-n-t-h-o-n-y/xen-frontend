@@ -222,6 +222,11 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     type: z.literal('ui_action'),
+    action: z.literal('workspace.view.toggle'),
+    arguments: z.object({}).strict(),
+  }),
+  z.object({
+    type: z.literal('ui_action'),
     action: z.enum([
       'command.open',
       'command.cancel',

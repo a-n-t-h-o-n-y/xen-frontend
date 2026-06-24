@@ -27,8 +27,9 @@ Accept and validate these `ui_action` IDs:
 - `command.completion.dismiss`
 - `command.completion.previous`
 - `command.completion.next`
+- `workspace.view.toggle`
 
-Command UI actions take no arguments and should be serialized as:
+Command and workspace UI actions take no arguments and should be serialized as:
 
 ```json
 {
