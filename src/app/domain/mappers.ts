@@ -1,6 +1,7 @@
 import type {
   CatalogDto,
   CommandExecuteResponseDto,
+  MeasureEntryDto,
   KeymapBindingDto,
   KeymapOverrideDto,
   KeymapResourceDto,
@@ -40,23 +41,59 @@ const measureFromDto = (measure: MeasureDto): Measure => ({
   },
 })
 
-export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot => ({
-  revision: snapshot.project_revision,
-  historyEntryId: snapshot.history_entry_id,
-  measure: measureFromDto(snapshot.project.measure),
-  pitch: {
-    tuning: snapshot.project.pitch.tuning,
-    scale: snapshot.project.pitch.scale
-      ? {
-          sourceId: snapshot.project.pitch.scale.source_id,
-          definition: scaleFromDto(snapshot.project.pitch.scale.definition),
-        }
-      : null,
-    transposition: snapshot.project.pitch.transposition,
-    translationDirection: snapshot.project.pitch.translation_direction,
-    baseFrequency: snapshot.project.pitch.base_frequency,
+const emptyMeasureEntry: MeasureEntryDto = {
+  id: 0,
+  measure: {
+    cell: {
+      weight: 1,
+      elements: [],
+    },
   },
-})
+}
+
+const arrangedMeasureFromDto = (snapshot: ProjectSnapshotDto): Measure => {
+  if (snapshot.schema_version === 1) {
+    return measureFromDto(snapshot.project.measure)
+  }
+
+  const composition = snapshot.project.composition
+  const currentRow = composition.rows.find((row) => row.output_id === 'current')
+    ?? composition.rows[0]
+  const measureId = currentRow?.cells[0] ?? null
+  const measureEntry = measureId === null
+    ? snapshot.project.measure_bank.measures[0]
+    : snapshot.project.measure_bank.measures.find((entry) => entry.id === measureId)
+  const columnLength = composition.columns[0]?.length ?? { numerator: 4, denominator: 4 }
+
+  return {
+    cell: (measureEntry ?? emptyMeasureEntry).measure.cell,
+    timeSignature: {
+      numerator: columnLength.numerator,
+      denominator: columnLength.denominator,
+    },
+  }
+}
+
+export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot => {
+  const pitchState = snapshot.project.pitch
+  return {
+    revision: snapshot.project_revision,
+    historyEntryId: snapshot.history_entry_id,
+    measure: arrangedMeasureFromDto(snapshot),
+    pitch: {
+      tuning: pitchState.tuning,
+      scale: pitchState.scale
+        ? {
+            sourceId: pitchState.scale.source_id,
+            definition: scaleFromDto(pitchState.scale.definition),
+          }
+        : null,
+      transposition: pitchState.transposition,
+      translationDirection: pitchState.translation_direction,
+      baseFrequency: pitchState.base_frequency,
+    },
+  }
+}
 
 export const libraryFromDto = (snapshot: LibrarySnapshotDto): LibrarySnapshot => ({
   revision: snapshot.library_revision,

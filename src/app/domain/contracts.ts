@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
 export const BRIDGE_PROTOCOL = 'xen.bridge.v1'
-export const PROJECT_SCHEMA_VERSION = 1
+export const PROJECT_SCHEMA_VERSION = 2
+export const LEGACY_PROJECT_SCHEMA_VERSION = 1
 export const LIBRARY_SCHEMA_VERSION = 1
 export const CATALOG_SCHEMA_VERSION = 2
 export const KEYMAP_SCHEMA_VERSION = 1
@@ -73,6 +74,43 @@ export const measureSchema = z.object({
   }),
 })
 
+export const measureEntrySchema = z.object({
+  id: nonNegativeInteger,
+  measure: z.object({
+    cell: cellSchema,
+  }),
+})
+
+export const measureBankSchema = z.object({
+  next_id: nonNegativeInteger,
+  measures: z.array(measureEntrySchema),
+})
+
+export const compositionLengthSchema = z.object({
+  numerator: finiteNumber,
+  denominator: finiteNumber,
+})
+
+export const compositionSchema = z.object({
+  columns: z.array(z.object({
+    length: compositionLengthSchema,
+  })),
+  rows: z.array(z.object({
+    output_id: z.string(),
+    cells: z.array(nonNegativeInteger.nullable()),
+  })),
+}).superRefine((composition, context) => {
+  composition.rows.forEach((row, rowIndex) => {
+    if (row.cells.length !== composition.columns.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['rows', rowIndex, 'cells'],
+        message: 'Expected row cells to match composition column count',
+      })
+    }
+  })
+})
+
 export const scaleDefinitionSchema = z.object({
   name: z.string(),
   tuning_length: finiteNumber,
@@ -80,30 +118,61 @@ export const scaleDefinitionSchema = z.object({
   mode: finiteNumber,
 })
 
-export const projectSnapshotSchema = z.object({
-  schema_version: z.literal(PROJECT_SCHEMA_VERSION),
+const pitchStateSchema = z.object({
+  tuning: z.object({
+    name: z.string(),
+    definition: z.object({
+      intervals: z.array(finiteNumber),
+      octave: finiteNumber,
+    }),
+  }),
+  scale: z.object({
+    source_id: z.string().nullable(),
+    definition: scaleDefinitionSchema,
+  }).nullable(),
+  transposition: finiteNumber,
+  translation_direction: z.enum(['up', 'down']),
+  base_frequency: finiteNumber,
+})
+
+export const legacyProjectSnapshotSchema = z.object({
+  schema_version: z.literal(LEGACY_PROJECT_SCHEMA_VERSION),
   history_entry_id: nonNegativeInteger,
   project_revision: nonNegativeInteger,
   project: z.object({
     measure: measureSchema,
-    pitch: z.object({
-      tuning: z.object({
-        name: z.string(),
-        definition: z.object({
-          intervals: z.array(finiteNumber),
-          octave: finiteNumber,
-        }),
-      }),
-      scale: z.object({
-        source_id: z.string().nullable(),
-        definition: scaleDefinitionSchema,
-      }).nullable(),
-      transposition: finiteNumber,
-      translation_direction: z.enum(['up', 'down']),
-      base_frequency: finiteNumber,
-    }),
+    pitch: pitchStateSchema,
   }),
 })
+
+export const arrangementProjectSnapshotSchema = z.object({
+  schema_version: z.literal(PROJECT_SCHEMA_VERSION),
+  history_entry_id: nonNegativeInteger,
+  project_revision: nonNegativeInteger,
+  project: z.object({
+    measure_bank: measureBankSchema,
+    composition: compositionSchema,
+    pitch: pitchStateSchema,
+  }),
+}).superRefine((snapshot, context) => {
+  const measureIds = new Set(snapshot.project.measure_bank.measures.map((entry) => entry.id))
+  snapshot.project.composition.rows.forEach((row, rowIndex) => {
+    row.cells.forEach((measureId, cellIndex) => {
+      if (measureId !== null && !measureIds.has(measureId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['project', 'composition', 'rows', rowIndex, 'cells', cellIndex],
+          message: `Unknown measure reference ${measureId}`,
+        })
+      }
+    })
+  })
+})
+
+export const projectSnapshotSchema = z.discriminatedUnion('schema_version', [
+  legacyProjectSnapshotSchema,
+  arrangementProjectSnapshotSchema,
+])
 
 const libraryCommandEntrySchema = z.object({
   name: z.string(),
@@ -290,7 +359,10 @@ export const keymapResourceSchema = z.object({
 export const sessionHelloSchema = z.object({
   protocol: z.literal(BRIDGE_PROTOCOL),
   plugin_version: z.string(),
-  project_schema_version: z.literal(PROJECT_SCHEMA_VERSION),
+  project_schema_version: z.union([
+    z.literal(LEGACY_PROJECT_SCHEMA_VERSION),
+    z.literal(PROJECT_SCHEMA_VERSION),
+  ]),
   library_schema_version: z.literal(LIBRARY_SCHEMA_VERSION),
   catalog: catalogSchema,
   keymap: keymapResourceSchema,
@@ -350,6 +422,7 @@ export type SelectionStepDto = z.infer<typeof selectionStepSchema>
 export type SelectionDto = z.infer<typeof selectionSchema>
 export type SelectionPathDto = SelectionDto['path']
 export type MeasureDto = z.infer<typeof measureSchema>
+export type MeasureEntryDto = z.infer<typeof measureEntrySchema>
 export type ScaleDefinitionDto = z.infer<typeof scaleDefinitionSchema>
 export type ProjectSnapshotDto = z.infer<typeof projectSnapshotSchema>
 export type LibrarySnapshotDto = z.infer<typeof librarySnapshotSchema>

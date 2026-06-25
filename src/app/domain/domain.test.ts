@@ -113,6 +113,68 @@ const projectFixture = (revision = 3): ProjectSnapshotDto => ({
   },
 })
 
+const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
+  schema_version: 2,
+  history_entry_id: 2,
+  project_revision: revision,
+  project: {
+    measure_bank: {
+      next_id: 3,
+      measures: [
+        {
+          id: 1,
+          measure: {
+            cell: {
+              weight: 1,
+              elements: [{ type: 'Note', pitch: 99, velocity: 1, delay: 0, gate: 1 }],
+            },
+          },
+        },
+        {
+          id: 2,
+          measure: {
+            cell: nestedCell,
+          },
+        },
+      ],
+    },
+    composition: {
+      columns: [{ length: { numerator: 7, denominator: 8 } }],
+      rows: [
+        {
+          output_id: 'other',
+          cells: [1],
+        },
+        {
+          output_id: 'current',
+          cells: [2],
+        },
+      ],
+    },
+    pitch: {
+      tuning: {
+        name: '12EDO',
+        definition: {
+          intervals: Array.from({ length: 12 }, (_, index) => index * 100),
+          octave: 1200,
+        },
+      },
+      scale: {
+        source_id: 'scale:major',
+        definition: {
+          name: 'major',
+          tuning_length: 12,
+          intervals: [2, 2, 1, 2, 2, 2, 1],
+          mode: 1,
+        },
+      },
+      transposition: 2,
+      translation_direction: 'up',
+      base_frequency: 440,
+    },
+  },
+})
+
 const libraryFixture = (revision = 4): LibrarySnapshotDto => ({
   schema_version: 1,
   library_revision: revision,
@@ -175,7 +237,7 @@ describe('schema 2 contract validation', () => {
     const hello = parseSessionHello({
       protocol: 'xen.bridge.v1',
       plugin_version: '1.0.0',
-      project_schema_version: 1,
+      project_schema_version: 2,
       library_schema_version: 1,
       catalog: {
         schema_version: 2,
@@ -247,6 +309,11 @@ describe('schema 2 contract validation', () => {
 
   it('validates project, library, command response, and events', () => {
     expect(parseProjectSnapshot(projectFixture()).project.pitch.transposition).toBe(2)
+    const arrangedProject = parseProjectSnapshot(arrangedProjectFixture())
+    expect(arrangedProject.schema_version).toBe(2)
+    if (arrangedProject.schema_version === 2) {
+      expect(arrangedProject.project.composition.rows[1]?.cells[0]).toBe(2)
+    }
     expect(parseLibrarySnapshot(libraryFixture()).scales[0]?.id).toBe('chromatic')
     expect(parseCommandResponse({
       status: { level: 'info', message: 'ok' },
@@ -260,6 +327,16 @@ describe('schema 2 contract validation', () => {
       payload: libraryFixture(),
     }).name).toBe('library.changed')
     expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 4 })).toThrow()
+    expect(() => parseProjectSnapshot({
+      ...arrangedProjectFixture(),
+      project: {
+        ...arrangedProjectFixture().project,
+        composition: {
+          columns: [{ length: { numerator: 4, denominator: 4 } }],
+          rows: [{ output_id: 'current', cells: [404] }],
+        },
+      },
+    })).toThrow()
   })
 })
 
@@ -337,6 +414,15 @@ describe('DTO to domain mappers', () => {
     expect(project.pitch.scale?.definition.tuningLength).toBe(12)
     expect(project.pitch.translationDirection).toBe('up')
     expect(project.pitch.baseFrequency).toBe(440)
+  })
+
+  it('maps arranged project snapshots to the current output first-column measure', () => {
+    const project = projectFromDto(arrangedProjectFixture(10))
+
+    expect(project.revision).toBe(10)
+    expect(project.measure.timeSignature).toEqual({ numerator: 7, denominator: 8 })
+    expect(project.measure.cell).toBe(nestedCell)
+    expect(project.pitch.scale?.definition.name).toBe('major')
   })
 
   it('maps library snapshots to camelCase resources and commands', () => {

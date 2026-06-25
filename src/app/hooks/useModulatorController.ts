@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import {
+  LFO_FREQUENCY_MAX,
   LFO_PHASE_OFFSET_MAX,
   LFO_PHASE_OFFSET_MIN,
   frequencyToRatio,
@@ -28,9 +29,14 @@ type TargetControlUpdate =
   | Partial<TargetControl>
   | ((current: TargetControl) => Partial<TargetControl>)
 
+const WAVE_PREVIEW_VIEWBOX_SIZE = 100
+const WAVE_PREVIEW_SAMPLES_PER_PIXEL = 2
+const WAVE_PREVIEW_SAMPLES_PER_CYCLE = 72
+
 type UseModulatorControllerArgs = {
   bridgeUnavailableMessage: string | null
   tuningLength: number
+  modulatorPreviewWidth: number
   executeBackendCommand: (command: string) => Promise<void>
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
@@ -50,6 +56,7 @@ type UseModulatorControllerArgs = {
 export function useModulatorController({
   bridgeUnavailableMessage,
   tuningLength,
+  modulatorPreviewWidth,
   executeBackendCommand,
   setStatusMessage,
   setStatusLevel,
@@ -62,9 +69,15 @@ export function useModulatorController({
   liveEmitCommandsRef,
 }: UseModulatorControllerArgs) {
   const { waveAPreviewPath, waveBPreviewPath, morphedWavePreviewPath } = useMemo(() => {
-    const width = 420
-    const height = 140
-    const steps = 96
+    const maxVisibleFrequency = clampNumber(
+      Math.max(activeModulator.lfoAFrequency, activeModulator.lfoBFrequency),
+      1,
+      LFO_FREQUENCY_MAX
+    )
+    const steps = Math.max(
+      Math.ceil(Math.max(modulatorPreviewWidth, 1) * WAVE_PREVIEW_SAMPLES_PER_PIXEL),
+      Math.ceil(maxVisibleFrequency * WAVE_PREVIEW_SAMPLES_PER_CYCLE)
+    )
     const waveAPoints: string[] = []
     const waveBPoints: string[] = []
     const mixedPoints: string[] = []
@@ -73,7 +86,7 @@ export function useModulatorController({
 
     for (let index = 0; index <= steps; index += 1) {
       const progress = index / steps
-      const x = progress * width
+      const x = progress * WAVE_PREVIEW_VIEWBOX_SIZE
       const waveA = sampleWaveShape(
         activeModulator.waveAType,
         progress * activeModulator.lfoAFrequency + normalizedWaveAPhase,
@@ -89,9 +102,9 @@ export function useModulatorController({
         -1,
         1
       )
-      const waveAY = (1 - (waveA + 1) / 2) * height
-      const waveBY = (1 - (waveB + 1) / 2) * height
-      const mixedY = (1 - (mixed + 1) / 2) * height
+      const waveAY = (1 - (waveA + 1) / 2) * WAVE_PREVIEW_VIEWBOX_SIZE
+      const waveBY = (1 - (waveB + 1) / 2) * WAVE_PREVIEW_VIEWBOX_SIZE
+      const mixedY = (1 - (mixed + 1) / 2) * WAVE_PREVIEW_VIEWBOX_SIZE
       waveAPoints.push(`${x.toFixed(2)},${waveAY.toFixed(2)}`)
       waveBPoints.push(`${x.toFixed(2)},${waveBY.toFixed(2)}`)
       mixedPoints.push(`${x.toFixed(2)},${mixedY.toFixed(2)}`)
@@ -102,7 +115,7 @@ export function useModulatorController({
       waveBPreviewPath: waveBPoints.join(' '),
       morphedWavePreviewPath: mixedPoints.join(' '),
     }
-  }, [activeModulator])
+  }, [activeModulator, modulatorPreviewWidth])
 
   const emitCommandsNow = useCallback(
     (commands: string[]): void => {

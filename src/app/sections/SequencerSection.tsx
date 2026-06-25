@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
 import { REFERENCE_RATIOS } from '../domain/music'
 import type { BgOverlayState } from '../presentation/viewModels'
 
@@ -75,6 +75,7 @@ type SequencerSectionProps = {
   waveAPreviewPath: string
   waveBPreviewPath: string
   morphedWavePreviewPath: string
+  setModulatorPreviewWidth: Dispatch<SetStateAction<number>>
 }
 
 function getNoteFillColor(velocity: number): string {
@@ -99,6 +100,7 @@ function ModulatorOverlay({
   waveAPreviewPath,
   waveBPreviewPath,
   morphedWavePreviewPath,
+  setModulatorPreviewWidth,
 }: {
   selectedOutline: RollSelectionSpan | null
   wavePadDragRef: { current: WavePadDragState | null }
@@ -122,7 +124,9 @@ function ModulatorOverlay({
   waveAPreviewPath: string
   waveBPreviewPath: string
   morphedWavePreviewPath: string
+  setModulatorPreviewWidth: Dispatch<SetStateAction<number>>
 }) {
+  const overlayRef = useRef<HTMLDivElement | null>(null)
   const hasSelection = selectedOutline !== null && selectedOutline.width > 0
   const overlaySpan = hasSelection ? selectedOutline : { x: 0, width: 1 }
   const overlayStyle = {
@@ -130,9 +134,27 @@ function ModulatorOverlay({
     width: `${overlaySpan.width * 100}%`,
   } as CSSProperties
 
+  useEffect(() => {
+    const overlay = overlayRef.current
+    if (!overlay) {
+      setModulatorPreviewWidth(0)
+      return
+    }
+
+    const updateWidth = (): void => {
+      setModulatorPreviewWidth(Math.round(overlay.getBoundingClientRect().width))
+    }
+
+    updateWidth()
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(overlay)
+    return () => observer.disconnect()
+  }, [hasSelection, overlayStyle.left, overlayStyle.width, setModulatorPreviewWidth])
+
   return (
     <div className="rollModulatorOverlayLayer" aria-hidden="true">
       <div
+        ref={overlayRef}
         className={`rollModulatorOverlay${hasSelection ? '' : ' rollModulatorOverlay-previewOnly'}`}
         style={overlayStyle}
         onPointerDown={
@@ -216,41 +238,7 @@ function ModulatorOverlay({
         }
         title="Drag handle: horizontal = frequency, vertical = phase offset. Shift=frequency only. Option/Alt=offset only."
       >
-        <svg viewBox="-2 -2 424 144" preserveAspectRatio="none">
-          <line x1="0" y1="70" x2="420" y2="70" className="modWaveAxis" />
-          <line x1="210" y1="0" x2="210" y2="140" className="modWaveAxis" />
-          <line
-            x1={`${waveHandleA.x * 4.2}`}
-            y1="0"
-            x2={`${waveHandleA.x * 4.2}`}
-            y2="140"
-            className="modWaveGuide modWaveGuide-a"
-            style={{ opacity: waveAOpacity }}
-          />
-          <line
-            x1="0"
-            y1={`${waveHandleA.y * 1.4}`}
-            x2="420"
-            y2={`${waveHandleA.y * 1.4}`}
-            className="modWaveGuide modWaveGuide-a"
-            style={{ opacity: waveAOpacity }}
-          />
-          <line
-            x1={`${waveHandleB.x * 4.2}`}
-            y1="0"
-            x2={`${waveHandleB.x * 4.2}`}
-            y2="140"
-            className="modWaveGuide modWaveGuide-b"
-            style={{ opacity: waveBOpacity }}
-          />
-          <line
-            x1="0"
-            y1={`${waveHandleB.y * 1.4}`}
-            x2="420"
-            y2={`${waveHandleB.y * 1.4}`}
-            className="modWaveGuide modWaveGuide-b"
-            style={{ opacity: waveBOpacity }}
-          />
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none">
           <polyline points={waveAPreviewPath} className="modWaveLine modWaveLine-a" style={{ opacity: waveAOpacity }} />
           <polyline points={waveBPreviewPath} className="modWaveLine modWaveLine-b" style={{ opacity: waveBOpacity }} />
           <polyline points={morphedWavePreviewPath} className="modWaveLine modWaveLine-mix" />
@@ -295,6 +283,7 @@ export function SequencerSection({
   waveAPreviewPath,
   waveBPreviewPath,
   morphedWavePreviewPath,
+  setModulatorPreviewWidth,
 }: SequencerSectionProps) {
   void [_backgroundOverlayStates, _highlightedPitches]
   const rollRowTemplate = useMemo(() => {
@@ -433,6 +422,7 @@ export function SequencerSection({
                 waveAPreviewPath={waveAPreviewPath}
                 waveBPreviewPath={waveBPreviewPath}
                 morphedWavePreviewPath={morphedWavePreviewPath}
+                setModulatorPreviewWidth={setModulatorPreviewWidth}
               />
             ) : null}
             {playheadPhase !== null ? (

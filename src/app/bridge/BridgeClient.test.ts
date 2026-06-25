@@ -10,16 +10,32 @@ import {
 import type { ProjectSnapshotDto } from '../domain/contracts'
 
 const projectFixture = (): ProjectSnapshotDto => ({
-  schema_version: 1,
+  schema_version: 2,
   history_entry_id: 2,
   project_revision: 3,
   project: {
-    measure: {
-      cell: {
-        weight: 1,
-        elements: [{ type: 'Note', pitch: 0, velocity: 1, delay: 0, gate: 1 }],
-      },
-      time_signature: { numerator: 4, denominator: 4 },
+    measure_bank: {
+      next_id: 2,
+      measures: [
+        {
+          id: 1,
+          measure: {
+            cell: {
+              weight: 1,
+              elements: [{ type: 'Note', pitch: 0, velocity: 1, delay: 0, gate: 1 }],
+            },
+          },
+        },
+      ],
+    },
+    composition: {
+      columns: [{ length: { numerator: 4, denominator: 4 } }],
+      rows: [
+        {
+          output_id: 'current',
+          cells: [1],
+        },
+      ],
     },
     pitch: {
       tuning: {

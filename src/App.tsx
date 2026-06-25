@@ -92,6 +92,7 @@ function App() {
   const transportRef = useRef<TransportState>(createTransportState())
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
+  const [modulatorPreviewWidth, setModulatorPreviewWidth] = useState(0)
   const {
     tuningSearch,
     setTuningSearch,
@@ -387,6 +388,7 @@ function App() {
   } = useModulatorController({
     bridgeUnavailableMessage,
     tuningLength,
+    modulatorPreviewWidth,
     executeBackendCommand,
     setStatusMessage,
     setStatusLevel,
@@ -597,6 +599,7 @@ function App() {
                 waveAPreviewPath={waveAPreviewPath}
                 waveBPreviewPath={waveBPreviewPath}
                 morphedWavePreviewPath={morphedWavePreviewPath}
+                setModulatorPreviewWidth={setModulatorPreviewWidth}
               />
             </div>
             <div

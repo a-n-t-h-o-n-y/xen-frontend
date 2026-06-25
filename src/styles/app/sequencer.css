@@ -199,10 +199,8 @@
   pointer-events: auto;
   cursor: crosshair;
   touch-action: none;
-  background: rgb(245 196 90 / 4%);
-  box-shadow:
-    inset 1px 0 0 rgb(245 196 90 / 28%),
-    inset -1px 0 0 rgb(245 196 90 / 28%);
+  background: transparent;
+  box-shadow: none;
 }
 
 .rollModulatorOverlay svg {
@@ -219,11 +217,13 @@
 
 .rollModulatorOverlay .modWaveHandle {
   position: absolute;
-  width: 0.58rem;
-  height: 0.58rem;
-  border: 1px solid rgb(7 12 18 / 86%);
+  width: 0.82rem;
+  height: 0.82rem;
+  border: 2px solid rgb(8 12 18 / 92%);
   border-radius: 999px;
-  box-shadow: 0 0 0 1px rgb(255 255 255 / 24%);
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 78%),
+    0 5px 14px rgb(0 0 0 / 34%);
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
