@@ -146,11 +146,16 @@ const targetFromEditor = (editor: EditorState): KeymapTarget => {
       arguments: { target: editor.modTarget },
     }
   }
+  const action = editor.targetType as Exclude<
+    FrontendUiActionId,
+    'selection.move' | 'composition.selection.move' | 'input_mode.set' |
+    'modulator.slot.select' | 'modulator.target.toggle'
+  >
   return {
     type: 'ui_action',
-    action: editor.targetType,
+    action,
     arguments: {},
-  }
+  } as KeymapTarget
 }
 
 export function SettingsOverlay({

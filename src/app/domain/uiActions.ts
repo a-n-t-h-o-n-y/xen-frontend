@@ -23,6 +23,17 @@ export type FrontendUiActionId =
   | 'workspace.view.sequencer'
   | 'composition.selection.move'
   | 'composition.cell.edit_measure'
+  | 'composition.cell.rename_or_create_measure'
+  | 'composition.cell.clear'
+  | 'composition.row.insert_before'
+  | 'composition.row.insert_after'
+  | 'composition.row.delete'
+  | 'composition.row.rename'
+  | 'composition.row.output'
+  | 'composition.column.insert_before'
+  | 'composition.column.insert_after'
+  | 'composition.column.delete'
+  | 'composition.column.length'
   | 'composition.loop.set_start'
   | 'composition.loop.set_end'
   | 'modulator.mode.toggle'
@@ -82,6 +93,72 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
   'composition.cell.edit_measure': {
     id: 'composition.cell.edit_measure',
     label: 'Edit composition cell measure',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.cell.rename_or_create_measure': {
+    id: 'composition.cell.rename_or_create_measure',
+    label: 'Rename or assign composition cell',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.cell.clear': {
+    id: 'composition.cell.clear',
+    label: 'Clear composition cell',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.row.insert_before': {
+    id: 'composition.row.insert_before',
+    label: 'Insert row before',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.row.insert_after': {
+    id: 'composition.row.insert_after',
+    label: 'Insert row after',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.row.delete': {
+    id: 'composition.row.delete',
+    label: 'Delete row',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.row.rename': {
+    id: 'composition.row.rename',
+    label: 'Rename row',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.row.output': {
+    id: 'composition.row.output',
+    label: 'Assign row output',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.column.insert_before': {
+    id: 'composition.column.insert_before',
+    label: 'Insert column before',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.column.insert_after': {
+    id: 'composition.column.insert_after',
+    label: 'Insert column after',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.column.delete': {
+    id: 'composition.column.delete',
+    label: 'Delete column',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.column.length': {
+    id: 'composition.column.length',
+    label: 'Edit column length',
     section: 'Composition',
     argumentKind: 'none',
   },

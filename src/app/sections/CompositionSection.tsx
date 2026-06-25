@@ -1,16 +1,34 @@
 import { formatTimeSignature } from '../presentation/viewModels'
 import { getMeasureById, isColumnInLoopRegion } from '../domain/composition'
 import { clampNumber, flattenMeasureToNoteIR, normalizePitch } from '../domain/music'
-import { Fragment } from 'react'
-import type { CSSProperties } from 'react'
+import { Fragment, useEffect, useMemo, useRef } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 import type { Composition, CompositionSelection, MeasureBank } from '../domain/models'
+
+export type CompositionEditTarget =
+  | { kind: 'cell'; rowIndex: number; columnIndex: number }
+  | { kind: 'rowName'; rowIndex: number }
+  | { kind: 'rowOutput'; rowIndex: number }
+  | { kind: 'columnLength'; columnIndex: number }
 
 type CompositionSectionProps = {
   composition: Composition
   measureBank: MeasureBank | null
   selection: CompositionSelection
   tuningLength: number
+  editTarget: CompositionEditTarget | null
   onSelectCell: (selection: CompositionSelection) => void
+  onBeginEdit: (target: CompositionEditTarget) => void
+  onCancelEdit: () => void
+  onCommitCellName: (rowIndex: number, columnIndex: number, name: string) => void
+  onCommitRowName: (rowIndex: number, name: string) => void
+  onCommitRowOutput: (rowIndex: number, outputId: string) => void
+  onCommitColumnLength: (columnIndex: number, length: string) => void
+  onInsertRow: (placement: 'before' | 'after', rowIndex: number) => void
+  onDeleteRow: (rowIndex: number) => void
+  onInsertColumn: (placement: 'before' | 'after', columnIndex: number) => void
+  onDeleteColumn: (columnIndex: number) => void
+  onClearCell: (rowIndex: number, columnIndex: number) => void
 }
 
 const minColumnWidth = 5.5
@@ -57,8 +75,22 @@ export function CompositionSection({
   measureBank,
   selection,
   tuningLength,
+  editTarget,
   onSelectCell,
+  onBeginEdit,
+  onCancelEdit,
+  onCommitCellName,
+  onCommitRowName,
+  onCommitRowOutput,
+  onCommitColumnLength,
+  onInsertRow,
+  onDeleteRow,
+  onInsertColumn,
+  onDeleteColumn,
+  onClearCell,
 }: CompositionSectionProps) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
+  const editInputRef = useRef<HTMLInputElement | null>(null)
   const columnWidths = composition.columns.map((column) => getColumnWidth(column.length))
   const gridTemplateColumns = ['10rem', ...columnWidths].join(' ')
   const selectedMeasureId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
@@ -68,10 +100,98 @@ export function CompositionSection({
         count + row.cells.filter((measureId) => measureId === selectedMeasureId).length
       ), 0)
   const shouldHighlightReferences = selectedMeasureInstanceCount > 1
+  const outputOptions = useMemo(() => Array.from(new Set([
+    'current',
+    ...composition.rows.map((row) => row.outputId).filter(Boolean),
+  ])), [composition.rows])
+  const editKey = editTarget
+    ? editTarget.kind === 'cell'
+      ? `cell-${editTarget.rowIndex}-${editTarget.columnIndex}`
+      : editTarget.kind === 'rowName' || editTarget.kind === 'rowOutput'
+        ? `${editTarget.kind}-${editTarget.rowIndex}`
+        : `${editTarget.kind}-${editTarget.columnIndex}`
+    : ''
+  const editValue = useMemo(() => {
+    if (!editTarget) {
+      return ''
+    }
+
+    if (editTarget.kind === 'cell') {
+      const measureId = composition.rows[editTarget.rowIndex]?.cells[editTarget.columnIndex]
+      const measureEntry = measureId === null || measureId === undefined
+        ? null
+        : getMeasureById(measureBank, measureId)
+      return measureEntry?.name ?? ''
+    }
+
+    if (editTarget.kind === 'rowName') {
+      return composition.rows[editTarget.rowIndex]?.name ?? ''
+    }
+
+    if (editTarget.kind === 'rowOutput') {
+      return composition.rows[editTarget.rowIndex]?.outputId ?? 'current'
+    }
+
+    const length = composition.columns[editTarget.columnIndex]?.length
+    return length ? formatTimeSignature(length) : '4/4'
+  }, [composition.columns, composition.rows, editTarget, measureBank])
+
+  useEffect(() => {
+    const selected = scrollerRef.current?.querySelector('[data-composition-selected="true"]')
+    if (selected instanceof HTMLElement) {
+      selected.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+  }, [selection.columnIndex, selection.rowIndex])
+
+  useEffect(() => {
+    if (!editTarget) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      editInputRef.current?.focus()
+      editInputRef.current?.select()
+    })
+  }, [editKey, editTarget])
+
+  const commitEdit = (): void => {
+    if (!editTarget) {
+      return
+    }
+    const value = editInputRef.current?.value ?? editValue
+
+    if (editTarget.kind === 'cell') {
+      onCommitCellName(editTarget.rowIndex, editTarget.columnIndex, value)
+    } else if (editTarget.kind === 'rowName') {
+      onCommitRowName(editTarget.rowIndex, value)
+    } else if (editTarget.kind === 'rowOutput') {
+      onCommitRowOutput(editTarget.rowIndex, value)
+    } else {
+      onCommitColumnLength(editTarget.columnIndex, value)
+    }
+  }
+
+  const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    event.stopPropagation()
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      commitEdit()
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onCancelEdit()
+    }
+  }
 
   return (
     <section className="composition" aria-label="Composition matrix">
-      <div className="compositionScroller">
+      <datalist id="composition-output-options">
+        {outputOptions.map((outputId) => (
+          <option value={outputId} key={outputId} />
+        ))}
+      </datalist>
+      <div className="compositionScroller" ref={scrollerRef}>
         <div
           className="compositionGrid"
           style={{ gridTemplateColumns }}
@@ -98,11 +218,74 @@ export function CompositionSection({
                 ].filter(Boolean).join(' ')}
                 role="columnheader"
                 aria-colindex={columnIndex + 2}
+                onClick={() => onSelectCell({ rowIndex: selection.rowIndex, columnIndex })}
               >
-                <span className="compositionColumnIndex mono">{columnIndex + 1}</span>
-                <span className="compositionColumnLength mono">
-                  {formatTimeSignature(column.length)}
+                <span className="compositionHeaderTopLine">
+                  <span className="compositionColumnIndex mono">{columnIndex + 1}</span>
+                  <span className="compositionHeaderActions">
+                    <button
+                      type="button"
+                      className="compositionHeaderAction mono"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onInsertColumn('before', columnIndex)
+                      }}
+                      aria-label={`Insert column before ${columnIndex + 1}`}
+                    >
+                      +L
+                    </button>
+                    <button
+                      type="button"
+                      className="compositionHeaderAction mono"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onInsertColumn('after', columnIndex)
+                      }}
+                      aria-label={`Insert column after ${columnIndex + 1}`}
+                    >
+                      +R
+                    </button>
+                    <button
+                      type="button"
+                      className="compositionHeaderAction mono"
+                      disabled={composition.columns.length <= 1}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onDeleteColumn(columnIndex)
+                      }}
+                      aria-label={`Delete column ${columnIndex + 1}`}
+                    >
+                      -
+                    </button>
+                  </span>
                 </span>
+                {editTarget?.kind === 'columnLength' && editTarget.columnIndex === columnIndex ? (
+                  <input
+                    key={editKey}
+                    ref={editInputRef}
+                    className="compositionInlineInput compositionInlineInput-compact mono"
+                    defaultValue={editValue}
+                    onKeyDown={handleEditKeyDown}
+                    onBlur={onCancelEdit}
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    aria-label={`Edit column ${columnIndex + 1} length`}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="compositionColumnLength mono"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onBeginEdit({ kind: 'columnLength', columnIndex })
+                    }}
+                    aria-label={`Edit column ${columnIndex + 1} length`}
+                  >
+                    {formatTimeSignature(column.length)}
+                  </button>
+                )}
               </div>
             )
           })}
@@ -119,9 +302,101 @@ export function CompositionSection({
                   ].filter(Boolean).join(' ')}
                   role="rowheader"
                   aria-rowindex={rowIndex + 2}
+                  onClick={() => onSelectCell({ rowIndex, columnIndex: selection.columnIndex })}
                 >
-                  <span className="compositionRowName">{row.name}</span>
-                  <span className="compositionRowOutput mono">{row.outputId || 'current'}</span>
+                  <span className="compositionRowTopLine">
+                    {editTarget?.kind === 'rowName' && editTarget.rowIndex === rowIndex ? (
+                      <input
+                        key={editKey}
+                        ref={editInputRef}
+                        className="compositionInlineInput"
+                        defaultValue={editValue}
+                        onKeyDown={handleEditKeyDown}
+                        onBlur={onCancelEdit}
+                        spellCheck={false}
+                        autoCapitalize="off"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        aria-label={`Rename row ${rowIndex + 1}`}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="compositionRowName"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onBeginEdit({ kind: 'rowName', rowIndex })
+                        }}
+                        aria-label={`Rename row ${rowIndex + 1}`}
+                      >
+                        {row.name}
+                      </button>
+                    )}
+                    <span className="compositionHeaderActions">
+                      <button
+                        type="button"
+                        className="compositionHeaderAction mono"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onInsertRow('before', rowIndex)
+                        }}
+                        aria-label={`Insert row before ${rowIndex + 1}`}
+                      >
+                        +U
+                      </button>
+                      <button
+                        type="button"
+                        className="compositionHeaderAction mono"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onInsertRow('after', rowIndex)
+                        }}
+                        aria-label={`Insert row after ${rowIndex + 1}`}
+                      >
+                        +D
+                      </button>
+                      <button
+                        type="button"
+                        className="compositionHeaderAction mono"
+                        disabled={composition.rows.length <= 1}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onDeleteRow(rowIndex)
+                        }}
+                        aria-label={`Delete row ${rowIndex + 1}`}
+                      >
+                        -
+                      </button>
+                    </span>
+                  </span>
+                  {editTarget?.kind === 'rowOutput' && editTarget.rowIndex === rowIndex ? (
+                    <input
+                      key={editKey}
+                      ref={editInputRef}
+                      className="compositionInlineInput compositionInlineInput-compact mono"
+                      list="composition-output-options"
+                      defaultValue={editValue}
+                      onKeyDown={handleEditKeyDown}
+                      onBlur={onCancelEdit}
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      aria-label={`Assign row ${rowIndex + 1} output`}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="compositionRowOutput mono"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onBeginEdit({ kind: 'rowOutput', rowIndex })
+                      }}
+                      aria-label={`Assign row ${rowIndex + 1} output`}
+                    >
+                      {row.outputId || 'current'}
+                    </button>
+                  )}
                 </div>
                 {composition.columns.map((column, columnIndex) => {
                   const measureId = row.cells[columnIndex]
@@ -140,11 +415,13 @@ export function CompositionSection({
                   const isReferenceMatch =
                     shouldHighlightReferences && measureId === selectedMeasureId && !isSelectedCell
                   const miniMapNotes = getMiniMapNotes(measureEntry, column.length, tuningLength)
+                  const isEditingCell = editTarget?.kind === 'cell' &&
+                    editTarget.rowIndex === rowIndex &&
+                    editTarget.columnIndex === columnIndex
 
                   return (
-                    <button
+                    <div
                       key={`composition-cell-${rowIndex}-${columnIndex}`}
-                      type="button"
                       className={[
                         'compositionCell',
                         isSelectedRow ? 'compositionCell-selectedRow' : '',
@@ -157,12 +434,14 @@ export function CompositionSection({
                         measureEntry ? '' : 'compositionCell-empty',
                       ].filter(Boolean).join(' ')}
                       role="gridcell"
+                      tabIndex={0}
                       aria-rowindex={rowIndex + 2}
                       aria-colindex={columnIndex + 2}
                       aria-selected={isSelectedCell}
+                      data-composition-selected={isSelectedCell ? 'true' : undefined}
                       onClick={() => onSelectCell({ rowIndex, columnIndex })}
+                      onDoubleClick={() => onBeginEdit({ kind: 'cell', rowIndex, columnIndex })}
                     >
-                      <span className="compositionCellLabel">{label}</span>
                       {miniMapNotes.length > 0 ? (
                         <span className="compositionMiniMap" aria-hidden="true">
                           {miniMapNotes.map((note, noteIndex) => (
@@ -181,7 +460,51 @@ export function CompositionSection({
                           ))}
                         </span>
                       ) : null}
-                    </button>
+                      <span className="compositionCellOverlay">
+                        {isEditingCell ? (
+                          <input
+                            key={editKey}
+                            ref={editInputRef}
+                            className="compositionInlineInput"
+                            defaultValue={editValue}
+                            onKeyDown={handleEditKeyDown}
+                            onBlur={onCancelEdit}
+                            spellCheck={false}
+                            autoCapitalize="off"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            aria-label={`Assign measure at row ${rowIndex + 1}, column ${columnIndex + 1}`}
+                          />
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="compositionCellLabel"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                onBeginEdit({ kind: 'cell', rowIndex, columnIndex })
+                              }}
+                              aria-label={`Assign measure at row ${rowIndex + 1}, column ${columnIndex + 1}`}
+                            >
+                              {label}
+                            </button>
+                            {measureEntry ? (
+                              <button
+                                type="button"
+                                className="compositionCellClear mono"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  onClearCell(rowIndex, columnIndex)
+                                }}
+                                aria-label={`Clear row ${rowIndex + 1}, column ${columnIndex + 1}`}
+                              >
+                                x
+                              </button>
+                            ) : null}
+                          </>
+                        )}
+                      </span>
+                    </div>
                   )
                 })}
               </Fragment>

@@ -76,6 +76,7 @@ export const measureSchema = z.object({
 
 export const measureEntrySchema = z.object({
   id: nonNegativeInteger,
+  name: z.string().optional(),
   measure: z.object({
     cell: cellSchema,
   }),
@@ -101,6 +102,7 @@ export const compositionSchema = z.object({
     length: compositionLengthSchema,
   })),
   rows: z.array(z.object({
+    name: z.string().optional(),
     output_id: z.string(),
     cells: z.array(nonNegativeInteger.nullable()),
   })),
@@ -324,6 +326,17 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
       'workspace.view.composition',
       'workspace.view.sequencer',
       'composition.cell.edit_measure',
+      'composition.cell.rename_or_create_measure',
+      'composition.cell.clear',
+      'composition.row.insert_before',
+      'composition.row.insert_after',
+      'composition.row.delete',
+      'composition.row.rename',
+      'composition.row.output',
+      'composition.column.insert_before',
+      'composition.column.insert_after',
+      'composition.column.delete',
+      'composition.column.length',
       'composition.loop.set_start',
       'composition.loop.set_end',
     ]),

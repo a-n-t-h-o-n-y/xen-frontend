@@ -66,7 +66,7 @@ const compositionFromDto = (
       },
     })),
     rows: composition.rows.map((row, index) => ({
-      name: row.output_id || `Row ${index + 1}`,
+      name: row.name || row.output_id || `Row ${index + 1}`,
       outputId: row.output_id,
       cells: row.cells,
     })),
@@ -112,7 +112,7 @@ export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot =>
           nextId: snapshot.project.measure_bank.next_id,
           measures: snapshot.project.measure_bank.measures.map((entry) => ({
             id: entry.id,
-            name: measureName(entry.id),
+            name: entry.name || measureName(entry.id),
             measure: entry.measure,
           })),
         }

@@ -36,6 +36,7 @@ type UseKeyboardControllerArgs = {
   installCompositionSelection: (nextSelection: CompositionSelection) => void
   setWorkspaceView: Dispatch<SetStateAction<WorkspaceView>>
   editSelectedCompositionCell: () => void
+  runSelectedCompositionAction: (action: string) => boolean
   setLoopStart: () => void
   setLoopEnd: () => void
   setIsModulatorMode: Dispatch<SetStateAction<boolean>>
@@ -62,6 +63,7 @@ export function useKeyboardController({
   installCompositionSelection,
   setWorkspaceView,
   editSelectedCompositionCell,
+  runSelectedCompositionAction,
   setLoopStart,
   setLoopEnd,
   setIsModulatorMode,
@@ -194,6 +196,10 @@ export function useKeyboardController({
               return
             }
 
+            if (runSelectedCompositionAction(matchedBinding.target.action)) {
+              return
+            }
+
             if (matchedBinding.target.action === 'composition.loop.set_start') {
               setLoopStart()
               return
@@ -275,6 +281,7 @@ export function useKeyboardController({
     keymapRef,
     openCommandMode,
     projectRef,
+    runSelectedCompositionAction,
     selectActiveModulatorTab,
     setIsModulatorMode,
     setLoopEnd,

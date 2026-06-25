@@ -40,23 +40,28 @@ import {
 import {
   collectLeafCells,
   formatOctaveForDisplay,
+  formatTimeSignature,
   isPathPrefix,
   getCellAtPath,
   getStatusCellMeta,
+  parseTimeSignatureInput,
 } from './app/presentation/viewModels'
 import type {
   Cell,
   ActiveMeasureTarget,
+  Composition,
   CompositionSelection,
   EditorState,
   TransportState,
 } from './app/domain/models'
+import type { CompositionEditTarget } from './app/sections/CompositionSection'
 import { resolveSelection } from './app/domain/selection'
 
 type WorkspaceView = 'composition' | 'sequencer' | 'library'
 
 const EMPTY_ROOT_CELL: Cell = { weight: 1, elements: [] }
 const INITIAL_COMPOSITION_SELECTION: CompositionSelection = { rowIndex: 0, columnIndex: 0 }
+const quoteCommandArgument = (value: string): string => JSON.stringify(value)
 
 function App() {
   const [editorState, setEditorState] = useState<EditorState>({
@@ -70,6 +75,7 @@ function App() {
   const [compositionSelection, setCompositionSelection] = useState<CompositionSelection>(
     INITIAL_COMPOSITION_SELECTION
   )
+  const [compositionEditTarget, setCompositionEditTarget] = useState<CompositionEditTarget | null>(null)
   const [activeMeasureTarget, setActiveMeasureTarget] = useState<ActiveMeasureTarget | null>(null)
   const compositionSelectionRef = useRef<CompositionSelection>(compositionSelection)
   const workspaceViewRef = useRef<WorkspaceView>(workspaceView)
@@ -380,6 +386,152 @@ function App() {
     setStatusMessage,
   ])
 
+  const runCompositionCommand = useCallback((command: string): void => {
+    if (bridgeUnavailableMessage !== null) {
+      return
+    }
+
+    void executeBackendCommand(command).catch((error: unknown) => {
+      setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+      setStatusLevel('error')
+    })
+  }, [bridgeUnavailableMessage, executeBackendCommand, setStatusLevel, setStatusMessage])
+
+  const withCompositionSelection = useCallback((
+    handler: (composition: Composition, selection: CompositionSelection) => void
+  ): void => {
+    const composition = projectRef.current?.composition
+    if (!composition) {
+      return
+    }
+    handler(composition, clampCompositionSelection(composition, compositionSelectionRef.current))
+  }, [projectRef])
+
+  const beginCompositionEdit = useCallback((target: CompositionEditTarget): void => {
+    setCompositionEditTarget(target)
+  }, [])
+
+  const commitCompositionCellName = useCallback((
+    rowIndex: number,
+    columnIndex: number,
+    name: string
+  ): void => {
+    const trimmed = name.trim()
+    setCompositionEditTarget(null)
+    if (!trimmed) {
+      runCompositionCommand(`composition cell clear ${rowIndex} ${columnIndex}`)
+      return
+    }
+    runCompositionCommand(
+      `composition cell assign ${rowIndex} ${columnIndex} ${quoteCommandArgument(trimmed)}`
+    )
+  }, [runCompositionCommand])
+
+  const commitCompositionRowName = useCallback((rowIndex: number, name: string): void => {
+    const trimmed = name.trim()
+    setCompositionEditTarget(null)
+    if (!trimmed) {
+      setStatusMessage('Row name cannot be empty.')
+      setStatusLevel('warning')
+      return
+    }
+    runCompositionCommand(`composition row rename ${rowIndex} ${quoteCommandArgument(trimmed)}`)
+  }, [runCompositionCommand, setStatusLevel, setStatusMessage])
+
+  const commitCompositionRowOutput = useCallback((rowIndex: number, outputId: string): void => {
+    const trimmed = outputId.trim()
+    setCompositionEditTarget(null)
+    if (!trimmed) {
+      setStatusMessage('Row output cannot be empty.')
+      setStatusLevel('warning')
+      return
+    }
+    runCompositionCommand(`composition row output ${rowIndex} ${quoteCommandArgument(trimmed)}`)
+  }, [runCompositionCommand, setStatusLevel, setStatusMessage])
+
+  const commitCompositionColumnLength = useCallback((columnIndex: number, length: string): void => {
+    const parsed = parseTimeSignatureInput(length)
+    setCompositionEditTarget(null)
+    if (!parsed) {
+      setStatusMessage('Invalid column length. Use N/D, e.g. 4/4')
+      setStatusLevel('warning')
+      return
+    }
+    runCompositionCommand(
+      `composition column length ${columnIndex} ${formatTimeSignature(parsed)}`
+    )
+  }, [runCompositionCommand, setStatusLevel, setStatusMessage])
+
+  const insertCompositionRow = useCallback((placement: 'before' | 'after', rowIndex: number): void => {
+    runCompositionCommand(`composition row insert ${placement} ${rowIndex}`)
+  }, [runCompositionCommand])
+
+  const deleteCompositionRow = useCallback((rowIndex: number): void => {
+    const composition = projectRef.current?.composition
+    if (!composition || composition.rows.length <= 1) {
+      return
+    }
+    runCompositionCommand(`composition row delete ${rowIndex}`)
+  }, [projectRef, runCompositionCommand])
+
+  const insertCompositionColumn = useCallback((
+    placement: 'before' | 'after',
+    columnIndex: number
+  ): void => {
+    runCompositionCommand(`composition column insert ${placement} ${columnIndex}`)
+  }, [runCompositionCommand])
+
+  const deleteCompositionColumn = useCallback((columnIndex: number): void => {
+    const composition = projectRef.current?.composition
+    if (!composition || composition.columns.length <= 1) {
+      return
+    }
+    runCompositionCommand(`composition column delete ${columnIndex}`)
+  }, [projectRef, runCompositionCommand])
+
+  const clearCompositionCell = useCallback((rowIndex: number, columnIndex: number): void => {
+    runCompositionCommand(`composition cell clear ${rowIndex} ${columnIndex}`)
+  }, [runCompositionCommand])
+
+  const runSelectedCompositionAction = useCallback((action: string): boolean => {
+    let handled = true
+    withCompositionSelection((composition, selection) => {
+      if (action === 'composition.cell.rename_or_create_measure') {
+        setCompositionEditTarget({ kind: 'cell', ...selection })
+      } else if (action === 'composition.cell.clear') {
+        clearCompositionCell(selection.rowIndex, selection.columnIndex)
+      } else if (action === 'composition.row.insert_before') {
+        insertCompositionRow('before', selection.rowIndex)
+      } else if (action === 'composition.row.insert_after') {
+        insertCompositionRow('after', selection.rowIndex)
+      } else if (action === 'composition.row.delete') {
+        if (composition.rows.length > 1) deleteCompositionRow(selection.rowIndex)
+      } else if (action === 'composition.row.rename') {
+        setCompositionEditTarget({ kind: 'rowName', rowIndex: selection.rowIndex })
+      } else if (action === 'composition.row.output') {
+        setCompositionEditTarget({ kind: 'rowOutput', rowIndex: selection.rowIndex })
+      } else if (action === 'composition.column.insert_before') {
+        insertCompositionColumn('before', selection.columnIndex)
+      } else if (action === 'composition.column.insert_after') {
+        insertCompositionColumn('after', selection.columnIndex)
+      } else if (action === 'composition.column.delete') {
+        if (composition.columns.length > 1) deleteCompositionColumn(selection.columnIndex)
+      } else if (action === 'composition.column.length') {
+        setCompositionEditTarget({ kind: 'columnLength', columnIndex: selection.columnIndex })
+      } else {
+        handled = false
+      }
+    })
+    return handled
+  }, [
+    clearCompositionCell,
+    deleteCompositionColumn,
+    deleteCompositionRow,
+    insertCompositionColumn,
+    insertCompositionRow,
+    withCompositionSelection,
+  ])
+
   const {
     isTimeSignatureEditing,
     timeSignatureDraft,
@@ -499,6 +651,7 @@ function App() {
     installCompositionSelection,
     setWorkspaceView: installWorkspaceView,
     editSelectedCompositionCell,
+    runSelectedCompositionAction,
     setLoopStart: () => setLoopBoundary('start'),
     setLoopEnd: () => setLoopBoundary('end'),
     setIsModulatorMode,
@@ -637,9 +790,22 @@ function App() {
                   measureBank={projectSnapshot.measureBank}
                   selection={displayedCompositionSelection}
                   tuningLength={tuningLength}
+                  editTarget={compositionEditTarget}
                   onSelectCell={(selection) => {
+                    setCompositionEditTarget(null)
                     installCompositionSelection(selection)
                   }}
+                  onBeginEdit={beginCompositionEdit}
+                  onCancelEdit={() => setCompositionEditTarget(null)}
+                  onCommitCellName={commitCompositionCellName}
+                  onCommitRowName={commitCompositionRowName}
+                  onCommitRowOutput={commitCompositionRowOutput}
+                  onCommitColumnLength={commitCompositionColumnLength}
+                  onInsertRow={insertCompositionRow}
+                  onDeleteRow={deleteCompositionRow}
+                  onInsertColumn={insertCompositionColumn}
+                  onDeleteColumn={deleteCompositionColumn}
+                  onClearCell={clearCompositionCell}
                 />
               ) : (
                 <div className="workspaceNotice" role="status" aria-live="polite">

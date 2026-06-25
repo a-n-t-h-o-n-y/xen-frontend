@@ -522,7 +522,7 @@
 
 .modulatorRailControls {
   display: grid;
-  grid-template-columns: minmax(13.2rem, 1fr) minmax(7.2rem, 0.75fr) minmax(13.2rem, 1fr);
+  grid-template-columns: minmax(15rem, 1fr) minmax(8rem, 0.75fr) minmax(15rem, 1fr);
   align-items: center;
   gap: var(--space-1);
   flex: 1 1 auto;
@@ -619,8 +619,10 @@
   align-items: center;
   justify-content: flex-end;
   gap: 0.18rem;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .modTargetChip {
@@ -636,6 +638,7 @@
   color: var(--text-secondary);
   cursor: ns-resize;
   touch-action: none;
+  flex: 0 0 auto;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,

@@ -459,6 +459,21 @@ describe('DTO to domain mappers', () => {
     expect(project.pitch.scale?.definition.name).toBe('major')
   })
 
+  it('uses backend measure and row names when arranged snapshots provide them', () => {
+    const fixture = arrangedProjectFixture(12)
+    if (fixture.schema_version === 2) {
+      fixture.project.measure_bank.measures[0]!.name = 'Intro'
+      fixture.project.measure_bank.measures[1]!.name = 'Pulse'
+      fixture.project.composition.rows[0]!.name = 'Lead'
+      fixture.project.composition.rows[1]!.name = 'Layer'
+    }
+
+    const project = projectFromDto(fixture)
+
+    expect(project.measureBank?.measures.map((entry) => entry.name)).toEqual(['Intro', 'Pulse'])
+    expect(project.composition?.rows.map((row) => row.name)).toEqual(['Lead', 'Layer'])
+  })
+
   it('defaults missing arranged loop regions to the full composition length', () => {
     const fixture = arrangedProjectFixture(11)
     if (fixture.schema_version === 2) {
@@ -956,6 +971,39 @@ describe('keymap routing', () => {
             arguments: {},
           },
         },
+        {
+          trigger: {
+            key: 'n',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.cell.rename_or_create_measure',
+            arguments: {},
+          },
+        },
+        {
+          trigger: {
+            key: 'o',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.row.output',
+            arguments: {},
+          },
+        },
+        {
+          trigger: {
+            key: 't',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.column.length',
+            arguments: {},
+          },
+        },
       ],
     },
     overrides: [],
@@ -1017,6 +1065,26 @@ describe('keymap routing', () => {
       .toMatchObject({ type: 'ui_action', action: 'composition.selection.move' })
     expect(findKeymapBinding(resource, 'composition', enterEvent, 'pitch')?.target)
       .toMatchObject({ type: 'ui_action', action: 'composition.cell.edit_measure' })
+  })
+
+  it('parses new editable composition UI actions', () => {
+    for (const [key, action] of [
+      ['n', 'composition.cell.rename_or_create_measure'],
+      ['o', 'composition.row.output'],
+      ['t', 'composition.column.length'],
+    ] as const) {
+      expect(findKeymapBinding(resource, 'composition', {
+        key,
+        shiftKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+      } as KeyboardEvent, 'pitch')?.target).toMatchObject({
+        type: 'ui_action',
+        action,
+        arguments: {},
+      })
+    }
   })
 
   it('finds trigger conflicts only inside the requested context', () => {
