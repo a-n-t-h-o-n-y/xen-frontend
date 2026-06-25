@@ -522,7 +522,7 @@
 
 .modulatorRailControls {
   display: grid;
-  grid-template-columns: minmax(4.8rem, 1fr) minmax(7.2rem, 1.35fr) minmax(4.8rem, 1fr);
+  grid-template-columns: minmax(13.2rem, 1fr) minmax(7.2rem, 0.75fr) minmax(13.2rem, 1fr);
   align-items: center;
   gap: var(--space-1);
   flex: 1 1 auto;
@@ -530,38 +530,73 @@
 }
 
 .modRailWaveSelect {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.22rem;
   min-width: 0;
-}
-
-.modRailWaveTrigger {
-  min-height: var(--control-height-sm);
-  padding: 0.22rem 0.42rem;
-  font-size: var(--font-xs);
-  gap: 0.26rem;
 }
 
 .modRailWaveLabel {
   color: rgb(255 255 255 / 58%);
+  font-size: var(--font-xs);
+  line-height: 1;
 }
 
-.modRailWaveMenu {
-  min-width: 7.4rem;
-  right: auto;
+.modRailWaveSegmentList {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-width: 0;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: var(--radius-1);
+  background: rgb(255 255 255 / 4%);
+  overflow: hidden;
+}
+
+.modRailWaveSegment {
+  min-width: 0;
+  height: var(--control-height-sm);
+  padding: 0 0.22rem;
+  border: 0;
+  border-right: 1px solid rgb(255 255 255 / 11%);
+  background: transparent;
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.68rem;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.modRailWaveSegment:last-child {
+  border-right: 0;
+}
+
+.modRailWaveSegment:hover {
+  background: rgb(255 255 255 / 9%);
+  color: var(--text-primary);
+}
+
+.modRailWaveSegment-active {
+  background: rgb(245 196 90 / 18%);
+  color: rgb(252 245 223);
 }
 
 .modRailPulseControl {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 2.8rem;
+  grid-template-columns: auto minmax(0, 1fr) 2.45rem;
   align-items: center;
-  gap: 0.3rem var(--space-2);
-  padding: 0.28rem 0.35rem 0.35rem;
-  border-top: 1px solid rgb(255 255 255 / 10%);
+  grid-column: 2;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0 0.1rem;
   color: var(--text-secondary);
   font-size: var(--font-xs);
 }
 
 .modRailPulseLabel {
-  grid-column: 1 / -1;
   color: rgb(255 255 255 / 64%);
 }
 

@@ -66,7 +66,7 @@ function App() {
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsOpenerRef = useRef<HTMLElement | null>(null)
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('composition')
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('sequencer')
   const [compositionSelection, setCompositionSelection] = useState<CompositionSelection>(
     INITIAL_COMPOSITION_SELECTION
   )
@@ -131,14 +131,12 @@ function App() {
     activeModulator,
     updateActiveModulator,
     updateActiveTargetControl,
-    openWaveMenu,
     setOpenWaveMenu,
     padDragRef,
     wavePadDragRef,
     lastWaveHandleUsedRef,
     liveEmitFrameRef,
     liveEmitCommandsRef,
-    waveMenuRef,
   } = useModulatorPanelState()
   const {
     projectState,
@@ -512,35 +510,6 @@ function App() {
   })
 
   useEffect(() => {
-    if (openWaveMenu === null) {
-      return
-    }
-
-    const handlePointerDown = (event: MouseEvent): void => {
-      const host = waveMenuRef.current
-      if (!host) {
-        return
-      }
-      if (event.target instanceof Node && !host.contains(event.target)) {
-        setOpenWaveMenu(null)
-      }
-    }
-
-    const handleEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        setOpenWaveMenu(null)
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown)
-    window.addEventListener('keydown', handleEscape)
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown)
-      window.removeEventListener('keydown', handleEscape)
-    }
-  }, [openWaveMenu, setOpenWaveMenu, waveMenuRef])
-
-  useEffect(() => {
     if (!isModulatorMode) {
       setOpenWaveMenu(null)
     }
@@ -667,6 +636,7 @@ function App() {
                   composition={projectSnapshot.composition}
                   measureBank={projectSnapshot.measureBank}
                   selection={displayedCompositionSelection}
+                  tuningLength={tuningLength}
                   onSelectCell={(selection) => {
                     installCompositionSelection(selection)
                   }}
@@ -794,10 +764,7 @@ function App() {
           <ModulatorsPanel
             activeModulatorTab={activeModulatorTab}
             activeModulator={activeModulator}
-            setOpenWaveMenu={setOpenWaveMenu}
             selectActiveModulatorTab={selectActiveModulatorTab}
-            waveMenuRef={waveMenuRef}
-            openWaveMenu={openWaveMenu}
             selectWaveType={selectWaveType}
             onWaveLerpChange={handleWaveLerpChange}
             onWaveAPulseWidthChange={handleWaveAPulseWidthChange}

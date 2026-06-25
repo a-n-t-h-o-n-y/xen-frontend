@@ -1,4 +1,4 @@
-import type { CSSProperties, Dispatch, SetStateAction } from 'react'
+import type { CSSProperties } from 'react'
 import {
   MOD_TARGET_ORDER,
   getModTargetSpecForTuning,
@@ -23,10 +23,7 @@ type PadDragState = {
 type ModulatorsPanelProps = {
   activeModulatorTab: number
   activeModulator: ModulatorPanelState
-  setOpenWaveMenu: Dispatch<SetStateAction<'a' | 'b' | null>>
   selectActiveModulatorTab: (index: number) => void
-  waveMenuRef: { current: HTMLDivElement | null }
-  openWaveMenu: 'a' | 'b' | null
   selectWaveType: (wave: 'a' | 'b', waveType: WaveType) => void
   onWaveLerpChange: (value: number) => void
   onWaveAPulseWidthChange: (value: number) => void
@@ -74,8 +71,6 @@ function WaveSelectControl({
   waveType,
   pulseWidth,
   setPulseWidth,
-  openWaveMenu,
-  setOpenWaveMenu,
   selectWaveType,
 }: {
   wave: 'a' | 'b'
@@ -83,56 +78,40 @@ function WaveSelectControl({
   waveType: WaveType
   pulseWidth: number
   setPulseWidth: (value: number) => void
-  openWaveMenu: 'a' | 'b' | null
-  setOpenWaveMenu: Dispatch<SetStateAction<'a' | 'b' | null>>
   selectWaveType: (wave: 'a' | 'b', waveType: WaveType) => void
 }) {
   return (
-    <div className="waveSelect modRailWaveSelect">
-      <button
-        type="button"
-        className="waveSelectTrigger modRailWaveTrigger mono"
-        onClick={() => setOpenWaveMenu((previous) => (previous === wave ? null : wave))}
-        aria-haspopup="listbox"
-        aria-expanded={openWaveMenu === wave}
-        aria-label={`${label} type`}
-      >
-        <span className="modRailWaveLabel">{label}</span>
-        <span>{WAVE_OPTION_SHORT_LABELS[waveType]}</span>
-        <span className="waveSelectChevron" aria-hidden="true">
-          ▾
-        </span>
-      </button>
-      {openWaveMenu === wave ? (
-        <div className="waveSelectMenu modRailWaveMenu" role="listbox" aria-label={`${label} options`}>
-          {WAVE_OPTIONS.map((option) => (
-            <button
-              key={`wave-${wave}-option-${option}`}
-              type="button"
-              className={`waveSelectOption mono${option === waveType ? ' waveSelectOption-active' : ''}`}
-              onClick={() => selectWaveType(wave, option)}
-              role="option"
-              aria-selected={option === waveType}
-            >
-              {WAVE_OPTION_LABELS[option]}
-            </button>
-          ))}
-          {waveType === 'square' ? (
-            <label className="modRailPulseControl">
-              <span className="modRailPulseLabel">Pulse width</span>
-              <input
-                className="modulatorSlider modulatorTopLerp"
-                type="range"
-                min={0.05}
-                max={0.95}
-                step={0.01}
-                value={pulseWidth}
-                onChange={(event) => setPulseWidth(Number(event.target.value))}
-              />
-              <span className="mono">{pulseWidth.toFixed(2)}</span>
-            </label>
-          ) : null}
-        </div>
+    <div className="modRailWaveSelect" role="radiogroup" aria-label={`${label} type`}>
+      <span className="modRailWaveLabel">{label}</span>
+      <div className="modRailWaveSegmentList">
+        {WAVE_OPTIONS.map((option) => (
+          <button
+            key={`wave-${wave}-option-${option}`}
+            type="button"
+            className={`modRailWaveSegment mono${option === waveType ? ' modRailWaveSegment-active' : ''}`}
+            onClick={() => selectWaveType(wave, option)}
+            role="radio"
+            aria-checked={option === waveType}
+            title={WAVE_OPTION_LABELS[option]}
+          >
+            {WAVE_OPTION_SHORT_LABELS[option]}
+          </button>
+        ))}
+      </div>
+      {waveType === 'square' ? (
+        <label className="modRailPulseControl">
+          <span className="modRailPulseLabel">PW</span>
+          <input
+            className="modulatorSlider modulatorTopLerp"
+            type="range"
+            min={0.05}
+            max={0.95}
+            step={0.01}
+            value={pulseWidth}
+            onChange={(event) => setPulseWidth(Number(event.target.value))}
+          />
+          <span className="mono">{pulseWidth.toFixed(2)}</span>
+        </label>
       ) : null}
     </div>
   )
@@ -141,10 +120,7 @@ function WaveSelectControl({
 export function ModulatorsPanel({
   activeModulatorTab,
   activeModulator,
-  setOpenWaveMenu,
   selectActiveModulatorTab,
-  waveMenuRef,
-  openWaveMenu,
   selectWaveType,
   onWaveLerpChange,
   onWaveAPulseWidthChange,
@@ -172,15 +148,13 @@ export function ModulatorsPanel({
           </button>
         ))}
       </div>
-      <div className="modulatorRailControls" ref={waveMenuRef}>
+      <div className="modulatorRailControls">
         <WaveSelectControl
           wave="a"
           label="A"
           waveType={activeModulator.waveAType}
           pulseWidth={activeModulator.waveAPulseWidth}
           setPulseWidth={onWaveAPulseWidthChange}
-          openWaveMenu={openWaveMenu}
-          setOpenWaveMenu={setOpenWaveMenu}
           selectWaveType={selectWaveType}
         />
         <label className="modRailLerp">
@@ -202,8 +176,6 @@ export function ModulatorsPanel({
           waveType={activeModulator.waveBType}
           pulseWidth={activeModulator.waveBPulseWidth}
           setPulseWidth={onWaveBPulseWidthChange}
-          openWaveMenu={openWaveMenu}
-          setOpenWaveMenu={setOpenWaveMenu}
           selectWaveType={selectWaveType}
         />
       </div>
