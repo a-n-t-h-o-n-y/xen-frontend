@@ -15,7 +15,7 @@ import {
 import type { CommandReferenceEntry, InputMode, KeymapResource, MessageLevel } from '../domain/models'
 import type { StatusCellMetaItem } from '../presentation/viewModels'
 
-type WorkspaceView = 'sequencer' | 'library'
+type WorkspaceView = 'composition' | 'sequencer' | 'library'
 
 type StatusSectionProps = {
   currentInputMode: InputMode
@@ -286,6 +286,15 @@ export function StatusSection({
           <span aria-hidden="true">⚙</span>
         </button>
         <div className="workspaceSwitch" role="group" aria-label="Workspace view">
+          <button
+            type="button"
+            className={`workspaceSwitchButton${workspaceView === 'composition' ? ' workspaceSwitchButton-active' : ''}`}
+            aria-pressed={workspaceView === 'composition'}
+            onClick={() => setWorkspaceView('composition')}
+            disabled={workspaceDisabled}
+          >
+            Comp
+          </button>
           <button
             type="button"
             className={`workspaceSwitchButton${workspaceView === 'sequencer' ? ' workspaceSwitchButton-active' : ''}`}

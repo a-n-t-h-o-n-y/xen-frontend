@@ -220,8 +220,8 @@ Recommended behavior: inline naming first. It preserves the design rule that the
 measure bank is created through matrix names and avoids hidden unnamed measures.
 
 The sequencer header's time signature display should reflect the active composition
-column length, not a property of the measure. Editing the time signature from the
-sequencer should update the active column length.
+column length, not a property of the measure. The time signature edit input in
+sequencer should be removed.
 
 ## Backend Contract Needs
 
@@ -339,7 +339,8 @@ The composition matrix should be a new section component, likely
 - Should the matrix allow multiple rows with the same output? Current backend
   semantics allow it; keep that behavior.
 - Should column length edits in the sequencer affect the selected composition column?
-  Recommended: yes.
+  Recommended: The sequencer will remove its time signature/length and it will
+  no longer be editable from there.
 
 ## First Build Slice
 

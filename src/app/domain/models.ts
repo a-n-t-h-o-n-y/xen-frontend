@@ -75,10 +75,60 @@ export type PitchState = {
   baseFrequency: number
 }
 
+export type MeasureBankEntry = {
+  id: number
+  name: string
+  measure: {
+    cell: Cell
+  }
+}
+
+export type MeasureBank = {
+  nextId: number
+  measures: MeasureBankEntry[]
+}
+
+export type CompositionLength = {
+  numerator: number
+  denominator: number
+}
+
+export type CompositionColumn = {
+  length: CompositionLength
+}
+
+export type CompositionRow = {
+  name: string
+  outputId: string
+  cells: Array<number | null>
+}
+
+export type CompositionLoopRegion = {
+  startColumn: number
+  endColumn: number
+}
+
+export type Composition = {
+  columns: CompositionColumn[]
+  rows: CompositionRow[]
+  loopRegion: CompositionLoopRegion
+}
+
+export type CompositionSelection = {
+  rowIndex: number
+  columnIndex: number
+}
+
+export type ActiveMeasureTarget = CompositionSelection & {
+  measureId: number
+}
+
 export type ProjectSnapshot = {
   revision: number
   historyEntryId: number
   measure: Measure
+  measureBank: MeasureBank | null
+  composition: Composition | null
   pitch: PitchState
 }
 

@@ -1,0 +1,196 @@
+/* =========================================================
+   Section 1: Composition Shell
+   Purpose: Scrollable matrix frame with pinned row and column metadata.
+   ========================================================= */
+
+.composition {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: var(--space-2);
+  border: var(--seq-border);
+  border-radius: var(--radius-2);
+  background: var(--seq-shell-bg);
+}
+
+.compositionScroller {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  border: var(--seq-border);
+  border-radius: var(--radius-1);
+  background: var(--seq-panel-bg);
+  overflow: auto;
+}
+
+.compositionGrid {
+  position: relative;
+  display: grid;
+  grid-auto-rows: minmax(3.25rem, auto);
+  min-width: max-content;
+}
+
+.compositionSticky {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+}
+
+/* =========================================================
+   Section 2: Headers
+   Purpose: Column timing metadata and row routing labels.
+   ========================================================= */
+
+.compositionCorner,
+.compositionHeaderCell,
+.compositionRowHeader {
+  min-width: 0;
+  border-right: 1px solid rgb(255 255 255 / 10%);
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  background: rgb(31 35 43 / 98%);
+}
+
+.compositionCorner,
+.compositionHeaderCell {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+.compositionCorner {
+  left: 0;
+  z-index: 8;
+}
+
+.compositionHeaderCell {
+  display: grid;
+  align-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+.compositionHeaderCell-selected,
+.compositionRowHeader-selected {
+  background: rgb(47 51 61 / 98%);
+}
+
+.compositionColumnIndex,
+.compositionRowOutput {
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+}
+
+.compositionColumnLength,
+.compositionRowName {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-md);
+  font-weight: 700;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compositionRowHeader {
+  display: grid;
+  align-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* =========================================================
+   Section 3: Cells and Selection
+   Purpose: Quiet row/column highlighting with a clear active cell.
+   ========================================================= */
+
+.compositionCell {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: var(--space-2);
+  border: 0;
+  border-right: 1px solid rgb(255 255 255 / 8%);
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  background: rgb(255 255 255 / 2%);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+}
+
+.compositionCell:hover {
+  background: rgb(255 255 255 / 6%);
+}
+
+.compositionCell:focus-visible {
+  outline: 2px solid rgb(245 196 90 / 70%);
+  outline-offset: -2px;
+}
+
+.compositionCell-selectedRow {
+  background: rgb(245 196 90 / 5%);
+}
+
+.compositionCell-selectedColumn {
+  background: rgb(148 163 184 / 7%);
+}
+
+.compositionCell-selected {
+  background: rgb(245 196 90 / 18%);
+  box-shadow: inset 0 0 0 2px rgb(245 196 90 / 72%);
+}
+
+.compositionCell-empty .compositionCellLabel {
+  color: rgb(184 192 204 / 46%);
+}
+
+.compositionCellLabel {
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+  font-size: var(--font-md);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   Section 4: Loop Region
+   Purpose: Persistent inclusive loop markers across matrix columns.
+   ========================================================= */
+
+.compositionCell-loop::before,
+.compositionHeaderCell.compositionCell-loop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(92 179 160 / 9%);
+  pointer-events: none;
+}
+
+.compositionCell-loopStart::after,
+.compositionHeaderCell.compositionCell-loopStart::after {
+  content: '';
+  position: absolute;
+  top: 0.45rem;
+  bottom: 0.45rem;
+  left: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: rgb(92 220 188 / 86%);
+  pointer-events: none;
+}
+
+.compositionCell-loopEnd::after,
+.compositionHeaderCell.compositionCell-loopEnd::after {
+  content: '';
+  position: absolute;
+  top: 0.45rem;
+  right: 0;
+  bottom: 0.45rem;
+  width: 3px;
+  border-radius: 2px 0 0 2px;
+  background: rgb(92 220 188 / 86%);
+  pointer-events: none;
+}

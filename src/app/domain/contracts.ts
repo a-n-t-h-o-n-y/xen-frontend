@@ -91,6 +91,11 @@ export const compositionLengthSchema = z.object({
   denominator: finiteNumber,
 })
 
+export const compositionLoopRegionSchema = z.object({
+  start_column: nonNegativeInteger,
+  end_column: nonNegativeInteger,
+})
+
 export const compositionSchema = z.object({
   columns: z.array(z.object({
     length: compositionLengthSchema,
@@ -99,6 +104,7 @@ export const compositionSchema = z.object({
     output_id: z.string(),
     cells: z.array(nonNegativeInteger.nullable()),
   })),
+  loop_region: compositionLoopRegionSchema.optional(),
 }).superRefine((composition, context) => {
   composition.rows.forEach((row, rowIndex) => {
     if (row.cells.length !== composition.columns.length) {
@@ -109,6 +115,23 @@ export const compositionSchema = z.object({
       })
     }
   })
+  if (composition.loop_region) {
+    const lastColumnIndex = composition.columns.length - 1
+    if (composition.loop_region.start_column > lastColumnIndex) {
+      context.addIssue({
+        code: 'custom',
+        path: ['loop_region', 'start_column'],
+        message: 'Expected loop start column to reference an existing composition column',
+      })
+    }
+    if (composition.loop_region.end_column > lastColumnIndex) {
+      context.addIssue({
+        code: 'custom',
+        path: ['loop_region', 'end_column'],
+        message: 'Expected loop end column to reference an existing composition column',
+      })
+    }
+  }
 })
 
 export const scaleDefinitionSchema = z.object({
@@ -294,6 +317,25 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
     type: z.literal('ui_action'),
     action: z.literal('workspace.view.toggle'),
     arguments: z.object({}).strict(),
+  }),
+  z.object({
+    type: z.literal('ui_action'),
+    action: z.enum([
+      'workspace.view.composition',
+      'workspace.view.sequencer',
+      'composition.cell.edit_measure',
+      'composition.loop.set_start',
+      'composition.loop.set_end',
+    ]),
+    arguments: z.object({}).strict(),
+  }),
+  z.object({
+    type: z.literal('ui_action'),
+    action: z.literal('composition.selection.move'),
+    arguments: z.object({
+      direction: z.enum(['left', 'right', 'up', 'down']),
+      amount: z.number().int().positive(),
+    }),
   }),
   z.object({
     type: z.literal('ui_action'),

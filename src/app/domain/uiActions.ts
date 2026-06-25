@@ -19,6 +19,12 @@ export type FrontendUiActionId =
   | 'selection.move'
   | 'input_mode.set'
   | 'workspace.view.toggle'
+  | 'workspace.view.composition'
+  | 'workspace.view.sequencer'
+  | 'composition.selection.move'
+  | 'composition.cell.edit_measure'
+  | 'composition.loop.set_start'
+  | 'composition.loop.set_end'
   | 'modulator.mode.toggle'
   | 'modulator.slot.select'
   | 'modulator.target.toggle'
@@ -28,7 +34,12 @@ type UiActionMetadata = {
   id: FrontendUiActionId
   label: string
   section: string
-  argumentKind: 'none' | 'selectionDirection' | 'inputMode' | 'modulatorSlot' | 'modTarget'
+  argumentKind:
+    | 'none'
+    | 'selectionDirection'
+    | 'inputMode'
+    | 'modulatorSlot'
+    | 'modTarget'
 }
 
 export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
@@ -48,6 +59,42 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     id: 'workspace.view.toggle',
     label: 'Toggle workspace view',
     section: 'Workspace',
+    argumentKind: 'none',
+  },
+  'workspace.view.composition': {
+    id: 'workspace.view.composition',
+    label: 'View composition',
+    section: 'Workspace',
+    argumentKind: 'none',
+  },
+  'workspace.view.sequencer': {
+    id: 'workspace.view.sequencer',
+    label: 'View sequencer',
+    section: 'Workspace',
+    argumentKind: 'none',
+  },
+  'composition.selection.move': {
+    id: 'composition.selection.move',
+    label: 'Move composition selection',
+    section: 'Composition',
+    argumentKind: 'selectionDirection',
+  },
+  'composition.cell.edit_measure': {
+    id: 'composition.cell.edit_measure',
+    label: 'Edit composition cell measure',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.loop.set_start': {
+    id: 'composition.loop.set_start',
+    label: 'Set loop start column',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.loop.set_end': {
+    id: 'composition.loop.set_end',
+    label: 'Set loop end column',
+    section: 'Composition',
     argumentKind: 'none',
   },
   'modulator.mode.toggle': {
@@ -132,6 +179,7 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
 
 export const keymapContextLabels: Record<string, string> = {
   sequence: 'Sequencer',
+  composition: 'Composition',
   'command.input': 'Command Bar',
   'command.completions': 'Command Completions',
 }
@@ -152,6 +200,9 @@ export const formatUiActionTarget = (
 ): string => {
   if (target.action === 'selection.move') {
     return `Move ${target.arguments.direction} by ${target.arguments.amount}`
+  }
+  if (target.action === 'composition.selection.move') {
+    return `Move composition ${target.arguments.direction} by ${target.arguments.amount}`
   }
   if (target.action === 'input_mode.set') {
     return `Set input mode to ${target.arguments.mode}`

@@ -14,6 +14,7 @@ import type {
   SelectionDto,
 } from './contracts'
 import type {
+  Composition,
   CommandContext,
   CommandExecuteResponse,
   KeymapResource,
@@ -51,6 +52,31 @@ const emptyMeasureEntry: MeasureEntryDto = {
   },
 }
 
+const measureName = (id: number): string => `M${id}`
+
+const compositionFromDto = (
+  composition: Extract<ProjectSnapshotDto, { schema_version: 2 }>['project']['composition']
+): Composition => {
+  const lastColumnIndex = Math.max(0, composition.columns.length - 1)
+  return {
+    columns: composition.columns.map((column) => ({
+      length: {
+        numerator: column.length.numerator,
+        denominator: column.length.denominator,
+      },
+    })),
+    rows: composition.rows.map((row, index) => ({
+      name: row.output_id || `Row ${index + 1}`,
+      outputId: row.output_id,
+      cells: row.cells,
+    })),
+    loopRegion: {
+      startColumn: composition.loop_region?.start_column ?? 0,
+      endColumn: composition.loop_region?.end_column ?? lastColumnIndex,
+    },
+  }
+}
+
 const arrangedMeasureFromDto = (snapshot: ProjectSnapshotDto): Measure => {
   if (snapshot.schema_version === 1) {
     return measureFromDto(snapshot.project.measure)
@@ -76,10 +102,22 @@ const arrangedMeasureFromDto = (snapshot: ProjectSnapshotDto): Measure => {
 
 export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot => {
   const pitchState = snapshot.project.pitch
+  const isArrangedProject = snapshot.schema_version === 2
   return {
     revision: snapshot.project_revision,
     historyEntryId: snapshot.history_entry_id,
     measure: arrangedMeasureFromDto(snapshot),
+    measureBank: isArrangedProject
+      ? {
+          nextId: snapshot.project.measure_bank.next_id,
+          measures: snapshot.project.measure_bank.measures.map((entry) => ({
+            id: entry.id,
+            name: measureName(entry.id),
+            measure: entry.measure,
+          })),
+        }
+      : null,
+    composition: isArrangedProject ? compositionFromDto(snapshot.project.composition) : null,
     pitch: {
       tuning: pitchState.tuning,
       scale: pitchState.scale

@@ -86,10 +86,12 @@ const editorFromBinding = (context: string, binding?: KeymapBinding): EditorStat
       ? 'command'
       : target?.action ?? 'command',
     command: target?.type === 'command' ? target.command : '',
-    direction: target?.type === 'ui_action' && target.action === 'selection.move'
+    direction: target?.type === 'ui_action' &&
+      (target.action === 'selection.move' || target.action === 'composition.selection.move')
       ? target.arguments.direction
       : 'right',
-    amount: target?.type === 'ui_action' && target.action === 'selection.move'
+    amount: target?.type === 'ui_action' &&
+      (target.action === 'selection.move' || target.action === 'composition.selection.move')
       ? target.arguments.amount
       : 1,
     mode: target?.type === 'ui_action' && target.action === 'input_mode.set'
@@ -113,6 +115,13 @@ const targetFromEditor = (editor: EditorState): KeymapTarget => {
     return {
       type: 'ui_action',
       action: 'selection.move',
+      arguments: { direction: editor.direction, amount: editor.amount },
+    }
+  }
+  if (editor.targetType === 'composition.selection.move') {
+    return {
+      type: 'ui_action',
+      action: 'composition.selection.move',
       arguments: { direction: editor.direction, amount: editor.amount },
     }
   }

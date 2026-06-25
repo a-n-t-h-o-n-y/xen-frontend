@@ -11,6 +11,7 @@ import { useKeyboardController } from './app/hooks/useKeyboardController'
 import { useModulatorController } from './app/hooks/useModulatorController'
 import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
+import { CompositionSection } from './app/sections/CompositionSection'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { StatusSection } from './app/sections/StatusSection'
 import { SettingsOverlay } from './app/sections/SettingsOverlay'
@@ -32,6 +33,11 @@ import {
   normalizePitch,
 } from './app/domain/music'
 import {
+  clampCompositionSelection,
+  getActiveMeasureTarget,
+  measureFromTarget,
+} from './app/domain/composition'
+import {
   collectLeafCells,
   formatOctaveForDisplay,
   isPathPrefix,
@@ -40,14 +46,17 @@ import {
 } from './app/presentation/viewModels'
 import type {
   Cell,
+  ActiveMeasureTarget,
+  CompositionSelection,
   EditorState,
   TransportState,
 } from './app/domain/models'
 import { resolveSelection } from './app/domain/selection'
 
-type WorkspaceView = 'sequencer' | 'library'
+type WorkspaceView = 'composition' | 'sequencer' | 'library'
 
 const EMPTY_ROOT_CELL: Cell = { weight: 1, elements: [] }
+const INITIAL_COMPOSITION_SELECTION: CompositionSelection = { rowIndex: 0, columnIndex: 0 }
 
 function App() {
   const [editorState, setEditorState] = useState<EditorState>({
@@ -57,7 +66,13 @@ function App() {
   const [openScaleMenu, setOpenScaleMenu] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsOpenerRef = useRef<HTMLElement | null>(null)
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('sequencer')
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('composition')
+  const [compositionSelection, setCompositionSelection] = useState<CompositionSelection>(
+    INITIAL_COMPOSITION_SELECTION
+  )
+  const [activeMeasureTarget, setActiveMeasureTarget] = useState<ActiveMeasureTarget | null>(null)
+  const compositionSelectionRef = useRef<CompositionSelection>(compositionSelection)
+  const workspaceViewRef = useRef<WorkspaceView>(workspaceView)
   const [isModulatorMode, setIsModulatorMode] = useState(false)
   const {
     isCommandMode,
@@ -174,6 +189,21 @@ function App() {
     setStatusLevel,
   })
 
+  const installCompositionSelection = useCallback((nextSelection: CompositionSelection): void => {
+    compositionSelectionRef.current = nextSelection
+    setCompositionSelection(nextSelection)
+  }, [])
+
+  const installWorkspaceView = useCallback((
+    nextView: WorkspaceView | ((current: WorkspaceView) => WorkspaceView)
+  ): void => {
+    setWorkspaceView((current) => {
+      const resolved = typeof nextView === 'function' ? nextView(current) : nextView
+      workspaceViewRef.current = resolved
+      return resolved
+    })
+  }, [])
+
   const projectViewModel = useMemo(() => {
     if (!projectSnapshot) {
       return null
@@ -183,7 +213,12 @@ function App() {
     const activeScale = pitchState.scale
     const rawTuningLength = pitchState.tuning.definition.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
-    const measure = projectSnapshot.measure
+    const measure = measureFromTarget(
+      projectSnapshot.measure,
+      projectSnapshot.measureBank,
+      projectSnapshot.composition,
+      activeMeasureTarget
+    )
     const scaleValidPitches = activeScale
       ? generateValidPitches(activeScale.definition, derivedTuningLength)
       : []
@@ -278,7 +313,7 @@ function App() {
       selectedElementIndex: selection?.selectedElementIndex ?? null,
       selectedElementKind: selection?.selectedElementKind ?? null,
     }
-  }, [editorState.selection, projectSnapshot])
+  }, [activeMeasureTarget, editorState.selection, projectSnapshot])
 
   const tuningLength = projectViewModel?.tuningLength ?? DEFAULT_TUNING_LENGTH
   const rootCell = projectViewModel?.rootCell ?? EMPTY_ROOT_CELL
@@ -297,6 +332,55 @@ function App() {
   const selectedCellMeta = projectViewModel?.selectedCellMeta ?? []
   const rulerRatios = projectViewModel?.rulerRatios ?? []
   const highlightedPitches = projectViewModel?.highlightedPitches ?? new Set<number>()
+
+  const displayedCompositionSelection = projectSnapshot?.composition
+    ? clampCompositionSelection(projectSnapshot.composition, compositionSelection)
+    : compositionSelection
+
+  const editSelectedCompositionCell = useCallback((): void => {
+    const composition = projectRef.current?.composition
+    if (!composition) {
+      return
+    }
+
+    const target = getActiveMeasureTarget(composition, compositionSelectionRef.current)
+    if (!target) {
+      setStatusMessage('Empty composition cell. Assign a measure before opening it.')
+      setStatusLevel('warning')
+      return
+    }
+
+    setActiveMeasureTarget(target)
+    installEditorState({ ...editorStateRef.current, selection: { path: [] } })
+    installWorkspaceView('sequencer')
+  }, [
+    editorStateRef,
+    installEditorState,
+    installWorkspaceView,
+    projectRef,
+    setStatusLevel,
+    setStatusMessage,
+  ])
+
+  const setLoopBoundary = useCallback((boundary: 'start' | 'end'): void => {
+    const composition = projectRef.current?.composition
+    if (!composition || bridgeUnavailableMessage !== null) {
+      return
+    }
+
+    const selection = clampCompositionSelection(composition, compositionSelectionRef.current)
+    const command = `composition loop ${boundary} ${selection.columnIndex}`
+    void executeBackendCommand(command).catch((error: unknown) => {
+      setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+      setStatusLevel('error')
+    })
+  }, [
+    bridgeUnavailableMessage,
+    executeBackendCommand,
+    projectRef,
+    setStatusLevel,
+    setStatusMessage,
+  ])
 
   const {
     isTimeSignatureEditing,
@@ -412,7 +496,13 @@ function App() {
     editorStateRef,
     keymapRef,
     installEditorState,
-    setWorkspaceView,
+    workspaceViewRef,
+    compositionSelectionRef,
+    installCompositionSelection,
+    setWorkspaceView: installWorkspaceView,
+    editSelectedCompositionCell,
+    setLoopStart: () => setLoopBoundary('start'),
+    setLoopEnd: () => setLoopBoundary('end'),
     setIsModulatorMode,
     selectActiveModulatorTab,
     setOpenWaveMenu,
@@ -565,8 +655,31 @@ function App() {
                 : 'Waiting for the native session and project snapshot.'}
             </p>
           </div>
-        ) : (
+        ) : projectSnapshot ? (
           <>
+            <div
+              className="workspacePane"
+              hidden={workspaceView !== 'composition'}
+              aria-hidden={workspaceView !== 'composition'}
+            >
+              {projectSnapshot.composition ? (
+                <CompositionSection
+                  composition={projectSnapshot.composition}
+                  measureBank={projectSnapshot.measureBank}
+                  selection={displayedCompositionSelection}
+                  onSelectCell={(selection) => {
+                    installCompositionSelection(selection)
+                  }}
+                />
+              ) : (
+                <div className="workspaceNotice" role="status" aria-live="polite">
+                  <h1 className="workspaceNoticeTitle">Composition unavailable</h1>
+                  <p className="workspaceNoticeBody">
+                    This project snapshot does not include arrangement data.
+                  </p>
+                </div>
+              )}
+            </div>
             <div
               className="workspacePane"
               hidden={workspaceView !== 'sequencer'}
@@ -626,13 +739,18 @@ function App() {
               />
             </div>
           </>
+        ) : (
+          <div className="workspaceNotice" role="status" aria-live="polite">
+            <h1 className="workspaceNoticeTitle">Project unavailable</h1>
+            <p className="workspaceNoticeBody">Project snapshot is not ready.</p>
+          </div>
         )}
       </section>
       <StatusSection
         currentInputMode={editorState.inputMode}
         currentInputModeLetter={currentInputModeLetter}
         workspaceView={workspaceView}
-        setWorkspaceView={setWorkspaceView}
+        setWorkspaceView={installWorkspaceView}
         isModulatorMode={isModulatorMode}
         setIsModulatorMode={setIsModulatorMode}
         isCommandMode={isCommandMode}

@@ -4,6 +4,7 @@
    Notes: Keep layout-first ordering to simplify cascade reasoning.
    ========================================================= */
 @import './styles/app/shell.css';
+@import './styles/app/composition.css';
 @import './styles/app/sequencer.css';
 @import './styles/app/status.css';
 @import './styles/app/modules.css';

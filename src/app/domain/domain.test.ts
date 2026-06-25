@@ -29,6 +29,12 @@ import {
   projectFromDto,
 } from './mappers'
 import {
+  getActiveMeasureTarget,
+  isColumnInLoopRegion,
+  measureFromTarget,
+  moveCompositionSelection,
+} from './composition'
+import {
   expandNumericPlaceholders,
   findKeymapBinding,
   findKeymapTriggerConflict,
@@ -139,17 +145,25 @@ const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
       ],
     },
     composition: {
-      columns: [{ length: { numerator: 7, denominator: 8 } }],
+      columns: [
+        { length: { numerator: 7, denominator: 8 } },
+        { length: { numerator: 4, denominator: 4 } },
+        { length: { numerator: 5, denominator: 16 } },
+      ],
       rows: [
         {
           output_id: 'other',
-          cells: [1],
+          cells: [1, null, 2],
         },
         {
           output_id: 'current',
-          cells: [2],
+          cells: [2, 1, null],
         },
       ],
+      loop_region: {
+        start_column: 2,
+        end_column: 0,
+      },
     },
     pitch: {
       tuning: {
@@ -313,6 +327,7 @@ describe('schema 2 contract validation', () => {
     expect(arrangedProject.schema_version).toBe(2)
     if (arrangedProject.schema_version === 2) {
       expect(arrangedProject.project.composition.rows[1]?.cells[0]).toBe(2)
+      expect(arrangedProject.project.composition.loop_region?.start_column).toBe(2)
     }
     expect(parseLibrarySnapshot(libraryFixture()).scales[0]?.id).toBe('chromatic')
     expect(parseCommandResponse({
@@ -334,6 +349,17 @@ describe('schema 2 contract validation', () => {
         composition: {
           columns: [{ length: { numerator: 4, denominator: 4 } }],
           rows: [{ output_id: 'current', cells: [404] }],
+        },
+      },
+    })).toThrow()
+    expect(() => parseProjectSnapshot({
+      ...arrangedProjectFixture(),
+      project: {
+        ...arrangedProjectFixture().project,
+        composition: {
+          columns: [{ length: { numerator: 4, denominator: 4 } }],
+          rows: [{ output_id: 'current', cells: [1] }],
+          loop_region: { start_column: 1, end_column: 0 },
         },
       },
     })).toThrow()
@@ -422,7 +448,27 @@ describe('DTO to domain mappers', () => {
     expect(project.revision).toBe(10)
     expect(project.measure.timeSignature).toEqual({ numerator: 7, denominator: 8 })
     expect(project.measure.cell).toBe(nestedCell)
+    expect(project.measureBank?.measures.map((entry) => entry.name)).toEqual(['M1', 'M2'])
+    expect(project.composition?.columns).toHaveLength(3)
+    expect(project.composition?.rows[1]).toMatchObject({
+      name: 'current',
+      outputId: 'current',
+      cells: [2, 1, null],
+    })
+    expect(project.composition?.loopRegion).toEqual({ startColumn: 2, endColumn: 0 })
     expect(project.pitch.scale?.definition.name).toBe('major')
+  })
+
+  it('defaults missing arranged loop regions to the full composition length', () => {
+    const fixture = arrangedProjectFixture(11)
+    if (fixture.schema_version === 2) {
+      delete fixture.project.composition.loop_region
+    }
+
+    expect(projectFromDto(fixture).composition?.loopRegion).toEqual({
+      startColumn: 0,
+      endColumn: 2,
+    })
   })
 
   it('maps library snapshots to camelCase resources and commands', () => {
@@ -774,6 +820,40 @@ describe('strict selection and local navigation', () => {
   })
 })
 
+describe('composition helpers', () => {
+  const project = projectFromDto(arrangedProjectFixture())
+  const composition = project.composition!
+
+  it('moves composition selection with wrapping', () => {
+    expect(moveCompositionSelection(composition, { rowIndex: 0, columnIndex: 0 }, 'left'))
+      .toEqual({ rowIndex: 0, columnIndex: 2 })
+    expect(moveCompositionSelection(composition, { rowIndex: 0, columnIndex: 2 }, 'right'))
+      .toEqual({ rowIndex: 0, columnIndex: 0 })
+    expect(moveCompositionSelection(composition, { rowIndex: 0, columnIndex: 1 }, 'up'))
+      .toEqual({ rowIndex: 1, columnIndex: 1 })
+  })
+
+  it('detects normal, wrapped, and single-column loop regions', () => {
+    expect([0, 1, 2].map((index) =>
+      isColumnInLoopRegion(index, { startColumn: 0, endColumn: 2 })
+    )).toEqual([true, true, true])
+    expect([0, 1, 2].map((index) =>
+      isColumnInLoopRegion(index, { startColumn: 2, endColumn: 0 })
+    )).toEqual([true, false, true])
+    expect([0, 1, 2].map((index) =>
+      isColumnInLoopRegion(index, { startColumn: 1, endColumn: 1 })
+    )).toEqual([false, true, false])
+  })
+
+  it('derives active measure targets and measure views from composition cells', () => {
+    const target = getActiveMeasureTarget(composition, { rowIndex: 1, columnIndex: 1 })
+    expect(target).toEqual({ rowIndex: 1, columnIndex: 1, measureId: 1 })
+    expect(measureFromTarget(project.measure, project.measureBank, composition, target).timeSignature)
+      .toEqual({ numerator: 4, denominator: 4 })
+    expect(getActiveMeasureTarget(composition, { rowIndex: 1, columnIndex: 2 })).toBeNull()
+  })
+})
+
 describe('keymap routing', () => {
   const resource = keymapFromDto(parseKeymapResource({
     schema_version: 1,
@@ -831,6 +911,52 @@ describe('keymap routing', () => {
           },
         },
       ],
+      composition: [
+        {
+          trigger: {
+            key: 'l',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.selection.move',
+            arguments: { direction: 'right', amount: 1 },
+          },
+        },
+        {
+          trigger: {
+            key: 'Enter',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.cell.edit_measure',
+            arguments: {},
+          },
+        },
+        {
+          trigger: {
+            key: '[',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.loop.set_start',
+            arguments: {},
+          },
+        },
+        {
+          trigger: {
+            key: ']',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.loop.set_end',
+            arguments: {},
+          },
+        },
+      ],
     },
     overrides: [],
   }))
@@ -871,6 +997,28 @@ describe('keymap routing', () => {
       .toMatchObject({ type: 'ui_action', action: 'command.completion.dismiss', arguments: {} })
   })
 
+  it('parses composition UI actions in their own context', () => {
+    const moveEvent = {
+      key: 'l',
+      shiftKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+    } as KeyboardEvent
+    const enterEvent = {
+      key: 'Enter',
+      shiftKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+    } as KeyboardEvent
+
+    expect(findKeymapBinding(resource, 'composition', moveEvent, 'pitch')?.target)
+      .toMatchObject({ type: 'ui_action', action: 'composition.selection.move' })
+    expect(findKeymapBinding(resource, 'composition', enterEvent, 'pitch')?.target)
+      .toMatchObject({ type: 'ui_action', action: 'composition.cell.edit_measure' })
+  })
+
   it('finds trigger conflicts only inside the requested context', () => {
     const escapeTrigger = resource.bindings['command.input']![0]!.trigger
     const conflict = findKeymapTriggerConflict(resource, 'command.input', escapeTrigger)
@@ -890,7 +1038,10 @@ describe('keymap routing', () => {
     expect(formatKeymapTrigger(binding.trigger)).toContain('Shift')
     expect(formatKeymapTarget(binding.target)).toBe('Move left by 2')
     expect(formatKeymapTarget(workspaceBinding.target)).toBe('Toggle workspace view')
+    expect(formatKeymapTarget(resource.bindings.composition![0]!.target))
+      .toBe('Move composition right by 1')
     expect(formatKeymapTarget(resource.bindings['command.input']![0]!.target)).toBe('Cancel command')
+    expect(formatKeymapContext('composition')).toBe('Composition')
     expect(formatKeymapContext('command.completions')).toBe('Command Completions')
     expect(getCommandKeymapContext(false)).toBe('command.input')
     expect(getCommandKeymapContext(true)).toBe('command.completions')

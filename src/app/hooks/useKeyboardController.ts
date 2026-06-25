@@ -4,14 +4,21 @@ import {
   findKeymapBinding,
 } from '../domain/keymap'
 import { isCommandUiActionId } from '../domain/uiActions'
+import { moveCompositionSelection } from '../domain/composition'
 import { moveSelection, projectRootCell } from '../domain/selection'
 import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { EditorState, KeymapResource, MessageLevel, ProjectSnapshot } from '../domain/models'
+import type {
+  CompositionSelection,
+  EditorState,
+  KeymapResource,
+  MessageLevel,
+  ProjectSnapshot,
+} from '../domain/models'
 import type { ModTarget } from '../domain/modulation'
 
-type WorkspaceView = 'sequencer' | 'library'
+type WorkspaceView = 'composition' | 'sequencer' | 'library'
 
 type UseKeyboardControllerArgs = {
   bridgeUnavailableMessage: string | null
@@ -24,7 +31,13 @@ type UseKeyboardControllerArgs = {
   editorStateRef: MutableRefObject<EditorState>
   keymapRef: MutableRefObject<KeymapResource | null>
   installEditorState: (nextState: EditorState) => void
+  workspaceViewRef: MutableRefObject<WorkspaceView>
+  compositionSelectionRef: MutableRefObject<CompositionSelection>
+  installCompositionSelection: (nextSelection: CompositionSelection) => void
   setWorkspaceView: Dispatch<SetStateAction<WorkspaceView>>
+  editSelectedCompositionCell: () => void
+  setLoopStart: () => void
+  setLoopEnd: () => void
   setIsModulatorMode: Dispatch<SetStateAction<boolean>>
   selectActiveModulatorTab: (index: number) => void
   setOpenWaveMenu: Dispatch<SetStateAction<'a' | 'b' | null>>
@@ -44,7 +57,13 @@ export function useKeyboardController({
   editorStateRef,
   keymapRef,
   installEditorState,
+  workspaceViewRef,
+  compositionSelectionRef,
+  installCompositionSelection,
   setWorkspaceView,
+  editSelectedCompositionCell,
+  setLoopStart,
+  setLoopEnd,
   setIsModulatorMode,
   selectActiveModulatorTab,
   setOpenWaveMenu,
@@ -58,7 +77,7 @@ export function useKeyboardController({
   )
 
   const toggleWorkspaceView = useCallback((): void => {
-    setWorkspaceView((current) => current === 'sequencer' ? 'library' : 'sequencer')
+    setWorkspaceView((current) => current === 'sequencer' ? 'composition' : 'sequencer')
   }, [setWorkspaceView])
 
   useEffect(() => {
@@ -85,9 +104,13 @@ export function useKeyboardController({
         !event.ctrlKey &&
         !event.altKey
 
+      const activeContext = workspaceViewRef.current === 'composition'
+        ? 'composition'
+        : 'sequence'
+
       const matchedBinding = findKeymapBinding(
         keymapRef.current,
-        'sequence',
+        activeContext,
         event,
         editorStateRef.current.inputMode
       )
@@ -117,6 +140,7 @@ export function useKeyboardController({
             }
 
             if (matchedBinding.target.action === 'selection.move') {
+              if (workspaceViewRef.current !== 'sequencer') return
               const project = projectRef.current
               if (!project) return
               const selection = moveSelection(
@@ -126,6 +150,19 @@ export function useKeyboardController({
                 matchedBinding.target.arguments.amount
               )
               installEditorState({ ...editorStateRef.current, selection })
+              return
+            }
+
+            if (matchedBinding.target.action === 'composition.selection.move') {
+              const composition = projectRef.current?.composition
+              if (!composition) return
+              const selection = moveCompositionSelection(
+                composition,
+                compositionSelectionRef.current,
+                matchedBinding.target.arguments.direction,
+                matchedBinding.target.arguments.amount
+              )
+              installCompositionSelection(selection)
               return
             }
 
@@ -142,7 +179,33 @@ export function useKeyboardController({
               return
             }
 
+            if (matchedBinding.target.action === 'workspace.view.composition') {
+              setWorkspaceView('composition')
+              return
+            }
+
+            if (matchedBinding.target.action === 'workspace.view.sequencer') {
+              setWorkspaceView('sequencer')
+              return
+            }
+
+            if (matchedBinding.target.action === 'composition.cell.edit_measure') {
+              editSelectedCompositionCell()
+              return
+            }
+
+            if (matchedBinding.target.action === 'composition.loop.set_start') {
+              setLoopStart()
+              return
+            }
+
+            if (matchedBinding.target.action === 'composition.loop.set_end') {
+              setLoopEnd()
+              return
+            }
+
             if (matchedBinding.target.action === 'modulator.mode.toggle') {
+              if (workspaceViewRef.current !== 'sequencer') return
               setIsModulatorMode((previous) => {
                 const next = !previous
                 if (!next) {
@@ -203,6 +266,9 @@ export function useKeyboardController({
     bridgeUnavailableMessage,
     editorStateRef,
     executeBackendCommand,
+    editSelectedCompositionCell,
+    compositionSelectionRef,
+    installCompositionSelection,
     installEditorState,
     isCommandMode,
     isProjectReady,
@@ -211,12 +277,16 @@ export function useKeyboardController({
     projectRef,
     selectActiveModulatorTab,
     setIsModulatorMode,
+    setLoopEnd,
+    setLoopStart,
     setOpenWaveMenu,
     setStatusLevel,
     setStatusMessage,
+    setWorkspaceView,
     settingsOpen,
     toggleActiveModulatorTarget,
     toggleWorkspaceView,
+    workspaceViewRef,
   ])
 
   useEffect(() => {

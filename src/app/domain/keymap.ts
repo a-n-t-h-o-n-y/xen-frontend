@@ -39,8 +39,24 @@ export type UiActionKeymapTarget =
     }
   | {
       type: 'ui_action'
-      action: 'workspace.view.toggle' | 'modulator.mode.toggle' | 'command.cancel'
+      action:
+        | 'workspace.view.toggle'
+        | 'workspace.view.composition'
+        | 'workspace.view.sequencer'
+        | 'composition.cell.edit_measure'
+        | 'composition.loop.set_start'
+        | 'composition.loop.set_end'
+        | 'modulator.mode.toggle'
+        | 'command.cancel'
       arguments: Record<string, never>
+    }
+  | {
+      type: 'ui_action'
+      action: 'composition.selection.move'
+      arguments: {
+        direction: 'left' | 'right' | 'up' | 'down'
+        amount: number
+      }
     }
   | {
       type: 'ui_action'
