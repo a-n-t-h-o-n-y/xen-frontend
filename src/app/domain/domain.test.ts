@@ -120,7 +120,7 @@ const projectFixture = (revision = 3): ProjectSnapshotDto => ({
 })
 
 const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
-  schema_version: 2,
+  schema_version: 3,
   history_entry_id: 2,
   project_revision: revision,
   project: {
@@ -152,11 +152,11 @@ const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
       ],
       rows: [
         {
-          output_id: 'other',
+          channel_id: 'other',
           cells: [1, null, 2],
         },
         {
-          output_id: 'current',
+          channel_id: 'channel-1',
           cells: [2, 1, null],
         },
       ],
@@ -230,7 +230,7 @@ const libraryFixture = (revision = 4): LibrarySnapshotDto => ({
   },
 })
 
-describe('schema 2 contract validation', () => {
+describe('schema contract validation', () => {
   it('accepts envelopes and rejects invalid payloads', () => {
     expect(parseEnvelope({
       protocol: 'xen.bridge.v1',
@@ -251,7 +251,7 @@ describe('schema 2 contract validation', () => {
     const hello = parseSessionHello({
       protocol: 'xen.bridge.v1',
       plugin_version: '1.0.0',
-      project_schema_version: 2,
+      project_schema_version: 3,
       library_schema_version: 1,
       catalog: {
         schema_version: 2,
@@ -324,8 +324,8 @@ describe('schema 2 contract validation', () => {
   it('validates project, library, command response, and events', () => {
     expect(parseProjectSnapshot(projectFixture()).project.pitch.transposition).toBe(2)
     const arrangedProject = parseProjectSnapshot(arrangedProjectFixture())
-    expect(arrangedProject.schema_version).toBe(2)
-    if (arrangedProject.schema_version === 2) {
+    expect(arrangedProject.schema_version).toBe(3)
+    if (arrangedProject.schema_version === 3) {
       expect(arrangedProject.project.composition.rows[1]?.cells[0]).toBe(2)
       expect(arrangedProject.project.composition.loop_region?.start_column).toBe(2)
     }
@@ -348,7 +348,7 @@ describe('schema 2 contract validation', () => {
         ...arrangedProjectFixture().project,
         composition: {
           columns: [{ length: { numerator: 4, denominator: 4 } }],
-          rows: [{ output_id: 'current', cells: [404] }],
+          rows: [{ channel_id: 'channel-1', cells: [404] }],
         },
       },
     })).toThrow()
@@ -358,7 +358,7 @@ describe('schema 2 contract validation', () => {
         ...arrangedProjectFixture().project,
         composition: {
           columns: [{ length: { numerator: 4, denominator: 4 } }],
-          rows: [{ output_id: 'current', cells: [1] }],
+          rows: [{ channel_id: 'channel-1', cells: [1] }],
           loop_region: { start_column: 1, end_column: 0 },
         },
       },
@@ -442,17 +442,20 @@ describe('DTO to domain mappers', () => {
     expect(project.pitch.baseFrequency).toBe(440)
   })
 
-  it('maps arranged project snapshots to the current output first-column measure', () => {
+  it('maps arranged project snapshots to the first row first-column measure', () => {
     const project = projectFromDto(arrangedProjectFixture(10))
 
     expect(project.revision).toBe(10)
     expect(project.measure.timeSignature).toEqual({ numerator: 7, denominator: 8 })
-    expect(project.measure.cell).toBe(nestedCell)
+    expect(project.measure.cell).toEqual({
+      weight: 1,
+      elements: [{ type: 'Note', pitch: 99, velocity: 1, delay: 0, gate: 1 }],
+    })
     expect(project.measureBank?.measures.map((entry) => entry.name)).toEqual(['M1', 'M2'])
     expect(project.composition?.columns).toHaveLength(3)
     expect(project.composition?.rows[1]).toMatchObject({
-      name: 'current',
-      outputId: 'current',
+      name: 'channel-1',
+      channelId: 'channel-1',
       cells: [2, 1, null],
     })
     expect(project.composition?.loopRegion).toEqual({ startColumn: 2, endColumn: 0 })
@@ -461,7 +464,7 @@ describe('DTO to domain mappers', () => {
 
   it('uses backend measure and row names when arranged snapshots provide them', () => {
     const fixture = arrangedProjectFixture(12)
-    if (fixture.schema_version === 2) {
+    if (fixture.schema_version === 3) {
       fixture.project.measure_bank.measures[0]!.name = 'Intro'
       fixture.project.measure_bank.measures[1]!.name = 'Pulse'
       fixture.project.composition.rows[0]!.name = 'Lead'
@@ -476,7 +479,7 @@ describe('DTO to domain mappers', () => {
 
   it('defaults missing arranged loop regions to the full composition length', () => {
     const fixture = arrangedProjectFixture(11)
-    if (fixture.schema_version === 2) {
+    if (fixture.schema_version === 3) {
       delete fixture.project.composition.loop_region
     }
 
@@ -1035,7 +1038,7 @@ describe('keymap routing', () => {
           },
           target: {
             type: 'ui_action',
-            action: 'composition.row.output',
+            action: 'composition.row.channel',
             arguments: {},
           },
         },
@@ -1120,7 +1123,7 @@ describe('keymap routing', () => {
       ['v', 'composition.cell.paste'],
       ['x', 'composition.cell.cut'],
       ['d', 'composition.cell.duplicate_right'],
-      ['o', 'composition.row.output'],
+      ['o', 'composition.row.channel'],
       ['t', 'composition.column.length'],
     ] as const) {
       expect(findKeymapBinding(resource, 'composition', {

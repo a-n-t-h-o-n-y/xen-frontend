@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const BRIDGE_PROTOCOL = 'xen.bridge.v1'
-export const PROJECT_SCHEMA_VERSION = 2
+export const PROJECT_SCHEMA_VERSION = 3
 export const LEGACY_PROJECT_SCHEMA_VERSION = 1
 export const LIBRARY_SCHEMA_VERSION = 1
 export const CATALOG_SCHEMA_VERSION = 2
@@ -103,7 +103,7 @@ export const compositionSchema = z.object({
   })),
   rows: z.array(z.object({
     name: z.string().optional(),
-    output_id: z.string(),
+    channel_id: z.string(),
     cells: z.array(nonNegativeInteger.nullable()),
   })),
   loop_region: compositionLoopRegionSchema.optional(),
@@ -336,7 +336,7 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
       'composition.row.insert_after',
       'composition.row.delete',
       'composition.row.rename',
-      'composition.row.output',
+      'composition.row.channel',
       'composition.column.insert_before',
       'composition.column.insert_after',
       'composition.column.delete',

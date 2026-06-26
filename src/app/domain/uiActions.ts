@@ -33,7 +33,7 @@ export type FrontendUiActionId =
   | 'composition.row.insert_after'
   | 'composition.row.delete'
   | 'composition.row.rename'
-  | 'composition.row.output'
+  | 'composition.row.channel'
   | 'composition.column.insert_before'
   | 'composition.column.insert_after'
   | 'composition.column.delete'
@@ -160,9 +160,9 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     section: 'Composition',
     argumentKind: 'none',
   },
-  'composition.row.output': {
-    id: 'composition.row.output',
-    label: 'Assign row output',
+  'composition.row.channel': {
+    id: 'composition.row.channel',
+    label: 'Edit row channel',
     section: 'Composition',
     argumentKind: 'none',
   },

@@ -76,7 +76,7 @@
 }
 
 .compositionColumnIndex,
-.compositionRowOutput {
+.compositionRowChannel {
   color: var(--text-secondary);
   font-size: var(--font-xs);
 }
@@ -127,7 +127,7 @@
 
 .compositionColumnLength,
 .compositionRowName,
-.compositionRowOutput {
+.compositionRowChannel {
   min-width: 0;
   padding: 0;
   border: 0;

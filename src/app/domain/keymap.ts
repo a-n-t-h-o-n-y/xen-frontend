@@ -54,7 +54,7 @@ export type UiActionKeymapTarget =
         | 'composition.row.insert_after'
         | 'composition.row.delete'
         | 'composition.row.rename'
-        | 'composition.row.output'
+        | 'composition.row.channel'
         | 'composition.column.insert_before'
         | 'composition.column.insert_after'
         | 'composition.column.delete'

@@ -9,7 +9,7 @@ import type { Composition, CompositionSelection, MeasureBank } from '../domain/m
 export type CompositionEditTarget =
   | { kind: 'cell'; rowIndex: number; columnIndex: number }
   | { kind: 'rowName'; rowIndex: number }
-  | { kind: 'rowOutput'; rowIndex: number }
+  | { kind: 'rowChannel'; rowIndex: number }
   | { kind: 'columnLength'; columnIndex: number }
 
 type CompositionSectionProps = {
@@ -23,7 +23,7 @@ type CompositionSectionProps = {
   onCancelEdit: () => void
   onCommitCellName: (rowIndex: number, columnIndex: number, name: string) => void
   onCommitRowName: (rowIndex: number, name: string) => void
-  onCommitRowOutput: (rowIndex: number, outputId: string) => void
+  onCommitRowChannel: (rowIndex: number, channelId: string) => void
   onCommitColumnLength: (columnIndex: number, length: string) => void
   onInsertRow: (placement: 'before' | 'after', rowIndex: number) => void
   onDeleteRow: (rowIndex: number) => void
@@ -82,7 +82,7 @@ export function CompositionSection({
   onCancelEdit,
   onCommitCellName,
   onCommitRowName,
-  onCommitRowOutput,
+  onCommitRowChannel,
   onCommitColumnLength,
   onInsertRow,
   onDeleteRow,
@@ -92,7 +92,6 @@ export function CompositionSection({
 }: CompositionSectionProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
-  const editSelectRef = useRef<HTMLSelectElement | null>(null)
   const columnWidths = composition.columns.map((column) => getColumnWidth(column.length))
   const gridTemplateColumns = ['10rem', ...columnWidths].join(' ')
   const selectedMeasureId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
@@ -102,14 +101,13 @@ export function CompositionSection({
         count + row.cells.filter((measureId) => measureId === selectedMeasureId).length
       ), 0)
   const shouldHighlightReferences = selectedMeasureInstanceCount > 1
-  const outputOptions = useMemo(() => Array.from(new Set([
-    'current',
-    ...composition.rows.map((row) => row.outputId).filter(Boolean),
-  ])), [composition.rows])
+  const channelOptions = useMemo(() => Array.from(new Set(
+    composition.rows.map((row) => row.channelId).filter(Boolean)
+  )), [composition.rows])
   const editKey = editTarget
     ? editTarget.kind === 'cell'
       ? `cell-${editTarget.rowIndex}-${editTarget.columnIndex}`
-      : editTarget.kind === 'rowName' || editTarget.kind === 'rowOutput'
+      : editTarget.kind === 'rowName' || editTarget.kind === 'rowChannel'
         ? `${editTarget.kind}-${editTarget.rowIndex}`
         : `${editTarget.kind}-${editTarget.columnIndex}`
     : ''
@@ -130,8 +128,8 @@ export function CompositionSection({
       return composition.rows[editTarget.rowIndex]?.name ?? ''
     }
 
-    if (editTarget.kind === 'rowOutput') {
-      return composition.rows[editTarget.rowIndex]?.outputId ?? 'current'
+    if (editTarget.kind === 'rowChannel') {
+      return composition.rows[editTarget.rowIndex]?.channelId ?? 'channel-1'
     }
 
     const length = composition.columns[editTarget.columnIndex]?.length
@@ -182,9 +180,7 @@ export function CompositionSection({
     }
 
     window.requestAnimationFrame(() => {
-      const editInput = editTarget.kind === 'rowOutput'
-        ? editSelectRef.current
-        : editInputRef.current
+      const editInput = editInputRef.current
       if (!editInput) {
         return
       }
@@ -200,22 +196,20 @@ export function CompositionSection({
     if (!editTarget) {
       return
     }
-    const value = editTarget.kind === 'rowOutput'
-      ? editSelectRef.current?.value ?? editValue
-      : editInputRef.current?.value ?? editValue
+    const value = editInputRef.current?.value ?? editValue
 
     if (editTarget.kind === 'cell') {
       onCommitCellName(editTarget.rowIndex, editTarget.columnIndex, value)
     } else if (editTarget.kind === 'rowName') {
       onCommitRowName(editTarget.rowIndex, value)
-    } else if (editTarget.kind === 'rowOutput') {
-      onCommitRowOutput(editTarget.rowIndex, value)
+    } else if (editTarget.kind === 'rowChannel') {
+      onCommitRowChannel(editTarget.rowIndex, value)
     } else {
       onCommitColumnLength(editTarget.columnIndex, value)
     }
   }
 
-  const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLSelectElement>): void => {
+  const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     event.stopPropagation()
     if (event.key === 'Enter') {
       event.preventDefault()
@@ -230,9 +224,9 @@ export function CompositionSection({
 
   return (
     <section className="composition" aria-label="Composition matrix">
-      <datalist id="composition-output-options">
-        {outputOptions.map((outputId) => (
-          <option value={outputId} key={outputId} />
+      <datalist id="composition-channel-options">
+        {channelOptions.map((channelId) => (
+          <option value={channelId} key={channelId} />
         ))}
       </datalist>
       <div className="compositionScroller" ref={scrollerRef}>
@@ -413,34 +407,32 @@ export function CompositionSection({
                       </button>
                     </span>
                   </span>
-                  {editTarget?.kind === 'rowOutput' && editTarget.rowIndex === rowIndex ? (
-                    <select
+                  {editTarget?.kind === 'rowChannel' && editTarget.rowIndex === rowIndex ? (
+                    <input
                       key={editKey}
-                      ref={editSelectRef}
+                      ref={editInputRef}
                       className="compositionInlineInput compositionInlineInput-compact mono"
                       defaultValue={editValue}
-                      onChange={commitEdit}
                       onKeyDown={handleEditKeyDown}
                       onBlur={onCancelEdit}
-                      aria-label={`Assign row ${rowIndex + 1} output`}
-                    >
-                      {outputOptions.map((outputId) => (
-                        <option value={outputId} key={outputId}>
-                          {outputId}
-                        </option>
-                      ))}
-                    </select>
+                      list="composition-channel-options"
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      aria-label={`Edit row ${rowIndex + 1} channel`}
+                    />
                   ) : (
                     <button
                       type="button"
-                      className="compositionRowOutput mono"
+                      className="compositionRowChannel mono"
                       onClick={(event) => {
                         event.stopPropagation()
-                        onBeginEdit({ kind: 'rowOutput', rowIndex })
+                        onBeginEdit({ kind: 'rowChannel', rowIndex })
                       }}
-                      aria-label={`Assign row ${rowIndex + 1} output`}
+                      aria-label={`Edit row ${rowIndex + 1} channel`}
                     >
-                      {row.outputId || 'current'}
+                      {row.channelId || 'channel-1'}
                     </button>
                   )}
                 </div>

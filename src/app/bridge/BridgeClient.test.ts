@@ -10,7 +10,7 @@ import {
 import type { ProjectSnapshotDto } from '../domain/contracts'
 
 const projectFixture = (): ProjectSnapshotDto => ({
-  schema_version: 2,
+  schema_version: 3,
   history_entry_id: 2,
   project_revision: 3,
   project: {
@@ -32,7 +32,7 @@ const projectFixture = (): ProjectSnapshotDto => ({
       columns: [{ length: { numerator: 4, denominator: 4 } }],
       rows: [
         {
-          output_id: 'current',
+          channel_id: 'channel-1',
           cells: [1],
         },
       ],
@@ -118,6 +118,20 @@ describe('BridgeClient', () => {
     })
 
     expect(JSON.parse(rawRequest).payload.context.active_measure_target).toBeNull()
+  })
+
+  it('serializes instance listener channels in session binding requests', async () => {
+    let rawRequest = ''
+    const client = createClient(async (requestJson) => {
+      rawRequest = requestJson
+      return responseEnvelope('session.binding.set', 'req-test', {})
+    })
+
+    await client.request('session.binding.set', {
+      channel_id: 'drums',
+    })
+
+    expect(JSON.parse(rawRequest).payload).toEqual({ channel_id: 'drums' })
   })
 
   it('rejects mismatched response method names', async () => {

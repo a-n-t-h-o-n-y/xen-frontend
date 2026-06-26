@@ -64,10 +64,18 @@ export type KeymapResetRequest = {
   expected_revision: number
 }
 
+export type SessionBindingSetRequest = {
+  channel_id: string
+}
+
 export type BridgeMethodMap = {
   'session.hello': {
     request: SessionHelloRequest
     response: SessionHelloDto
+  }
+  'session.binding.set': {
+    request: SessionBindingSetRequest
+    response: EmptyRequest
   }
   'state.get': {
     request: EmptyRequest
@@ -134,6 +142,7 @@ const keymapResetRequestSchema = z.object({
 
 const responseSchemas = {
   'session.hello': sessionHelloSchema,
+  'session.binding.set': z.object({}).strict(),
   'state.get': projectSnapshotSchema,
   'library.get': librarySnapshotSchema,
   'command.execute': commandResponseSchema,
@@ -148,6 +157,9 @@ const requestSchemas = {
     protocol: z.literal(BRIDGE_PROTOCOL),
     frontend_app: z.string(),
     frontend_version: z.string(),
+  }),
+  'session.binding.set': z.object({
+    channel_id: z.string().min(1),
   }),
   'state.get': z.object({}).strict(),
   'library.get': z.object({}).strict(),
@@ -171,6 +183,7 @@ const requestSchemas = {
 
 const defaultTimeouts = {
   'session.hello': 5_000,
+  'session.binding.set': 15_000,
   'state.get': 5_000,
   'library.get': 5_000,
   'command.execute': 15_000,

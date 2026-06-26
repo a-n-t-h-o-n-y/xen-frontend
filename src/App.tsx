@@ -446,15 +446,15 @@ function App() {
     runCompositionCommand(`composition row rename ${rowIndex} ${quoteCommandArgument(trimmed)}`)
   }, [runCompositionCommand, setStatusLevel, setStatusMessage])
 
-  const commitCompositionRowOutput = useCallback((rowIndex: number, outputId: string): void => {
-    const trimmed = outputId.trim()
+  const commitCompositionRowChannel = useCallback((rowIndex: number, channelId: string): void => {
+    const trimmed = channelId.trim()
     setCompositionEditTarget(null)
     if (!trimmed) {
-      setStatusMessage('Row output cannot be empty.')
+      setStatusMessage('Row channel cannot be empty.')
       setStatusLevel('warning')
       return
     }
-    runCompositionCommand(`composition row output ${rowIndex} ${quoteCommandArgument(trimmed)}`)
+    runCompositionCommand(`composition row channel ${rowIndex} ${quoteCommandArgument(trimmed)}`)
   }, [runCompositionCommand, setStatusLevel, setStatusMessage])
 
   const commitCompositionColumnLength = useCallback((columnIndex: number, length: string): void => {
@@ -516,8 +516,8 @@ function App() {
         if (composition.rows.length > 1) deleteCompositionRow(selection.rowIndex)
       } else if (action === 'composition.row.rename') {
         setCompositionEditTarget({ kind: 'rowName', rowIndex: selection.rowIndex })
-      } else if (action === 'composition.row.output') {
-        setCompositionEditTarget({ kind: 'rowOutput', rowIndex: selection.rowIndex })
+      } else if (action === 'composition.row.channel') {
+        setCompositionEditTarget({ kind: 'rowChannel', rowIndex: selection.rowIndex })
       } else if (action === 'composition.column.insert_before') {
         insertCompositionColumn('before', selection.columnIndex)
       } else if (action === 'composition.column.insert_after') {
@@ -808,7 +808,7 @@ function App() {
                   onCancelEdit={() => setCompositionEditTarget(null)}
                   onCommitCellName={commitCompositionCellName}
                   onCommitRowName={commitCompositionRowName}
-                  onCommitRowOutput={commitCompositionRowOutput}
+                  onCommitRowChannel={commitCompositionRowChannel}
                   onCommitColumnLength={commitCompositionColumnLength}
                   onInsertRow={insertCompositionRow}
                   onDeleteRow={deleteCompositionRow}

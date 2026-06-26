@@ -99,7 +99,7 @@ export type CompositionColumn = {
 
 export type CompositionRow = {
   name: string
-  outputId: string
+  channelId: string
   cells: Array<number | null>
 }
 

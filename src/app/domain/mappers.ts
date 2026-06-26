@@ -55,7 +55,7 @@ const emptyMeasureEntry: MeasureEntryDto = {
 const measureName = (id: number): string => `M${id}`
 
 const compositionFromDto = (
-  composition: Extract<ProjectSnapshotDto, { schema_version: 2 }>['project']['composition']
+  composition: Extract<ProjectSnapshotDto, { schema_version: 3 }>['project']['composition']
 ): Composition => {
   const lastColumnIndex = Math.max(0, composition.columns.length - 1)
   return {
@@ -66,8 +66,8 @@ const compositionFromDto = (
       },
     })),
     rows: composition.rows.map((row, index) => ({
-      name: row.name || row.output_id || `Row ${index + 1}`,
-      outputId: row.output_id,
+      name: row.name || row.channel_id || `Row ${index + 1}`,
+      channelId: row.channel_id,
       cells: row.cells,
     })),
     loopRegion: {
@@ -83,9 +83,8 @@ const arrangedMeasureFromDto = (snapshot: ProjectSnapshotDto): Measure => {
   }
 
   const composition = snapshot.project.composition
-  const currentRow = composition.rows.find((row) => row.output_id === 'current')
-    ?? composition.rows[0]
-  const measureId = currentRow?.cells[0] ?? null
+  const firstRow = composition.rows[0]
+  const measureId = firstRow?.cells[0] ?? null
   const measureEntry = measureId === null
     ? snapshot.project.measure_bank.measures[0]
     : snapshot.project.measure_bank.measures.find((entry) => entry.id === measureId)
@@ -102,7 +101,7 @@ const arrangedMeasureFromDto = (snapshot: ProjectSnapshotDto): Measure => {
 
 export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot => {
   const pitchState = snapshot.project.pitch
-  const isArrangedProject = snapshot.schema_version === 2
+  const isArrangedProject = snapshot.schema_version === 3
   return {
     revision: snapshot.project_revision,
     historyEntryId: snapshot.history_entry_id,
