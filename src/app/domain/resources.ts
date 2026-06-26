@@ -1,4 +1,10 @@
-import type { KeymapResource, LibrarySnapshot, ProjectSnapshot, Selection } from './models'
+import type {
+  ActiveMeasureTarget,
+  KeymapResource,
+  LibrarySnapshot,
+  ProjectSnapshot,
+  Selection,
+} from './models'
 import { projectRootCell, reconcileSelection } from './selection'
 
 export type ProjectIngestion = {
@@ -10,14 +16,15 @@ export type ProjectIngestion = {
 export const ingestProjectSnapshot = (
   current: ProjectSnapshot | null,
   incoming: ProjectSnapshot,
-  selection: Selection
+  selection: Selection,
+  activeMeasureTarget: ActiveMeasureTarget | null = null
 ): ProjectIngestion => {
   if (current && incoming.revision <= current.revision) {
     return { snapshot: current, selection, installed: false }
   }
   return {
     snapshot: incoming,
-    selection: reconcileSelection(projectRootCell(incoming), selection),
+    selection: reconcileSelection(projectRootCell(incoming, activeMeasureTarget), selection),
     installed: true,
   }
 }

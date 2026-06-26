@@ -757,12 +757,14 @@ describe('command execution primitives', () => {
     })).toEqual({
       expectedProjectRevision: 12,
       selection: { path: [] },
+      activeMeasureTarget: null,
     })
     expect(commandContextToDto(buildCommandContext(projectFromDto(projectFixture(12)), {
       path: [{ kind: 'element', index: 99 }],
     }))).toEqual({
       expected_project_revision: 12,
       selection: { path: [] },
+      active_measure_target: null,
     })
   })
 
@@ -984,6 +986,39 @@ describe('keymap routing', () => {
         },
         {
           trigger: {
+            key: 'c',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.cell.copy',
+            arguments: {},
+          },
+        },
+        {
+          trigger: {
+            key: 'v',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.cell.paste',
+            arguments: {},
+          },
+        },
+        {
+          trigger: {
+            key: 'd',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.cell.duplicate_right',
+            arguments: {},
+          },
+        },
+        {
+          trigger: {
             key: 'o',
             modifiers: { shift: false, command: false, alt: false },
           },
@@ -1070,6 +1105,9 @@ describe('keymap routing', () => {
   it('parses new editable composition UI actions', () => {
     for (const [key, action] of [
       ['n', 'composition.cell.rename_or_create_measure'],
+      ['c', 'composition.cell.copy'],
+      ['v', 'composition.cell.paste'],
+      ['d', 'composition.cell.duplicate_right'],
       ['o', 'composition.row.output'],
       ['t', 'composition.column.length'],
     ] as const) {

@@ -4,12 +4,13 @@ import {
   findKeymapBinding,
 } from '../domain/keymap'
 import { isCommandUiActionId } from '../domain/uiActions'
-import { moveCompositionSelection } from '../domain/composition'
+import { getMeasureById, moveCompositionSelection } from '../domain/composition'
 import { moveSelection, projectRootCell } from '../domain/selection'
 import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
+  ActiveMeasureTarget,
   CompositionSelection,
   EditorState,
   KeymapResource,
@@ -20,6 +21,8 @@ import type { ModTarget } from '../domain/modulation'
 
 type WorkspaceView = 'composition' | 'sequencer' | 'library'
 
+const quoteCommandArgument = (value: string): string => JSON.stringify(value)
+
 type UseKeyboardControllerArgs = {
   bridgeUnavailableMessage: string | null
   isProjectReady: boolean
@@ -29,6 +32,7 @@ type UseKeyboardControllerArgs = {
   executeBackendCommand: (command: string) => Promise<void>
   projectRef: MutableRefObject<ProjectSnapshot | null>
   editorStateRef: MutableRefObject<EditorState>
+  activeMeasureTargetRef: MutableRefObject<ActiveMeasureTarget | null>
   keymapRef: MutableRefObject<KeymapResource | null>
   installEditorState: (nextState: EditorState) => void
   workspaceViewRef: MutableRefObject<WorkspaceView>
@@ -56,6 +60,7 @@ export function useKeyboardController({
   executeBackendCommand,
   projectRef,
   editorStateRef,
+  activeMeasureTargetRef,
   keymapRef,
   installEditorState,
   workspaceViewRef,
@@ -74,9 +79,119 @@ export function useKeyboardController({
   setStatusLevel,
 }: UseKeyboardControllerArgs) {
   const pendingNumberRef = useRef('')
+  const compositionClipboardRef = useRef<string | null>(null)
   const lastShortcutCommandRef = useRef<{ command: 'copy' | 'cut' | 'paste'; at: number } | null>(
     null
   )
+
+  const getSelectedCompositionMeasureName = useCallback((): string | null => {
+    const project = projectRef.current
+    const composition = project?.composition
+    if (!project || !composition) {
+      return null
+    }
+
+    const selection = compositionSelectionRef.current
+    const measureId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
+    if (measureId === null || measureId === undefined) {
+      return null
+    }
+
+    return getMeasureById(project.measureBank, measureId)?.name ?? null
+  }, [compositionSelectionRef, projectRef])
+
+  const assignCompositionMeasureName = useCallback((
+    selection: CompositionSelection,
+    measureName: string
+  ): void => {
+    void executeBackendCommand(
+      `composition cell assign ${selection.rowIndex} ${selection.columnIndex} ${
+        quoteCommandArgument(measureName)
+      }`
+    ).catch((error: unknown) => {
+      setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+      setStatusLevel('error')
+    })
+  }, [executeBackendCommand, setStatusLevel, setStatusMessage])
+
+  const handleCompositionCellCopy = useCallback((clipboardData?: DataTransfer | null): boolean => {
+    const measureName = getSelectedCompositionMeasureName()
+    if (!measureName) {
+      setStatusMessage('Empty composition cell. Nothing to copy.')
+      setStatusLevel('warning')
+      return false
+    }
+
+    compositionClipboardRef.current = measureName
+    clipboardData?.setData('text/plain', measureName)
+    setStatusMessage(`Copied composition measure ${measureName}.`)
+    setStatusLevel('info')
+    return true
+  }, [getSelectedCompositionMeasureName, setStatusLevel, setStatusMessage])
+
+  const handleCompositionCellPaste = useCallback((clipboardText?: string): boolean => {
+    const measureName = (clipboardText ?? compositionClipboardRef.current ?? '').trim()
+    if (!measureName) {
+      setStatusMessage('No composition measure name to paste.')
+      setStatusLevel('warning')
+      return false
+    }
+
+    assignCompositionMeasureName(compositionSelectionRef.current, measureName)
+    return true
+  }, [assignCompositionMeasureName, compositionSelectionRef, setStatusLevel, setStatusMessage])
+
+  const handleCompositionCellDuplicateRight = useCallback((): boolean => {
+    const project = projectRef.current
+    const composition = project?.composition
+    const measureName = getSelectedCompositionMeasureName()
+    if (!composition || !measureName) {
+      setStatusMessage('Empty composition cell. Nothing to duplicate.')
+      setStatusLevel('warning')
+      return false
+    }
+
+    const selection = compositionSelectionRef.current
+    if (selection.columnIndex >= composition.columns.length - 1) {
+      setStatusMessage('Cannot duplicate right from the last composition column.')
+      setStatusLevel('warning')
+      return false
+    }
+
+    assignCompositionMeasureName(
+      { rowIndex: selection.rowIndex, columnIndex: selection.columnIndex + 1 },
+      measureName
+    )
+    return true
+  }, [
+    assignCompositionMeasureName,
+    compositionSelectionRef,
+    getSelectedCompositionMeasureName,
+    projectRef,
+    setStatusLevel,
+    setStatusMessage,
+  ])
+
+  const handleCompositionCellAction = useCallback((
+    action: string,
+    clipboardText?: string,
+    clipboardData?: DataTransfer | null
+  ): boolean => {
+    if (action === 'composition.cell.copy') {
+      return handleCompositionCellCopy(clipboardData)
+    }
+    if (action === 'composition.cell.paste') {
+      return handleCompositionCellPaste(clipboardText)
+    }
+    if (action === 'composition.cell.duplicate_right') {
+      return handleCompositionCellDuplicateRight()
+    }
+    return false
+  }, [
+    handleCompositionCellCopy,
+    handleCompositionCellDuplicateRight,
+    handleCompositionCellPaste,
+  ])
 
   const toggleWorkspaceView = useCallback((): void => {
     setWorkspaceView((current) => current === 'sequencer' ? 'composition' : 'sequencer')
@@ -146,7 +261,7 @@ export function useKeyboardController({
               const project = projectRef.current
               if (!project) return
               const selection = moveSelection(
-                projectRootCell(project),
+                projectRootCell(project, activeMeasureTargetRef.current),
                 editorStateRef.current.selection,
                 matchedBinding.target.arguments.direction,
                 matchedBinding.target.arguments.amount
@@ -193,6 +308,10 @@ export function useKeyboardController({
 
             if (matchedBinding.target.action === 'composition.cell.edit_measure') {
               editSelectedCompositionCell()
+              return
+            }
+
+            if (handleCompositionCellAction(matchedBinding.target.action)) {
               return
             }
 
@@ -271,8 +390,10 @@ export function useKeyboardController({
   }, [
     bridgeUnavailableMessage,
     editorStateRef,
+    activeMeasureTargetRef,
     executeBackendCommand,
     editSelectedCompositionCell,
+    handleCompositionCellAction,
     compositionSelectionRef,
     installCompositionSelection,
     installEditorState,
@@ -313,6 +434,26 @@ export function useKeyboardController({
         return
       }
 
+      if (workspaceViewRef.current === 'composition') {
+        event.preventDefault()
+        if (command === 'copy') {
+          handleCompositionCellCopy(event.clipboardData)
+        } else if (command === 'cut') {
+          if (handleCompositionCellCopy(event.clipboardData)) {
+            const selection = compositionSelectionRef.current
+            void executeBackendCommand(
+              `composition cell clear ${selection.rowIndex} ${selection.columnIndex}`
+            ).catch((error: unknown) => {
+              setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+              setStatusLevel('error')
+            })
+          }
+        } else {
+          handleCompositionCellPaste(event.clipboardData?.getData('text/plain'))
+        }
+        return
+      }
+
       event.preventDefault()
 
       void executeBackendCommand(command).catch((error: unknown) => {
@@ -341,10 +482,14 @@ export function useKeyboardController({
     }
   }, [
     bridgeUnavailableMessage,
+    compositionSelectionRef,
     executeBackendCommand,
+    handleCompositionCellCopy,
+    handleCompositionCellPaste,
     isCommandMode,
     isProjectReady,
     setStatusLevel,
     setStatusMessage,
+    workspaceViewRef,
   ])
 }

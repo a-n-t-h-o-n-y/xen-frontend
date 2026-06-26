@@ -77,6 +77,7 @@ function App() {
   )
   const [compositionEditTarget, setCompositionEditTarget] = useState<CompositionEditTarget | null>(null)
   const [activeMeasureTarget, setActiveMeasureTarget] = useState<ActiveMeasureTarget | null>(null)
+  const activeMeasureTargetRef = useRef<ActiveMeasureTarget | null>(activeMeasureTarget)
   const compositionSelectionRef = useRef<CompositionSelection>(compositionSelection)
   const workspaceViewRef = useRef<WorkspaceView>(workspaceView)
   const [isModulatorMode, setIsModulatorMode] = useState(false)
@@ -158,6 +159,7 @@ function App() {
   } = useProjectSession({
     transportRef,
     editorStateRef,
+    activeMeasureTargetRef,
     setEditorState,
     setSessionReference,
     setLibrarySnapshot,
@@ -206,6 +208,11 @@ function App() {
       workspaceViewRef.current = resolved
       return resolved
     })
+  }, [])
+
+  const installActiveMeasureTarget = useCallback((nextTarget: ActiveMeasureTarget | null): void => {
+    activeMeasureTargetRef.current = nextTarget
+    setActiveMeasureTarget(nextTarget)
   }, [])
 
   const projectViewModel = useMemo(() => {
@@ -354,11 +361,12 @@ function App() {
       return
     }
 
-    setActiveMeasureTarget(target)
+    installActiveMeasureTarget(target)
     installEditorState({ ...editorStateRef.current, selection: { path: [] } })
     installWorkspaceView('sequencer')
   }, [
     editorStateRef,
+    installActiveMeasureTarget,
     installEditorState,
     installWorkspaceView,
     projectRef,
@@ -644,6 +652,7 @@ function App() {
     executeBackendCommand,
     projectRef,
     editorStateRef,
+    activeMeasureTargetRef,
     keymapRef,
     installEditorState,
     workspaceViewRef,

@@ -97,6 +97,29 @@ describe('BridgeClient', () => {
     })
   })
 
+  it('serializes null active measure targets as null in command requests', async () => {
+    let rawRequest = ''
+    const client = createClient(async (requestJson) => {
+      rawRequest = requestJson
+      return responseEnvelope('command.execute', 'req-test', {
+        status: { level: 'info', message: 'ok' },
+        suggested_selection: null,
+        snapshot: projectFixture(),
+      })
+    })
+
+    await client.request('command.execute', {
+      command: 'transport stop',
+      context: {
+        expected_project_revision: 3,
+        selection: { path: [] },
+        active_measure_target: null,
+      },
+    })
+
+    expect(JSON.parse(rawRequest).payload.context.active_measure_target).toBeNull()
+  })
+
   it('rejects mismatched response method names', async () => {
     const client = createClient(async () =>
       responseEnvelope('library.get', 'req-test', projectFixture())

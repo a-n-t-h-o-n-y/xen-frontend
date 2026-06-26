@@ -119,6 +119,11 @@ type CommandExecuteRequest = {
   context: {
     expected_project_revision: number
     selection: Selection
+    active_measure_target: {
+      row_index: number
+      column_index: number
+      measure_id: number
+    } | null
   }
 }
 

@@ -218,6 +218,7 @@ export type KeymapResource = {
 export type CommandContext = {
   expectedProjectRevision: number
   selection: Selection
+  activeMeasureTarget: ActiveMeasureTarget | null
 }
 
 export type {

@@ -264,6 +264,13 @@ export const commandResponseFromDto = (
 export const commandContextToDto = (context: CommandContext) => ({
   expected_project_revision: context.expectedProjectRevision,
   selection: context.selection as SelectionDto,
+  active_measure_target: context.activeMeasureTarget
+    ? {
+        row_index: context.activeMeasureTarget.rowIndex,
+        column_index: context.activeMeasureTarget.columnIndex,
+        measure_id: context.activeMeasureTarget.measureId,
+      }
+    : null,
 })
 
 export const keymapOverrideSetRequestToDto = (

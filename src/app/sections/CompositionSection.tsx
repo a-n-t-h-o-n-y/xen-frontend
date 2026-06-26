@@ -1,7 +1,8 @@
 import { formatTimeSignature } from '../presentation/viewModels'
 import { getMeasureById, isColumnInLoopRegion } from '../domain/composition'
 import { clampNumber, flattenMeasureToNoteIR, normalizePitch } from '../domain/music'
-import { Fragment, useEffect, useMemo, useRef } from 'react'
+import { getCompositionSelectionScrollDelta } from './compositionScroll'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { Composition, CompositionSelection, MeasureBank } from '../domain/models'
 
@@ -91,6 +92,7 @@ export function CompositionSection({
 }: CompositionSectionProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
+  const editSelectRef = useRef<HTMLSelectElement | null>(null)
   const columnWidths = composition.columns.map((column) => getColumnWidth(column.length))
   const gridTemplateColumns = ['10rem', ...columnWidths].join(' ')
   const selectedMeasureId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
@@ -136,10 +138,41 @@ export function CompositionSection({
     return length ? formatTimeSignature(length) : '4/4'
   }, [composition.columns, composition.rows, editTarget, measureBank])
 
-  useEffect(() => {
-    const selected = scrollerRef.current?.querySelector('[data-composition-selected="true"]')
-    if (selected instanceof HTMLElement) {
-      selected.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current
+    const selected = scroller?.querySelector('[data-composition-selected="true"]')
+    if (!scroller || !(selected instanceof HTMLElement)) {
+      return
+    }
+
+    const corner = scroller.querySelector('.compositionCorner')
+    const scrollerRect = scroller.getBoundingClientRect()
+    const selectedRect = selected.getBoundingClientRect()
+    const cornerRect = corner instanceof HTMLElement ? corner.getBoundingClientRect() : null
+    const { topDelta, leftDelta } = getCompositionSelectionScrollDelta(
+      scrollerRect,
+      selectedRect,
+      {
+        width: cornerRect?.width ?? 0,
+        height: cornerRect?.height ?? 0,
+      }
+    )
+
+    if (topDelta !== 0) {
+      scroller.scrollTop += topDelta
+    }
+    if (leftDelta !== 0) {
+      scroller.scrollLeft += leftDelta
+    }
+
+    const activeElement = document.activeElement
+    const shouldMoveFocus =
+      activeElement === document.body ||
+      activeElement === null ||
+      (activeElement instanceof HTMLElement && scroller.contains(activeElement))
+
+    if (shouldMoveFocus && document.activeElement !== selected) {
+      selected.focus({ preventScroll: true })
     }
   }, [selection.columnIndex, selection.rowIndex])
 
@@ -149,8 +182,17 @@ export function CompositionSection({
     }
 
     window.requestAnimationFrame(() => {
-      editInputRef.current?.focus()
-      editInputRef.current?.select()
+      const editInput = editTarget.kind === 'rowOutput'
+        ? editSelectRef.current
+        : editInputRef.current
+      if (!editInput) {
+        return
+      }
+
+      editInput.focus()
+      if (editInput instanceof HTMLInputElement) {
+        editInput.select()
+      }
     })
   }, [editKey, editTarget])
 
@@ -158,7 +200,9 @@ export function CompositionSection({
     if (!editTarget) {
       return
     }
-    const value = editInputRef.current?.value ?? editValue
+    const value = editTarget.kind === 'rowOutput'
+      ? editSelectRef.current?.value ?? editValue
+      : editInputRef.current?.value ?? editValue
 
     if (editTarget.kind === 'cell') {
       onCommitCellName(editTarget.rowIndex, editTarget.columnIndex, value)
@@ -171,7 +215,7 @@ export function CompositionSection({
     }
   }
 
-  const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+  const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLSelectElement>): void => {
     event.stopPropagation()
     if (event.key === 'Enter') {
       event.preventDefault()
@@ -370,20 +414,22 @@ export function CompositionSection({
                     </span>
                   </span>
                   {editTarget?.kind === 'rowOutput' && editTarget.rowIndex === rowIndex ? (
-                    <input
+                    <select
                       key={editKey}
-                      ref={editInputRef}
+                      ref={editSelectRef}
                       className="compositionInlineInput compositionInlineInput-compact mono"
-                      list="composition-output-options"
                       defaultValue={editValue}
+                      onChange={commitEdit}
                       onKeyDown={handleEditKeyDown}
                       onBlur={onCancelEdit}
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      autoComplete="off"
-                      autoCorrect="off"
                       aria-label={`Assign row ${rowIndex + 1} output`}
-                    />
+                    >
+                      {outputOptions.map((outputId) => (
+                        <option value={outputId} key={outputId}>
+                          {outputId}
+                        </option>
+                      ))}
+                    </select>
                   ) : (
                     <button
                       type="button"

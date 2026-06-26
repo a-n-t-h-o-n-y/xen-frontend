@@ -23,6 +23,9 @@ export type FrontendUiActionId =
   | 'workspace.view.sequencer'
   | 'composition.selection.move'
   | 'composition.cell.edit_measure'
+  | 'composition.cell.copy'
+  | 'composition.cell.paste'
+  | 'composition.cell.duplicate_right'
   | 'composition.cell.rename_or_create_measure'
   | 'composition.cell.clear'
   | 'composition.row.insert_before'
@@ -93,6 +96,24 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
   'composition.cell.edit_measure': {
     id: 'composition.cell.edit_measure',
     label: 'Edit composition cell measure',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.cell.copy': {
+    id: 'composition.cell.copy',
+    label: 'Copy composition cell',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.cell.paste': {
+    id: 'composition.cell.paste',
+    label: 'Paste composition cell',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.cell.duplicate_right': {
+    id: 'composition.cell.duplicate_right',
+    label: 'Duplicate composition cell right',
     section: 'Composition',
     argumentKind: 'none',
   },

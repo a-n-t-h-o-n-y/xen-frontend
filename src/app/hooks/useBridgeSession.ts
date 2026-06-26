@@ -13,6 +13,7 @@ import type {
   ProjectSnapshotDto,
 } from '../domain/contracts'
 import type {
+  ActiveMeasureTarget,
   EditorState,
   LibrarySnapshot,
   MessageLevel,
@@ -27,6 +28,7 @@ type UseBridgeSessionArgs = {
   ) => Promise<BridgeMethodMap[K]['response']>
   projectRef: MutableRefObject<ProjectSnapshot | null>
   editorStateRef: MutableRefObject<EditorState>
+  activeMeasureTargetRef: MutableRefObject<ActiveMeasureTarget | null>
   libraryRevisionRef: MutableRefObject<number>
   setProject: Dispatch<SetStateAction<ProjectSnapshot | null>>
   setEditorState: Dispatch<SetStateAction<EditorState>>
@@ -39,6 +41,7 @@ export function useBridgeSession({
   request,
   projectRef,
   editorStateRef,
+  activeMeasureTargetRef,
   libraryRevisionRef,
   setProject,
   setEditorState,
@@ -59,7 +62,8 @@ export function useBridgeSession({
     const result = ingestProjectSnapshot(
       projectRef.current,
       domainSnapshot,
-      editorStateRef.current.selection
+      editorStateRef.current.selection,
+      activeMeasureTargetRef.current
     )
     if (!result.installed) {
       return result.snapshot
@@ -71,7 +75,7 @@ export function useBridgeSession({
       installEditorState({ ...editorStateRef.current, selection: result.selection })
     }
     return result.snapshot
-  }, [editorStateRef, installEditorState, projectRef, setProject])
+  }, [activeMeasureTargetRef, editorStateRef, installEditorState, projectRef, setProject])
 
   const ingestLibrary = useCallback((snapshot: LibrarySnapshot | LibrarySnapshotDto): LibrarySnapshot | null => {
     const domainSnapshot = 'revision' in snapshot ? snapshot : libraryFromDto(snapshot)
@@ -92,7 +96,11 @@ export function useBridgeSession({
         if (!project) {
           throw new Error('Project state is not loaded')
         }
-        const context = buildCommandContext(project, editorStateRef.current.selection)
+        const context = buildCommandContext(
+          project,
+          editorStateRef.current.selection,
+          activeMeasureTargetRef.current
+        )
         const selection = context.selection
         if (selection !== editorStateRef.current.selection) {
           installEditorState({ ...editorStateRef.current, selection })
@@ -106,7 +114,7 @@ export function useBridgeSession({
         if (
           commandResponse.suggestedSelection &&
           resolveSelection(
-            projectRootCell(installedProject),
+            projectRootCell(installedProject, activeMeasureTargetRef.current),
             commandResponse.suggestedSelection
           )
         ) {
@@ -126,6 +134,7 @@ export function useBridgeSession({
     },
     [
       editorStateRef,
+      activeMeasureTargetRef,
       ingestProject,
       installEditorState,
       projectRef,

@@ -5,7 +5,8 @@ import type {
   SelectionPath,
   SelectionStep,
 } from './music'
-import type { ProjectSnapshot } from './models'
+import { measureFromTarget } from './composition'
+import type { ActiveMeasureTarget, ProjectSnapshot } from './models'
 
 export type ResolvedSelection = {
   cellPath: number[]
@@ -168,5 +169,13 @@ export const moveSelection = (
   return { path }
 }
 
-export const projectRootCell = (snapshot: ProjectSnapshot): Cell =>
-  snapshot.measure.cell
+export const projectRootCell = (
+  snapshot: ProjectSnapshot,
+  activeMeasureTarget: ActiveMeasureTarget | null = null
+): Cell =>
+  measureFromTarget(
+    snapshot.measure,
+    snapshot.measureBank,
+    snapshot.composition,
+    activeMeasureTarget
+  ).cell

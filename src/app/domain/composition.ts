@@ -79,6 +79,16 @@ export const getActiveMeasureTarget = (
   return { ...safeSelection, measureId }
 }
 
+export const isActiveMeasureTargetValid = (
+  composition: Composition | null,
+  target: ActiveMeasureTarget | null
+): target is ActiveMeasureTarget =>
+  Boolean(
+    composition &&
+    target &&
+    composition.rows[target.rowIndex]?.cells[target.columnIndex] === target.measureId
+  )
+
 export const measureFromTarget = (
   fallbackMeasure: Measure,
   measureBank: MeasureBank | null,
