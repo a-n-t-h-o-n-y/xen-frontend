@@ -80,9 +80,13 @@ export function useKeyboardController({
 }: UseKeyboardControllerArgs) {
   const pendingNumberRef = useRef('')
   const compositionClipboardRef = useRef<string | null>(null)
+  const optimisticCompositionCellNamesRef = useRef<Map<string, string>>(new Map())
   const lastShortcutCommandRef = useRef<{ command: 'copy' | 'cut' | 'paste'; at: number } | null>(
     null
   )
+
+  const getCompositionCellKey = (selection: CompositionSelection): string =>
+    `${selection.rowIndex}:${selection.columnIndex}`
 
   const getSelectedCompositionMeasureName = useCallback((): string | null => {
     const project = projectRef.current
@@ -92,6 +96,13 @@ export function useKeyboardController({
     }
 
     const selection = compositionSelectionRef.current
+    const optimisticName = optimisticCompositionCellNamesRef.current.get(
+      getCompositionCellKey(selection)
+    )
+    if (optimisticName) {
+      return optimisticName
+    }
+
     const measureId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
     if (measureId === null || measureId === undefined) {
       return null
@@ -104,10 +115,22 @@ export function useKeyboardController({
     selection: CompositionSelection,
     measureName: string
   ): void => {
+    optimisticCompositionCellNamesRef.current.set(getCompositionCellKey(selection), measureName)
     void executeBackendCommand(
       `composition cell assign ${selection.rowIndex} ${selection.columnIndex} ${
         quoteCommandArgument(measureName)
       }`
+    ).catch((error: unknown) => {
+      optimisticCompositionCellNamesRef.current.delete(getCompositionCellKey(selection))
+      setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+      setStatusLevel('error')
+    })
+  }, [executeBackendCommand, setStatusLevel, setStatusMessage])
+
+  const clearCompositionSelection = useCallback((selection: CompositionSelection): void => {
+    optimisticCompositionCellNamesRef.current.delete(getCompositionCellKey(selection))
+    void executeBackendCommand(
+      `composition cell clear ${selection.rowIndex} ${selection.columnIndex}`
     ).catch((error: unknown) => {
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')
@@ -141,6 +164,15 @@ export function useKeyboardController({
     return true
   }, [assignCompositionMeasureName, compositionSelectionRef, setStatusLevel, setStatusMessage])
 
+  const handleCompositionCellCut = useCallback((clipboardData?: DataTransfer | null): boolean => {
+    if (!handleCompositionCellCopy(clipboardData)) {
+      return false
+    }
+
+    clearCompositionSelection(compositionSelectionRef.current)
+    return true
+  }, [clearCompositionSelection, compositionSelectionRef, handleCompositionCellCopy])
+
   const handleCompositionCellDuplicateRight = useCallback((): boolean => {
     const project = projectRef.current
     const composition = project?.composition
@@ -158,15 +190,18 @@ export function useKeyboardController({
       return false
     }
 
+    const targetSelection = { rowIndex: selection.rowIndex, columnIndex: selection.columnIndex + 1 }
     assignCompositionMeasureName(
-      { rowIndex: selection.rowIndex, columnIndex: selection.columnIndex + 1 },
+      targetSelection,
       measureName
     )
+    installCompositionSelection(targetSelection)
     return true
   }, [
     assignCompositionMeasureName,
     compositionSelectionRef,
     getSelectedCompositionMeasureName,
+    installCompositionSelection,
     projectRef,
     setStatusLevel,
     setStatusMessage,
@@ -180,6 +215,9 @@ export function useKeyboardController({
     if (action === 'composition.cell.copy') {
       return handleCompositionCellCopy(clipboardData)
     }
+    if (action === 'composition.cell.cut') {
+      return handleCompositionCellCut(clipboardData)
+    }
     if (action === 'composition.cell.paste') {
       return handleCompositionCellPaste(clipboardText)
     }
@@ -189,6 +227,7 @@ export function useKeyboardController({
     return false
   }, [
     handleCompositionCellCopy,
+    handleCompositionCellCut,
     handleCompositionCellDuplicateRight,
     handleCompositionCellPaste,
   ])
@@ -439,15 +478,7 @@ export function useKeyboardController({
         if (command === 'copy') {
           handleCompositionCellCopy(event.clipboardData)
         } else if (command === 'cut') {
-          if (handleCompositionCellCopy(event.clipboardData)) {
-            const selection = compositionSelectionRef.current
-            void executeBackendCommand(
-              `composition cell clear ${selection.rowIndex} ${selection.columnIndex}`
-            ).catch((error: unknown) => {
-              setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-              setStatusLevel('error')
-            })
-          }
+          handleCompositionCellCut(event.clipboardData)
         } else {
           handleCompositionCellPaste(event.clipboardData?.getData('text/plain'))
         }
@@ -485,6 +516,7 @@ export function useKeyboardController({
     compositionSelectionRef,
     executeBackendCommand,
     handleCompositionCellCopy,
+    handleCompositionCellCut,
     handleCompositionCellPaste,
     isCommandMode,
     isProjectReady,

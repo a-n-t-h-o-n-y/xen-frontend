@@ -1008,6 +1008,17 @@ describe('keymap routing', () => {
         },
         {
           trigger: {
+            key: 'x',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: {
+            type: 'ui_action',
+            action: 'composition.cell.cut',
+            arguments: {},
+          },
+        },
+        {
+          trigger: {
             key: 'd',
             modifiers: { shift: false, command: false, alt: false },
           },
@@ -1107,6 +1118,7 @@ describe('keymap routing', () => {
       ['n', 'composition.cell.rename_or_create_measure'],
       ['c', 'composition.cell.copy'],
       ['v', 'composition.cell.paste'],
+      ['x', 'composition.cell.cut'],
       ['d', 'composition.cell.duplicate_right'],
       ['o', 'composition.row.output'],
       ['t', 'composition.column.length'],

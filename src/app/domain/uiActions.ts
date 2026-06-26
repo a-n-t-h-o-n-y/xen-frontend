@@ -24,6 +24,7 @@ export type FrontendUiActionId =
   | 'composition.selection.move'
   | 'composition.cell.edit_measure'
   | 'composition.cell.copy'
+  | 'composition.cell.cut'
   | 'composition.cell.paste'
   | 'composition.cell.duplicate_right'
   | 'composition.cell.rename_or_create_measure'
@@ -102,6 +103,12 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
   'composition.cell.copy': {
     id: 'composition.cell.copy',
     label: 'Copy composition cell',
+    section: 'Composition',
+    argumentKind: 'none',
+  },
+  'composition.cell.cut': {
+    id: 'composition.cell.cut',
+    label: 'Cut composition cell',
     section: 'Composition',
     argumentKind: 'none',
   },

@@ -45,6 +45,7 @@ export type UiActionKeymapTarget =
         | 'workspace.view.sequencer'
         | 'composition.cell.edit_measure'
         | 'composition.cell.copy'
+        | 'composition.cell.cut'
         | 'composition.cell.paste'
         | 'composition.cell.duplicate_right'
         | 'composition.cell.rename_or_create_measure'
