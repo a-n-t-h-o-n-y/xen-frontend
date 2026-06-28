@@ -8,6 +8,7 @@ import { useProjectSession } from './app/hooks/useProjectSession'
 import { useCommandController } from './app/hooks/useCommandController'
 import { useKeyboardController } from './app/hooks/useKeyboardController'
 import { useModulatorController } from './app/hooks/useModulatorController'
+import { useScaleMenu } from './app/hooks/useScaleMenu'
 import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
 import { CompositionSection } from './app/sections/CompositionSection'
@@ -78,7 +79,6 @@ function App() {
     selection: { path: [] },
     inputMode: 'pitch',
   })
-  const [openScaleMenu, setOpenScaleMenu] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsOpenerRef = useRef<HTMLElement | null>(null)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('sequencer')
@@ -119,7 +119,7 @@ function App() {
   const timeSignatureInputRef = useRef<HTMLInputElement>(null)
   const keyInputRef = useRef<HTMLInputElement>(null)
   const baseFrequencyInputRef = useRef<HTMLInputElement>(null)
-  const scaleMenuRef = useRef<HTMLDivElement | null>(null)
+  const { openScaleMenu, setOpenScaleMenu, scaleMenuRef } = useScaleMenu()
   const editorStateRef = useRef<EditorState>(editorState)
   const transportRef = useRef<TransportState>(createTransportState())
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
@@ -682,35 +682,6 @@ function App() {
       setOpenWaveMenu(null)
     }
   }, [isModulatorMode, setOpenWaveMenu])
-
-  useEffect(() => {
-    if (!openScaleMenu) {
-      return
-    }
-
-    const handlePointerDown = (event: MouseEvent): void => {
-      const host = scaleMenuRef.current
-      if (!host) {
-        return
-      }
-      if (event.target instanceof Node && !host.contains(event.target)) {
-        setOpenScaleMenu(false)
-      }
-    }
-
-    const handleEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        setOpenScaleMenu(false)
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown)
-    window.addEventListener('keydown', handleEscape)
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown)
-      window.removeEventListener('keydown', handleEscape)
-    }
-  }, [openScaleMenu])
 
   const runLibraryCommand = useCallback(
     async (command: string): Promise<void> => {
