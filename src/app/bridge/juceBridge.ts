@@ -56,7 +56,7 @@ async function getNativeFunctionFactory(): Promise<(name: string) => unknown> {
     return nativeFnFactoryPromise
   }
 
-  nativeFnFactoryPromise = import('../vendor/juce/index.js').then((module) => {
+  nativeFnFactoryPromise = import('../../vendor/juce/index.js').then((module) => {
     if (typeof module.getNativeFunction !== 'function') {
       throw new Error('JUCE bridge contract mismatch: getNativeFunction export is missing.')
     }

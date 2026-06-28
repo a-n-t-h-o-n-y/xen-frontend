@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { addXenBridgeListener, removeXenBridgeListener } from '../../bridge/juceBridge'
+import { addXenBridgeListener, removeXenBridgeListener } from '../bridge/juceBridge'
 import {
   BRIDGE_PROTOCOL,
   parseBridgeEvent,

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getXenBridgeRequest } from '../../bridge/juceBridge'
+import { getXenBridgeRequest } from './juceBridge'
 import {
   BRIDGE_PROTOCOL,
   commandResponseSchema,
