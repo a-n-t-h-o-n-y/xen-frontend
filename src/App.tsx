@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import './App.css'
 import { HeaderSection } from './app/sections/HeaderSection'
 import { useCommandState } from './app/hooks/useCommandState'
 import { useHeaderEditing } from './app/hooks/useHeaderEditing'
