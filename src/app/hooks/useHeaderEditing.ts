@@ -6,6 +6,14 @@ import {
   parseTimeSignatureInput,
 } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
+import {
+  scaleMeasureTimeSignature,
+  setBaseFrequency,
+  setKey,
+  setMeasureTimeSignature,
+  setMode,
+  setTranslateDirection,
+} from '../domain/commands'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { LibrarySnapshot, MessageLevel, TranslateDirection } from '../domain/models'
 
@@ -107,7 +115,7 @@ export function useHeaderEditing({
 
       const normalized = formatTimeSignature(parsed)
       try {
-        await executeBackendCommand(`set measure timeSignature ${normalized}`)
+        await executeBackendCommand(setMeasureTimeSignature(normalized))
         setIsTimeSignatureEditing(false)
         return true
       } catch (error) {
@@ -137,7 +145,7 @@ export function useHeaderEditing({
       }
 
       try {
-        await executeBackendCommand(`set key ${parsed}`)
+        await executeBackendCommand(setKey(parsed))
         setIsKeyEditing(false)
         return true
       } catch (error) {
@@ -167,7 +175,7 @@ export function useHeaderEditing({
       }
 
       try {
-        await executeBackendCommand(`set baseFrequency ${parsed}`)
+        await executeBackendCommand(setBaseFrequency(parsed))
         setIsBaseFrequencyEditing(false)
         return true
       } catch (error) {
@@ -217,7 +225,7 @@ export function useHeaderEditing({
         return
       }
 
-      void executeBackendCommand(`${mode === 'double' ? 'double' : 'halve'} measure timeSignature`).catch(
+      void executeBackendCommand(scaleMeasureTimeSignature(mode)).catch(
         (error) => {
           setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
           setStatusLevel('error')
@@ -263,7 +271,7 @@ export function useHeaderEditing({
       }
 
       try {
-        await executeBackendCommand(`set mode ${modeIndex}`)
+        await executeBackendCommand(setMode(modeIndex))
       } catch (error) {
         setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
         setStatusLevel('error')
@@ -312,7 +320,7 @@ export function useHeaderEditing({
 
     const nextDirection: TranslateDirection = scaleTranslateDirection === 'down' ? 'up' : 'down'
     try {
-      await executeBackendCommand(`set translateDirection ${nextDirection}`)
+      await executeBackendCommand(setTranslateDirection(nextDirection))
     } catch (error) {
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')

@@ -37,6 +37,18 @@ import {
   measureFromTarget,
 } from './app/domain/composition'
 import {
+  compositionCellAssign,
+  compositionCellClear,
+  compositionColumnDelete,
+  compositionColumnInsert,
+  compositionColumnLength,
+  compositionLoopBoundary,
+  compositionRowChannel,
+  compositionRowDelete,
+  compositionRowInsert,
+  compositionRowRename,
+} from './app/domain/commands'
+import {
   collectLeafCells,
   formatOctaveForDisplay,
   formatTimeSignature,
@@ -60,7 +72,6 @@ type WorkspaceView = 'composition' | 'sequencer' | 'library'
 
 const EMPTY_ROOT_CELL: Cell = { weight: 1, elements: [] }
 const INITIAL_COMPOSITION_SELECTION: CompositionSelection = { rowIndex: 0, columnIndex: 0 }
-const quoteCommandArgument = (value: string): string => JSON.stringify(value)
 
 function App() {
   const [editorState, setEditorState] = useState<EditorState>({
@@ -380,7 +391,7 @@ function App() {
     }
 
     const selection = clampCompositionSelection(composition, compositionSelectionRef.current)
-    const command = `composition loop ${boundary} ${selection.columnIndex}`
+    const command = compositionLoopBoundary(boundary, selection.columnIndex)
     void executeBackendCommand(command).catch((error: unknown) => {
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')
@@ -426,12 +437,10 @@ function App() {
     const trimmed = name.trim()
     setCompositionEditTarget(null)
     if (!trimmed) {
-      runCompositionCommand(`composition cell clear ${rowIndex} ${columnIndex}`)
+      runCompositionCommand(compositionCellClear(rowIndex, columnIndex))
       return
     }
-    runCompositionCommand(
-      `composition cell assign ${rowIndex} ${columnIndex} ${quoteCommandArgument(trimmed)}`
-    )
+    runCompositionCommand(compositionCellAssign(rowIndex, columnIndex, trimmed))
   }, [runCompositionCommand])
 
   const commitCompositionRowName = useCallback((rowIndex: number, name: string): void => {
@@ -442,7 +451,7 @@ function App() {
       setStatusLevel('warning')
       return
     }
-    runCompositionCommand(`composition row rename ${rowIndex} ${quoteCommandArgument(trimmed)}`)
+    runCompositionCommand(compositionRowRename(rowIndex, trimmed))
   }, [runCompositionCommand, setStatusLevel, setStatusMessage])
 
   const commitCompositionRowChannel = useCallback((rowIndex: number, channelId: string): void => {
@@ -453,7 +462,7 @@ function App() {
       setStatusLevel('warning')
       return
     }
-    runCompositionCommand(`composition row channel ${rowIndex} ${quoteCommandArgument(trimmed)}`)
+    runCompositionCommand(compositionRowChannel(rowIndex, trimmed))
   }, [runCompositionCommand, setStatusLevel, setStatusMessage])
 
   const commitCompositionColumnLength = useCallback((columnIndex: number, length: string): void => {
@@ -464,13 +473,11 @@ function App() {
       setStatusLevel('warning')
       return
     }
-    runCompositionCommand(
-      `composition column length ${columnIndex} ${formatTimeSignature(parsed)}`
-    )
+    runCompositionCommand(compositionColumnLength(columnIndex, formatTimeSignature(parsed)))
   }, [runCompositionCommand, setStatusLevel, setStatusMessage])
 
   const insertCompositionRow = useCallback((placement: 'before' | 'after', rowIndex: number): void => {
-    runCompositionCommand(`composition row insert ${placement} ${rowIndex}`)
+    runCompositionCommand(compositionRowInsert(placement, rowIndex))
   }, [runCompositionCommand])
 
   const deleteCompositionRow = useCallback((rowIndex: number): void => {
@@ -478,14 +485,14 @@ function App() {
     if (!composition || composition.rows.length <= 1) {
       return
     }
-    runCompositionCommand(`composition row delete ${rowIndex}`)
+    runCompositionCommand(compositionRowDelete(rowIndex))
   }, [projectRef, runCompositionCommand])
 
   const insertCompositionColumn = useCallback((
     placement: 'before' | 'after',
     columnIndex: number
   ): void => {
-    runCompositionCommand(`composition column insert ${placement} ${columnIndex}`)
+    runCompositionCommand(compositionColumnInsert(placement, columnIndex))
   }, [runCompositionCommand])
 
   const deleteCompositionColumn = useCallback((columnIndex: number): void => {
@@ -493,11 +500,11 @@ function App() {
     if (!composition || composition.columns.length <= 1) {
       return
     }
-    runCompositionCommand(`composition column delete ${columnIndex}`)
+    runCompositionCommand(compositionColumnDelete(columnIndex))
   }, [projectRef, runCompositionCommand])
 
   const clearCompositionCell = useCallback((rowIndex: number, columnIndex: number): void => {
-    runCompositionCommand(`composition cell clear ${rowIndex} ${columnIndex}`)
+    runCompositionCommand(compositionCellClear(rowIndex, columnIndex))
   }, [runCompositionCommand])
 
   const runSelectedCompositionAction = useCallback((action: string): boolean => {

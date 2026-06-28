@@ -5,6 +5,7 @@ import {
 } from '../domain/keymap'
 import { isCommandUiActionId } from '../domain/uiActions'
 import { getMeasureById, moveCompositionSelection } from '../domain/composition'
+import { compositionCellAssign, compositionCellClear } from '../domain/commands'
 import { moveSelection, projectRootCell } from '../domain/selection'
 import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
@@ -20,8 +21,6 @@ import type {
 import type { ModTarget } from '../domain/modulation'
 
 type WorkspaceView = 'composition' | 'sequencer' | 'library'
-
-const quoteCommandArgument = (value: string): string => JSON.stringify(value)
 
 type UseKeyboardControllerArgs = {
   bridgeUnavailableMessage: string | null
@@ -117,9 +116,7 @@ export function useKeyboardController({
   ): void => {
     optimisticCompositionCellNamesRef.current.set(getCompositionCellKey(selection), measureName)
     void executeBackendCommand(
-      `composition cell assign ${selection.rowIndex} ${selection.columnIndex} ${
-        quoteCommandArgument(measureName)
-      }`
+      compositionCellAssign(selection.rowIndex, selection.columnIndex, measureName)
     ).catch((error: unknown) => {
       optimisticCompositionCellNamesRef.current.delete(getCompositionCellKey(selection))
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
@@ -130,7 +127,7 @@ export function useKeyboardController({
   const clearCompositionSelection = useCallback((selection: CompositionSelection): void => {
     optimisticCompositionCellNamesRef.current.delete(getCompositionCellKey(selection))
     void executeBackendCommand(
-      `composition cell clear ${selection.rowIndex} ${selection.columnIndex}`
+      compositionCellClear(selection.rowIndex, selection.columnIndex)
     ).catch((error: unknown) => {
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')
