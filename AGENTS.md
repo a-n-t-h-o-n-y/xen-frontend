@@ -38,13 +38,18 @@ report that it was stopped.
 Prefer small, focused components and explicit prop types.
 
 ## Testing Guidelines
-There is currently no test runner configured in `package.json`.
+Tests run on Vitest. React Testing Library is not yet wired up, but pure logic
+(domain, bridge, presentation) is covered.
 
-For now, treat lint + build as required quality gates:
+- `npm test`: run the full test suite once (CI mode).
+- Place tests beside source as `*.test.ts` or `*.test.tsx`, or under `src/__tests__/`.
+- Keep tests focused and deterministic; prefer pure-function tests over component tests until a renderer is configured.
+
+Lint + build remain required quality gates:
 - `npm run lint`
 - `npm run build`
 
-If you add tests, use Vitest with React Testing Library and place tests beside source files or under `src/__tests__/`.
+If you add tests, prefer Vitest + React Testing Library and place tests beside source files or under `src/__tests__/`.
 
 ## Commit & Pull Request Guidelines
 Current history uses concise, imperative commit subjects (example: `Scaffold frontend (Vite + React + TS)`).
