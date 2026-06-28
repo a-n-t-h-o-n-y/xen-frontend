@@ -3,6 +3,7 @@ import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
+import vitest from 'eslint-plugin-vitest'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -15,6 +16,14 @@ export default defineConfig([
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
     ],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+    },
+  },
+  {
+    files: ['**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}'],
+    extends: [vitest.configs.recommended],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,

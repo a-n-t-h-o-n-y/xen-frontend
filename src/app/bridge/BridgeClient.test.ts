@@ -182,6 +182,7 @@ describe('BridgeClient', () => {
     vi.useFakeTimers()
     const client = createClient(async () => new Promise(() => undefined))
     const result = client.request('state.get', {}, { timeoutMs: 50 })
+    // eslint-disable-next-line vitest/valid-expect -- assertion is awaited after advancing fake timers below
     const assertion = expect(result).rejects.toBeInstanceOf(BridgeTimeoutError)
 
     await vi.advanceTimersByTimeAsync(50)
