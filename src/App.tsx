@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { HeaderSection } from './app/sections/HeaderSection'
 import { useCommandState } from './app/hooks/useCommandState'
 import { useHeaderEditing } from './app/hooks/useHeaderEditing'
@@ -8,6 +8,7 @@ import { useProjectSession } from './app/hooks/useProjectSession'
 import { useCommandController } from './app/hooks/useCommandController'
 import { useKeyboardController } from './app/hooks/useKeyboardController'
 import { useModulatorController } from './app/hooks/useModulatorController'
+import { useProjectViewModel } from './app/hooks/useProjectViewModel'
 import { useScaleMenu } from './app/hooks/useScaleMenu'
 import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
@@ -22,20 +23,10 @@ import {
   createTransportState,
 } from './app/constants'
 import { getErrorMessage } from './app/utils/errors'
-import {
-  clampNumber,
-  getTuningRatios,
-  generateValidPitches,
-  mapPitchToScale,
-  collectNotePitches,
-  getChildCells,
-  getSelectedElement,
-  normalizePitch,
-} from './app/domain/music'
+import { clampNumber } from './app/domain/music'
 import {
   clampCompositionSelection,
   getActiveMeasureTarget,
-  measureFromTarget,
 } from './app/domain/composition'
 import {
   compositionCellAssign,
@@ -50,12 +41,8 @@ import {
   compositionRowRename,
 } from './app/domain/commands'
 import {
-  collectLeafCells,
   formatOctaveForDisplay,
   formatTimeSignature,
-  isPathPrefix,
-  getCellAtPath,
-  getStatusCellMeta,
   parseTimeSignatureInput,
 } from './app/presentation/viewModels'
 import type {
@@ -67,7 +54,6 @@ import type {
   TransportState,
 } from './app/domain/models'
 import type { CompositionEditTarget } from './app/sections/CompositionSection'
-import { resolveSelection } from './app/domain/selection'
 
 type WorkspaceView = 'composition' | 'sequencer' | 'library'
 
@@ -225,116 +211,11 @@ function App() {
     setActiveMeasureTarget(nextTarget)
   }, [])
 
-  const projectViewModel = useMemo(() => {
-    if (!projectSnapshot) {
-      return null
-    }
-
-    const pitchState = projectSnapshot.pitch
-    const activeScale = pitchState.scale
-    const rawTuningLength = pitchState.tuning.definition.intervals.length
-    const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
-    const measure = measureFromTarget(
-      projectSnapshot.measure,
-      projectSnapshot.measureBank,
-      projectSnapshot.composition,
-      activeMeasureTarget
-    )
-    const scaleValidPitches = activeScale
-      ? generateValidPitches(activeScale.definition, derivedTuningLength)
-      : []
-    const translateDirection = pitchState.translationDirection
-
-    const mapPitch = (pitch: number): number =>
-      mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
-
-    const rootCell = measure.cell
-
-    const tuningRatios = getTuningRatios(pitchState.tuning.definition.intervals)
-    const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
-    const hasScale = activeScale !== null
-    const staffLineBands: number[] = []
-
-    if (hasScale) {
-      let currentBand = 0
-      let previousMappedPitch = 0
-
-      for (let pitch = 0; pitch < derivedTuningLength; pitch += 1) {
-        const mappedPitch = rowMap[pitch] ?? pitch
-        if (mappedPitch !== previousMappedPitch) {
-          currentBand = currentBand === 0 ? 1 : 0
-        }
-        staffLineBands.push(currentBand)
-        previousMappedPitch = mappedPitch
-      }
-    } else {
-      for (let pitch = 0; pitch < derivedTuningLength; pitch += 1) {
-        staffLineBands.push(pitch % 2 === 0 ? 0 : 1)
-      }
-    }
-
-    const signature = `${measure.timeSignature.numerator}/${measure.timeSignature.denominator}`
-    const selectedNumerator = measure.timeSignature.numerator
-    const selectedDenominator = measure.timeSignature.denominator
-    const directLeafCells = collectLeafCells(rootCell)
-    const selection = resolveSelection(rootCell, editorState.selection)
-    const selectedCellPath = selection?.cellPath ?? []
-    const resolvedSelectedCell = selection?.selectedCell ?? rootCell
-    const resolvedSelectedElement = selection?.selectedElement ?? null
-    const selectedPitchSource = resolvedSelectedElement ?? resolvedSelectedCell ?? rootCell
-    const selectedPitches = collectNotePitches(selectedPitchSource)
-    const mappedHighlights = new Set(
-      selectedPitches.map((pitch) =>
-        normalizePitch(mapPitch(normalizePitch(pitch, derivedTuningLength)), derivedTuningLength)
-      )
-    )
-    const selectedElementForScope =
-      resolvedSelectedElement ?? getSelectedElement(resolvedSelectedCell ?? rootCell, null)
-    const patternScopePath =
-      selectedElementForScope?.type === 'Sequence'
-        ? selectedCellPath
-        : selectedCellPath.length > 0
-          ? selectedCellPath.slice(0, -1)
-          : []
-    const patternScopeCell = getCellAtPath(rootCell, patternScopePath)
-    const patternScopeCells = patternScopeCell ? getChildCells(patternScopeCell) : []
-    const scopeIndices = directLeafCells.map((leafCell) => {
-      if (!isPathPrefix(patternScopePath, leafCell.path)) {
-        return -1
-      }
-      return leafCell.path[patternScopePath.length] ?? -1
-    })
-    const selectionFlags = directLeafCells.map((leafCell) =>
-      isPathPrefix(selectedCellPath, leafCell.path)
-    )
-
-    return {
-      tuningLength: derivedTuningLength,
-      patternScopeCellCount: patternScopeCells.length,
-      leafPatternScopeIndices: scopeIndices,
-      rootCell,
-      measureNumerator: selectedNumerator,
-      measureDenominator: selectedDenominator,
-      timeSignature: signature,
-      scaleName: activeScale?.definition.name ?? 'chromatic',
-      scaleSourceId: activeScale?.sourceId ?? 'chromatic',
-      scaleMode: activeScale?.definition.mode ?? 0,
-      scaleSize: activeScale?.definition.intervals.length ?? 0,
-      scaleTranslateDirection: pitchState.translationDirection,
-      tuningName: pitchState.tuning.name,
-      keyDisplay: pitchState.transposition,
-      baseFrequency: pitchState.baseFrequency,
-      staffLineBandByPitch: staffLineBands,
-      leafCells: directLeafCells,
-      selectedLeafFlags: selectionFlags,
-      selectedCellMeta: getStatusCellMeta(resolvedSelectedCell, resolvedSelectedElement),
-      rulerRatios: tuningRatios,
-      highlightedPitches: mappedHighlights,
-      selectedCellPath,
-      selectedElementIndex: selection?.selectedElementIndex ?? null,
-      selectedElementKind: selection?.selectedElementKind ?? null,
-    }
-  }, [activeMeasureTarget, editorState.selection, projectSnapshot])
+  const projectViewModel = useProjectViewModel(
+    projectSnapshot,
+    editorState.selection,
+    activeMeasureTarget
+  )
 
   const tuningLength = projectViewModel?.tuningLength ?? DEFAULT_TUNING_LENGTH
   const rootCell = projectViewModel?.rootCell ?? EMPTY_ROOT_CELL

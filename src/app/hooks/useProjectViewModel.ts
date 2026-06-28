@@ -1,0 +1,164 @@
+import { useMemo } from 'react'
+import { DEFAULT_TUNING_LENGTH } from '../constants'
+import {
+  collectNotePitches,
+  generateValidPitches,
+  getChildCells,
+  getSelectedElement,
+  getTuningRatios,
+  mapPitchToScale,
+  normalizePitch,
+} from '../domain/music'
+import { measureFromTarget } from '../domain/composition'
+import { resolveSelection } from '../domain/selection'
+import {
+  collectLeafCells,
+  getCellAtPath,
+  getStatusCellMeta,
+  isPathPrefix,
+} from '../presentation/viewModels'
+import type { ActiveMeasureTarget, ProjectSnapshot, Selection } from '../domain/models'
+
+export type ProjectViewModel = {
+  tuningLength: number
+  patternScopeCellCount: number
+  leafPatternScopeIndices: number[]
+  rootCell: ProjectSnapshot['measure']['cell']
+  measureNumerator: number
+  measureDenominator: number
+  timeSignature: string
+  scaleName: string
+  scaleSourceId: string
+  scaleMode: number
+  scaleSize: number
+  scaleTranslateDirection: ProjectSnapshot['pitch']['translationDirection']
+  tuningName: string
+  keyDisplay: number
+  baseFrequency: number
+  staffLineBandByPitch: number[]
+  leafCells: ReturnType<typeof collectLeafCells>
+  selectedLeafFlags: boolean[]
+  selectedCellMeta: ReturnType<typeof getStatusCellMeta>
+  rulerRatios: ReturnType<typeof getTuningRatios>
+  highlightedPitches: Set<number>
+  selectedCellPath: number[]
+  selectedElementIndex: number | null
+  selectedElementKind: string | null
+}
+
+export function useProjectViewModel(
+  projectSnapshot: ProjectSnapshot | null,
+  selection: Selection,
+  activeMeasureTarget: ActiveMeasureTarget | null
+): ProjectViewModel | null {
+  return useMemo(() => {
+    if (!projectSnapshot) {
+      return null
+    }
+
+    const pitchState = projectSnapshot.pitch
+    const activeScale = pitchState.scale
+    const rawTuningLength = pitchState.tuning.definition.intervals.length
+    const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
+    const measure = measureFromTarget(
+      projectSnapshot.measure,
+      projectSnapshot.measureBank,
+      projectSnapshot.composition,
+      activeMeasureTarget
+    )
+    const scaleValidPitches = activeScale
+      ? generateValidPitches(activeScale.definition, derivedTuningLength)
+      : []
+    const translateDirection = pitchState.translationDirection
+
+    const mapPitch = (pitch: number): number =>
+      mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
+
+    const rootCell = measure.cell
+
+    const tuningRatios = getTuningRatios(pitchState.tuning.definition.intervals)
+    const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
+    const hasScale = activeScale !== null
+    const staffLineBands: number[] = []
+
+    if (hasScale) {
+      let currentBand = 0
+      let previousMappedPitch = 0
+
+      for (let pitch = 0; pitch < derivedTuningLength; pitch += 1) {
+        const mappedPitch = rowMap[pitch] ?? pitch
+        if (mappedPitch !== previousMappedPitch) {
+          currentBand = currentBand === 0 ? 1 : 0
+        }
+        staffLineBands.push(currentBand)
+        previousMappedPitch = mappedPitch
+      }
+    } else {
+      for (let pitch = 0; pitch < derivedTuningLength; pitch += 1) {
+        staffLineBands.push(pitch % 2 === 0 ? 0 : 1)
+      }
+    }
+
+    const signature = `${measure.timeSignature.numerator}/${measure.timeSignature.denominator}`
+    const selectedNumerator = measure.timeSignature.numerator
+    const selectedDenominator = measure.timeSignature.denominator
+    const directLeafCells = collectLeafCells(rootCell)
+    const resolvedSelection = resolveSelection(rootCell, selection)
+    const selectedCellPath = resolvedSelection?.cellPath ?? []
+    const resolvedSelectedCell = resolvedSelection?.selectedCell ?? rootCell
+    const resolvedSelectedElement = resolvedSelection?.selectedElement ?? null
+    const selectedPitchSource = resolvedSelectedElement ?? resolvedSelectedCell ?? rootCell
+    const selectedPitches = collectNotePitches(selectedPitchSource)
+    const mappedHighlights = new Set(
+      selectedPitches.map((pitch) =>
+        normalizePitch(mapPitch(normalizePitch(pitch, derivedTuningLength)), derivedTuningLength)
+      )
+    )
+    const selectedElementForScope =
+      resolvedSelectedElement ?? getSelectedElement(resolvedSelectedCell ?? rootCell, null)
+    const patternScopePath =
+      selectedElementForScope?.type === 'Sequence'
+        ? selectedCellPath
+        : selectedCellPath.length > 0
+          ? selectedCellPath.slice(0, -1)
+          : []
+    const patternScopeCell = getCellAtPath(rootCell, patternScopePath)
+    const patternScopeCells = patternScopeCell ? getChildCells(patternScopeCell) : []
+    const scopeIndices = directLeafCells.map((leafCell) => {
+      if (!isPathPrefix(patternScopePath, leafCell.path)) {
+        return -1
+      }
+      return leafCell.path[patternScopePath.length] ?? -1
+    })
+    const selectionFlags = directLeafCells.map((leafCell) =>
+      isPathPrefix(selectedCellPath, leafCell.path)
+    )
+
+    return {
+      tuningLength: derivedTuningLength,
+      patternScopeCellCount: patternScopeCells.length,
+      leafPatternScopeIndices: scopeIndices,
+      rootCell,
+      measureNumerator: selectedNumerator,
+      measureDenominator: selectedDenominator,
+      timeSignature: signature,
+      scaleName: activeScale?.definition.name ?? 'chromatic',
+      scaleSourceId: activeScale?.sourceId ?? 'chromatic',
+      scaleMode: activeScale?.definition.mode ?? 0,
+      scaleSize: activeScale?.definition.intervals.length ?? 0,
+      scaleTranslateDirection: pitchState.translationDirection,
+      tuningName: pitchState.tuning.name,
+      keyDisplay: pitchState.transposition,
+      baseFrequency: pitchState.baseFrequency,
+      staffLineBandByPitch: staffLineBands,
+      leafCells: directLeafCells,
+      selectedLeafFlags: selectionFlags,
+      selectedCellMeta: getStatusCellMeta(resolvedSelectedCell, resolvedSelectedElement),
+      rulerRatios: tuningRatios,
+      highlightedPitches: mappedHighlights,
+      selectedCellPath,
+      selectedElementIndex: resolvedSelection?.selectedElementIndex ?? null,
+      selectedElementKind: resolvedSelection?.selectedElementKind ?? null,
+    }
+  }, [activeMeasureTarget, projectSnapshot, selection])
+}
