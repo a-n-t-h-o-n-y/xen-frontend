@@ -1,6 +1,6 @@
 import { formatTimeSignature } from '../presentation/viewModels'
 import { getMeasureById, isColumnInLoopRegion } from '../domain/composition'
-import { clampNumber, flattenMeasureToNoteIR, normalizePitch } from '../domain/music'
+import { getMiniMapNotes } from './compositionMiniMap'
 import { getCompositionSelectionScrollDelta } from './compositionScroll'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
@@ -34,41 +34,10 @@ type CompositionSectionProps = {
 
 const minColumnWidth = 5.5
 const beatWidth = 3.25
-const maxMiniMapNotes = 28
-
-type MiniMapNote = {
-  x: number
-  width: number
-  pitchRatio: number
-  velocity: number
-}
 
 const getColumnWidth = (length: { numerator: number; denominator: number }): string => {
   const beats = length.numerator * (4 / length.denominator)
   return `${Math.max(minColumnWidth, beats * beatWidth)}rem`
-}
-
-const getMiniMapNotes = (
-  measureEntry: MeasureBank['measures'][number] | null,
-  length: { numerator: number; denominator: number },
-  tuningLength: number
-): MiniMapNote[] => {
-  if (!measureEntry || tuningLength <= 0) {
-    return []
-  }
-
-  return flattenMeasureToNoteIR(
-    {
-      cell: measureEntry.measure.cell,
-      timeSignature: length,
-    },
-    0
-  ).slice(0, maxMiniMapNotes).map((note) => ({
-    x: clampNumber(note.x, 0, 1),
-    width: clampNumber(note.width, 0.018, 1),
-    pitchRatio: normalizePitch(note.pitch, tuningLength) / Math.max(1, tuningLength - 1),
-    velocity: clampNumber(note.velocity, 0, 1),
-  }))
 }
 
 export function CompositionSection({
