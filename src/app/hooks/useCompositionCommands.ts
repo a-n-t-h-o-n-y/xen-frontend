@@ -79,6 +79,7 @@ export function useCompositionCommands({
     installEditorState({ ...editorStateRef.current, selection: { path: [] } })
     installWorkspaceView('sequencer')
   }, [
+    compositionSelectionRef,
     editorStateRef,
     installActiveMeasureTarget,
     installEditorState,
@@ -102,6 +103,7 @@ export function useCompositionCommands({
     })
   }, [
     bridgeUnavailableMessage,
+    compositionSelectionRef,
     executeBackendCommand,
     projectRef,
     setStatusLevel,
@@ -127,7 +129,7 @@ export function useCompositionCommands({
       return
     }
     handler(composition, clampCompositionSelection(composition, compositionSelectionRef.current))
-  }, [projectRef])
+  }, [compositionSelectionRef, projectRef])
 
   const beginCompositionEdit = useCallback((target: CompositionEditTarget): void => {
     setCompositionEditTarget(target)
