@@ -684,15 +684,36 @@ describe('command completion', () => {
     expect(rankCommandCompletions(commands, 'gain')[0]?.matchKind).toBe('keyword')
   })
 
-  it('keeps exact commands without trailing space in command search for completion acceptance', () => {
+  it('hides completions for an exact command without a trailing space', () => {
     const exact = analyzeCommandCompletion('set velocity', commands)
-    const nextText = applyCommandCompletion('set velocity', exact.segment, exact.candidates[0].command)
 
-    expect(exact.mode).toBe('commandSearch')
-    expect(exact.recognizedCommand).toBeNull()
-    expect(exact.candidates[0]?.command.id).toBe('set velocity')
+    expect(exact.mode).toBe('none')
+    expect(exact.recognizedCommand?.id).toBe('set velocity')
+    expect(exact.candidates).toHaveLength(0)
     expect(exact.argumentPlaceholders).toHaveLength(0)
-    expect(nextText).toBe('set velocity ')
+  })
+
+  it('keeps longer completions visible when the exact command is also a prefix', () => {
+    const prefixCommands = [
+      ...commands,
+      {
+        id: 'set',
+        keywords: ['assign'],
+        acceptsPatternPrefix: true,
+        targetRequirement: 'element' as const,
+        description: 'Set selected item',
+        arguments: [],
+        signature: 'set',
+      },
+    ]
+    const exactPrefix = analyzeCommandCompletion('set', prefixCommands)
+
+    expect(exactPrefix.mode).toBe('commandSearch')
+    expect(exactPrefix.recognizedCommand?.id).toBe('set')
+    expect(exactPrefix.candidates.map((candidate) => candidate.command.id)).not.toContain('set')
+    expect(exactPrefix.candidates.map((candidate) => candidate.command.id)).toEqual(
+      expect.arrayContaining(['set velocity', 'set gate'])
+    )
   })
 
   it('recognizes commands with an argument boundary and argument input separately from command search', () => {
