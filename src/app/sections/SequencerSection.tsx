@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
 import { REFERENCE_RATIOS } from '../domain/music'
+import { getNoteFillColor, isNoteOffVelocity } from './sequencerNoteColor'
 import type { BgOverlayState } from '../presentation/viewModels'
 
 type RollNoteSpan = {
@@ -76,14 +77,6 @@ type SequencerSectionProps = {
   waveBPreviewPath: string
   morphedWavePreviewPath: string
   setModulatorPreviewWidth: Dispatch<SetStateAction<number>>
-}
-
-function getNoteFillColor(velocity: number): string {
-  const normalizedVelocity = Math.max(0, Math.min(velocity, 1))
-  const red = Math.round(74 + normalizedVelocity * 48)
-  const green = Math.round(98 + normalizedVelocity * 40)
-  const blue = Math.round(146 + normalizedVelocity * 54)
-  return `rgb(${red} ${green} ${blue} / 1)`
 }
 
 function ModulatorOverlay({
@@ -384,11 +377,16 @@ export function SequencerSection({
                 const rowFromTop = tuningLength - 1 - note.pitch
                 const noteZIndex = note.isSelected ? 4 : 2
                 const rowHeightPercent = tuningLength > 0 ? 100 / tuningLength : 0
+                const isNoteOff = isNoteOffVelocity(note.velocity)
 
                 return (
                   <div
                     key={`roll-note-${noteIndex}`}
-                    className={`rollCellNote${note.isSelected ? ' rollCellNote-selected' : ''}`}
+                    className={[
+                      'rollCellNote',
+                      isNoteOff ? 'rollCellNote-noteOff' : '',
+                      note.isSelected ? 'rollCellNote-selected' : '',
+                    ].filter(Boolean).join(' ')}
                     style={
                       {
                         left: `calc(${note.x * 100}% + 1px)`,

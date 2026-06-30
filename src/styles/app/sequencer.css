@@ -319,6 +319,12 @@
   z-index: 2;
 }
 
+.rollCellNote-noteOff {
+  box-shadow:
+    inset 0 0 0 1px rgb(45 181 197 / 72%),
+    inset 0 0 0 2px rgb(0 0 0 / 72%);
+}
+
 .rollCellNote-selected {
   box-shadow: none;
 }
