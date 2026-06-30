@@ -689,8 +689,48 @@ describe('command completion', () => {
 
     expect(exact.mode).toBe('none')
     expect(exact.recognizedCommand?.id).toBe('set velocity')
+    expect(exact.isExactCommandInput).toBe(true)
     expect(exact.candidates).toHaveLength(0)
     expect(exact.argumentPlaceholders).toHaveLength(0)
+  })
+
+  it('hides unrelated fuzzy matches after an exact command is typed', () => {
+    const exactCommands = [
+      ...commands,
+      {
+        id: 'undo',
+        keywords: ['revert'],
+        acceptsPatternPrefix: false,
+        targetRequirement: 'none' as const,
+        description: 'Undo the last edit',
+        arguments: [],
+        signature: 'undo',
+      },
+      {
+        id: 'set tuningDirectory',
+        keywords: ['undo'],
+        acceptsPatternPrefix: false,
+        targetRequirement: 'none' as const,
+        description: 'Set tuning directory',
+        arguments: [],
+        signature: 'set tuningDirectory',
+      },
+      {
+        id: 'set sequenceDirectory',
+        keywords: ['undo'],
+        acceptsPatternPrefix: false,
+        targetRequirement: 'none' as const,
+        description: 'Set sequence directory',
+        arguments: [],
+        signature: 'set sequenceDirectory',
+      },
+    ]
+    const exact = analyzeCommandCompletion('undo', exactCommands)
+
+    expect(exact.mode).toBe('none')
+    expect(exact.recognizedCommand?.id).toBe('undo')
+    expect(exact.isExactCommandInput).toBe(true)
+    expect(exact.candidates).toHaveLength(0)
   })
 
   it('keeps longer completions visible when the exact command is also a prefix', () => {
@@ -710,6 +750,7 @@ describe('command completion', () => {
 
     expect(exactPrefix.mode).toBe('commandSearch')
     expect(exactPrefix.recognizedCommand?.id).toBe('set')
+    expect(exactPrefix.isExactCommandInput).toBe(true)
     expect(exactPrefix.candidates.map((candidate) => candidate.command.id)).not.toContain('set')
     expect(exactPrefix.candidates.map((candidate) => candidate.command.id)).toEqual(
       expect.arrayContaining(['set velocity', 'set gate'])
@@ -1243,6 +1284,7 @@ describe('keymap routing', () => {
       commandHistory: ['copy'],
       isCompletionVisible: false,
       isCompletionDismissed: false,
+      isExactCommandInput: false,
       completionMode: 'none' as const,
     }
 
@@ -1271,6 +1313,15 @@ describe('keymap routing', () => {
       ...baseState,
       commandText: '',
     }, handlers)).toBe(true)
+    expect(runCommandUiAction('command.submit', {
+      ...baseState,
+      isCompletionVisible: true,
+    }, handlers)).toBe(true)
+    expect(runCommandUiAction('command.submit', {
+      ...baseState,
+      isCompletionVisible: true,
+      isExactCommandInput: true,
+    }, handlers)).toBe(true)
 
     expect(calls).toEqual([
       'submit',
@@ -1280,6 +1331,8 @@ describe('keymap routing', () => {
       'completionPrevious',
       'completionDismiss',
       'closeIfEmpty',
+      'completionAccept',
+      'submit',
     ])
   })
 })

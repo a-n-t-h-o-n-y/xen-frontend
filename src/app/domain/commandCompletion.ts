@@ -24,6 +24,7 @@ export type CompletionAnalysis = {
   mode: CompletionMode
   segment: CompletionSegment
   recognizedCommand: CommandReferenceEntry | null
+  isExactCommandInput: boolean
   candidates: CommandCompletionCandidate[]
   argumentPlaceholders: ArgumentPlaceholder[]
 }
@@ -287,6 +288,7 @@ export const analyzeCommandCompletion = (
   const normalizedSegment = normalize(trimmedCommandText)
   const hasExplicitArgumentBoundary = /\s$/.test(trimmedCommandText)
   const exactCommand = commands.find((command) => normalize(command.id) === normalizedSegment) ?? null
+  const isExactCommandInput = exactCommand !== null
   const recognizedCommand = commands.find((command) => {
     const id = normalize(command.id)
     return (
@@ -303,6 +305,7 @@ export const analyzeCommandCompletion = (
       mode: 'argumentAssist',
       segment,
       recognizedCommand,
+      isExactCommandInput,
       candidates: [],
       argumentPlaceholders: isArgumentInputVisible
         ? getArgumentPlaceholders(recognizedCommand, argumentInput)
@@ -311,13 +314,18 @@ export const analyzeCommandCompletion = (
   }
 
   const query = segment.commandText.slice(queryStartOffset)
-  const candidates = rankCommandCompletions(commands, query, recentCommandIds)
-    .filter((candidate) => exactCommand === null || candidate.command.id !== exactCommand.id)
+  const rankedCandidates = rankCommandCompletions(commands, query, recentCommandIds)
+  const candidates = exactCommand
+    ? rankedCandidates.filter((candidate) =>
+      normalize(candidate.command.id).startsWith(`${normalize(exactCommand.id)} `)
+    )
+    : rankedCandidates
 
   return {
     mode: candidates.length > 0 ? 'commandSearch' : 'none',
     segment,
     recognizedCommand: exactCommand,
+    isExactCommandInput,
     candidates,
     argumentPlaceholders: [],
   }

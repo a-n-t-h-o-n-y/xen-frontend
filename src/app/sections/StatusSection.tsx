@@ -222,6 +222,7 @@ export function StatusSection({
       commandHistory,
       isCompletionVisible: isPopupVisible && Boolean(selectedCandidate),
       isCompletionDismissed,
+      isExactCommandInput: completion.isExactCommandInput,
       completionMode,
     }, {
       cancel: () => closeCommandMode({ preserveText: true }),
@@ -378,12 +379,6 @@ export function StatusSection({
                   if (isPopupVisible && selectedCandidate) {
                     runLocalCommandAction('command.completion.accept')
                   }
-                  return
-                }
-
-                if (event.key === 'Enter' && isPopupVisible && selectedCandidate) {
-                  event.preventDefault()
-                  runLocalCommandAction('command.completion.accept')
                   return
                 }
 

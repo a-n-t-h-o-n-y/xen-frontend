@@ -327,6 +327,7 @@ export type CommandActionRunnerState = {
   commandHistory: string[]
   isCompletionVisible: boolean
   isCompletionDismissed: boolean
+  isExactCommandInput: boolean
   completionMode: 'none' | 'commandSearch' | 'argumentAssist'
 }
 
@@ -356,7 +357,7 @@ export const runCommandUiAction = (
       }
       return true
     case 'command.submit':
-      if (state.isCompletionVisible) {
+      if (state.isCompletionVisible && !state.isExactCommandInput) {
         handlers.completionAccept()
       } else {
         handlers.submit()
