@@ -42,9 +42,9 @@ describe('DTO to domain mappers', () => {
 
   it('uses backend measure and row names when arranged snapshots provide them', () => {
     const fixture = arrangedProjectFixture(12)
-    if (fixture.schema_version === 3) {
-      fixture.project.measure_bank.measures[0]!.name = 'Intro'
-      fixture.project.measure_bank.measures[1]!.name = 'Pulse'
+    if (fixture.schema_version === 4) {
+      fixture.project.sequence_bank.sequences[0]!.name = 'Intro'
+      fixture.project.sequence_bank.sequences[1]!.name = 'Pulse'
       fixture.project.composition.rows[0]!.name = 'Lead'
       fixture.project.composition.rows[1]!.name = 'Layer'
     }
@@ -57,9 +57,7 @@ describe('DTO to domain mappers', () => {
 
   it('defaults missing arranged loop regions to the full composition length', () => {
     const fixture = arrangedProjectFixture(11)
-    if (fixture.schema_version === 3) {
-      delete fixture.project.composition.loop_region
-    }
+    delete fixture.project.composition.loop_region
 
     expect(projectFromDto(fixture).composition?.loopRegion).toEqual({
       startColumn: 0,
@@ -71,7 +69,7 @@ describe('DTO to domain mappers', () => {
     const library = libraryFromDto(libraryFixture(7))
 
     expect(library.revision).toBe(7)
-    expect(library.measures[0]?.relativePath).toBe('measure.xen')
+    expect(library.cells[0]?.relativePath).toBe('measure.xen')
     expect(library.tunings).toEqual([])
     expect(library.scales[1]).toMatchObject({
       id: 'scale:major',

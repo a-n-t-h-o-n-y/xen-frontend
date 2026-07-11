@@ -1,10 +1,9 @@
 import { z } from 'zod'
 
-export const BRIDGE_PROTOCOL = 'xen.bridge.v2'
-export const PROJECT_SCHEMA_VERSION = 3
-export const LEGACY_PROJECT_SCHEMA_VERSION = 1
+export const BRIDGE_PROTOCOL = 'xen.bridge.v3'
+export const PROJECT_SCHEMA_VERSION = 4
 export const LIBRARY_SCHEMA_VERSION = 1
-export const CATALOG_SCHEMA_VERSION = 2
+export const CATALOG_SCHEMA_VERSION = 3
 export const KEYMAP_SCHEMA_VERSION = 1
 
 const finiteNumber = z.number().finite()
@@ -67,25 +66,15 @@ export const cellSchema: z.ZodType<Cell> = z.lazy(() =>
   })
 )
 
-export const measureSchema = z.object({
-  cell: cellSchema,
-  time_signature: z.object({
-    numerator: finiteNumber,
-    denominator: finiteNumber,
-  }),
-})
-
-export const measureEntrySchema = z.object({
+export const sequenceEntrySchema = z.object({
   id: nonNegativeInteger,
   name: z.string().optional(),
-  measure: z.object({
-    cell: cellSchema,
-  }),
+  cell: cellSchema,
 })
 
-export const measureBankSchema = z.object({
+export const sequenceBankSchema = z.object({
   next_id: nonNegativeInteger,
-  measures: z.array(measureEntrySchema),
+  sequences: z.array(sequenceEntrySchema),
 })
 
 export const compositionLengthSchema = z.object({
@@ -100,7 +89,8 @@ export const compositionLoopRegionSchema = z.object({
 
 export const compositionSchema = z.object({
   columns: z.array(z.object({
-    length: compositionLengthSchema,
+    duration: compositionLengthSchema,
+    pitch: z.lazy(() => pitchStateSchema),
   })),
   rows: z.array(z.object({
     name: z.string().optional(),
@@ -144,7 +134,7 @@ export const scaleDefinitionSchema = z.object({
   mode: finiteNumber,
 })
 
-const pitchStateSchema = z.object({
+export const pitchStateSchema = z.object({
   tuning: z.object({
     name: z.string(),
     definition: z.object({
@@ -161,30 +151,19 @@ const pitchStateSchema = z.object({
   base_frequency: finiteNumber,
 })
 
-export const legacyProjectSnapshotSchema = z.object({
-  schema_version: z.literal(LEGACY_PROJECT_SCHEMA_VERSION),
-  history_entry_id: nonNegativeInteger,
-  project_revision: nonNegativeInteger,
-  project: z.object({
-    measure: measureSchema,
-    pitch: pitchStateSchema,
-  }),
-})
-
 export const arrangementProjectSnapshotSchema = z.object({
   schema_version: z.literal(PROJECT_SCHEMA_VERSION),
   history_entry_id: nonNegativeInteger,
   project_revision: nonNegativeInteger,
   project: z.object({
-    measure_bank: measureBankSchema,
+    sequence_bank: sequenceBankSchema,
     composition: compositionSchema,
-    pitch: pitchStateSchema,
   }),
 }).superRefine((snapshot, context) => {
-  const measureIds = new Set(snapshot.project.measure_bank.measures.map((entry) => entry.id))
+  const sequenceIds = new Set(snapshot.project.sequence_bank.sequences.map((entry) => entry.id))
   snapshot.project.composition.rows.forEach((row, rowIndex) => {
     row.cells.forEach((measureId, cellIndex) => {
-      if (measureId !== null && !measureIds.has(measureId)) {
+      if (measureId !== null && !sequenceIds.has(measureId)) {
         context.addIssue({
           code: 'custom',
           path: ['project', 'composition', 'rows', rowIndex, 'cells', cellIndex],
@@ -195,10 +174,7 @@ export const arrangementProjectSnapshotSchema = z.object({
   })
 })
 
-export const projectSnapshotSchema = z.discriminatedUnion('schema_version', [
-  legacyProjectSnapshotSchema,
-  arrangementProjectSnapshotSchema,
-])
+export const projectSnapshotSchema = arrangementProjectSnapshotSchema
 
 const libraryCommandEntrySchema = z.object({
   name: z.string(),
@@ -234,10 +210,11 @@ export const librarySnapshotSchema = z.object({
   library_revision: nonNegativeInteger,
   paths: z.object({
     library: z.string(),
-    sequences: z.string(),
+    content: z.string(),
     tunings: z.string(),
   }),
-  measures: z.array(libraryCommandEntrySchema),
+  cells: z.array(libraryCommandEntrySchema),
+  compositions: z.array(libraryCommandEntrySchema),
   tunings: z.array(tuningEntrySchema),
   scales: z.array(z.union([chromaticScaleSchema, definedScaleSchema])),
   chords: z.array(z.object({
@@ -438,10 +415,7 @@ export const keymapStorageResourceSchema = z.object({
 export const sessionHelloSchema = z.object({
   protocol: z.literal(BRIDGE_PROTOCOL),
   plugin_version: z.string(),
-  project_schema_version: z.union([
-    z.literal(LEGACY_PROJECT_SCHEMA_VERSION),
-    z.literal(PROJECT_SCHEMA_VERSION),
-  ]),
+  project_schema_version: z.literal(PROJECT_SCHEMA_VERSION),
   library_schema_version: z.literal(LIBRARY_SCHEMA_VERSION),
   catalog: catalogSchema,
   keymap: keymapStorageResourceSchema,
@@ -500,8 +474,7 @@ export type EnvelopePayloadDto = EnvelopeDto['payload']
 export type SelectionStepDto = z.infer<typeof selectionStepSchema>
 export type SelectionDto = z.infer<typeof selectionSchema>
 export type SelectionPathDto = SelectionDto['path']
-export type MeasureDto = z.infer<typeof measureSchema>
-export type MeasureEntryDto = z.infer<typeof measureEntrySchema>
+export type SequenceEntryDto = z.infer<typeof sequenceEntrySchema>
 export type ScaleDefinitionDto = z.infer<typeof scaleDefinitionSchema>
 export type ProjectSnapshotDto = z.infer<typeof projectSnapshotSchema>
 export type LibrarySnapshotDto = z.infer<typeof librarySnapshotSchema>

@@ -95,6 +95,7 @@ export type CompositionLength = {
 
 export type CompositionColumn = {
   length: CompositionLength
+  pitch: PitchState
 }
 
 export type CompositionRow = {
@@ -177,10 +178,11 @@ export type LibrarySnapshot = {
   revision: number
   paths: {
     library: string
-    sequences: string
+    content: string
     tunings: string
   }
-  measures: LibraryCommandEntry[]
+  cells: LibraryCommandEntry[]
+  compositions: LibraryCommandEntry[]
   tunings: LibraryTuningEntry[]
   scales: LibraryScaleEntry[]
   chords: LibraryChordEntry[]

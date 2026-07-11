@@ -8,7 +8,7 @@ import { buildSessionReference } from '../domain/reference'
 import { libraryFixture } from '../domain/testFixtures'
 
 const commands = buildSessionReference({
-  schema_version: 2,
+  schema_version: 3,
   commands: [
     {
       path: ['transport', 'stop'],

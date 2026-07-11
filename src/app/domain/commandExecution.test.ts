@@ -17,7 +17,7 @@ describe('command execution primitives', () => {
     }))).toEqual({
       expected_project_revision: 12,
       selection: { path: [] },
-      active_measure_target: null,
+      cursor: { row_index: 0, column_index: 0, sequence_id: null },
     })
   })
 
@@ -45,4 +45,3 @@ describe('command execution primitives', () => {
     expect(order).toEqual(['first:start', 'first:end', 'second'])
   })
 })
-

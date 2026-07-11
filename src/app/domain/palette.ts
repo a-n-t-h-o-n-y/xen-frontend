@@ -21,7 +21,7 @@ export type CommandPaletteItem = PaletteItemBase & {
 
 export type FilePaletteItem = PaletteItemBase & {
   kind: 'file'
-  fileKind: 'measure'
+  fileKind: 'cell' | 'composition'
   backendCommand: string
 }
 
@@ -83,22 +83,29 @@ const commandItems = (commands: CommandReferenceEntry[]): CommandPaletteItem[] =
     command,
   }))
 
-const fileItems = (library: LibrarySnapshot): FilePaletteItem[] =>
-  library.measures.map((measure) => {
-    const sourceName = measure.stem || measure.relativePath || measure.name
+const libraryFileItems = (
+  entries: LibrarySnapshot['cells'],
+  fileKind: FilePaletteItem['fileKind']
+): FilePaletteItem[] => entries.map((entry) => {
+    const sourceName = entry.stem || entry.relativePath || entry.name
     const directory = parentPath(sourceName)
     return {
       kind: 'file',
-      fileKind: 'measure',
-      id: `file:measure:${measure.path || measure.relativePath || measure.name}`,
+      fileKind,
+      id: `file:${fileKind}:${entry.path || entry.relativePath || entry.name}`,
       label: leafName(sourceName),
-      detail: directory || measure.relativePath || measure.path,
-      keywords: ['file', 'measure', measure.name, measure.stem, measure.relativePath],
-      searchText: [measure.name, measure.stem, measure.relativePath, measure.path, 'measure file'].join(' '),
+      detail: directory || entry.relativePath || entry.path,
+      keywords: ['file', fileKind, entry.name, entry.stem, entry.relativePath],
+      searchText: [entry.name, entry.stem, entry.relativePath, entry.path, `${fileKind} file`].join(' '),
       active: false,
-      backendCommand: measure.command,
+      backendCommand: entry.command,
     }
   })
+
+const fileItems = (library: LibrarySnapshot): FilePaletteItem[] => [
+  ...libraryFileItems(library.cells, 'cell'),
+  ...libraryFileItems(library.compositions, 'composition'),
+]
 
 const tuningItems = (
   library: LibrarySnapshot,

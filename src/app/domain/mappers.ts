@@ -1,14 +1,12 @@
 import type {
   CatalogDto,
   CommandExecuteResponseDto,
-  MeasureEntryDto,
   KeymapDocumentDto,
   KeymapOverrideDto,
   KeymapStorageResourceDto,
   KeymapTargetDto,
   KeymapTriggerDto,
   LibrarySnapshotDto,
-  MeasureDto,
   ProjectSnapshotDto,
   ScaleDefinitionDto,
   SelectionDto,
@@ -37,36 +35,27 @@ export const scaleFromDto = (definition: ScaleDefinitionDto): Scale => ({
   mode: definition.mode,
 })
 
-const measureFromDto = (measure: MeasureDto): Measure => ({
-  cell: measure.cell,
-  timeSignature: {
-    numerator: measure.time_signature.numerator,
-    denominator: measure.time_signature.denominator,
-  },
-})
-
-const emptyMeasureEntry: MeasureEntryDto = {
+const emptyMeasureEntry = {
   id: 0,
-  measure: {
-    cell: {
-      weight: 1,
-      elements: [],
-    },
+  cell: {
+    weight: 1,
+    elements: [],
   },
 }
 
 const measureName = (id: number): string => `M${id}`
 
 const compositionFromDto = (
-  composition: Extract<ProjectSnapshotDto, { schema_version: 3 }>['project']['composition']
+  composition: ProjectSnapshotDto['project']['composition']
 ): Composition => {
   const lastColumnIndex = Math.max(0, composition.columns.length - 1)
   return {
     columns: composition.columns.map((column) => ({
       length: {
-        numerator: column.length.numerator,
-        denominator: column.length.denominator,
+        numerator: column.duration.numerator,
+        denominator: column.duration.denominator,
       },
+      pitch: pitchFromDto(column.pitch),
     })),
     rows: composition.rows.map((row, index) => ({
       name: row.name || row.channel_id || `Row ${index + 1}`,
@@ -81,20 +70,16 @@ const compositionFromDto = (
 }
 
 const arrangedMeasureFromDto = (snapshot: ProjectSnapshotDto): Measure => {
-  if (snapshot.schema_version === 1) {
-    return measureFromDto(snapshot.project.measure)
-  }
-
   const composition = snapshot.project.composition
   const firstRow = composition.rows[0]
   const measureId = firstRow?.cells[0] ?? null
   const measureEntry = measureId === null
-    ? snapshot.project.measure_bank.measures[0]
-    : snapshot.project.measure_bank.measures.find((entry) => entry.id === measureId)
-  const columnLength = composition.columns[0]?.length ?? { numerator: 4, denominator: 4 }
+    ? snapshot.project.sequence_bank.sequences[0]
+    : snapshot.project.sequence_bank.sequences.find((entry) => entry.id === measureId)
+  const columnLength = composition.columns[0]?.duration ?? { numerator: 4, denominator: 4 }
 
   return {
-    cell: (measureEntry ?? emptyMeasureEntry).measure.cell,
+    cell: (measureEntry ?? emptyMeasureEntry).cell,
     timeSignature: {
       numerator: columnLength.numerator,
       denominator: columnLength.denominator,
@@ -103,24 +88,26 @@ const arrangedMeasureFromDto = (snapshot: ProjectSnapshotDto): Measure => {
 }
 
 export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot => {
-  const pitchState = snapshot.project.pitch
-  const isArrangedProject = snapshot.schema_version === 3
+  const pitchState = snapshot.project.composition.columns[0]?.pitch
+  const fallbackPitch = { tuning: { name: '', definition: { intervals: [], octave: 1200 } }, scale: null, transposition: 0, translation_direction: 'up' as const, base_frequency: 440 }
   return {
     revision: snapshot.project_revision,
     historyEntryId: snapshot.history_entry_id,
     measure: arrangedMeasureFromDto(snapshot),
-    measureBank: isArrangedProject
-      ? {
-          nextId: snapshot.project.measure_bank.next_id,
-          measures: snapshot.project.measure_bank.measures.map((entry) => ({
+    measureBank: {
+          nextId: snapshot.project.sequence_bank.next_id,
+          measures: snapshot.project.sequence_bank.sequences.map((entry) => ({
             id: entry.id,
             name: entry.name || measureName(entry.id),
-            measure: entry.measure,
+            measure: { cell: entry.cell },
           })),
-        }
-      : null,
-    composition: isArrangedProject ? compositionFromDto(snapshot.project.composition) : null,
-    pitch: {
+        },
+    composition: compositionFromDto(snapshot.project.composition),
+    pitch: pitchFromDto(pitchState ?? fallbackPitch),
+  }
+}
+
+const pitchFromDto = (pitchState: ProjectSnapshotDto['project']['composition']['columns'][number]['pitch']) => ({
       tuning: pitchState.tuning,
       scale: pitchState.scale
         ? {
@@ -131,14 +118,23 @@ export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot =>
       transposition: pitchState.transposition,
       translationDirection: pitchState.translation_direction,
       baseFrequency: pitchState.base_frequency,
-    },
-  }
-}
+    })
 
 export const libraryFromDto = (snapshot: LibrarySnapshotDto): LibrarySnapshot => ({
   revision: snapshot.library_revision,
   paths: snapshot.paths,
-  measures: snapshot.measures.map((entry) => ({
+  cells: snapshot.cells.map((entry) => ({
+    name: entry.name,
+    relativePath: entry.relative_path,
+    stem: entry.stem,
+    path: entry.path,
+    command: entry.command,
+    description: '',
+    intervals: [],
+    octave: null,
+    noteCount: null,
+  })),
+  compositions: snapshot.compositions.map((entry) => ({
     name: entry.name,
     relativePath: entry.relative_path,
     stem: entry.stem,
@@ -261,13 +257,11 @@ export const commandResponseFromDto = (
 export const commandContextToDto = (context: CommandContext) => ({
   expected_project_revision: context.expectedProjectRevision,
   selection: context.selection as SelectionDto,
-  active_measure_target: context.activeMeasureTarget
-    ? {
-        row_index: context.activeMeasureTarget.rowIndex,
-        column_index: context.activeMeasureTarget.columnIndex,
-        measure_id: context.activeMeasureTarget.measureId,
-      }
-    : null,
+  cursor: {
+    row_index: context.activeMeasureTarget?.rowIndex ?? 0,
+    column_index: context.activeMeasureTarget?.columnIndex ?? 0,
+    sequence_id: context.activeMeasureTarget?.measureId ?? null,
+  },
 })
 
 export const keymapOverridesToDocument = (

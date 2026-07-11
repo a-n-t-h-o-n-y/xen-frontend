@@ -32,16 +32,41 @@ export const nestedCell: Cell = {
   ],
 }
 
+const pitchFixture = () => ({
+  tuning: {
+    name: '12EDO',
+    definition: {
+      intervals: Array.from({ length: 12 }, (_, index) => index * 100),
+      octave: 1200,
+    },
+  },
+  scale: {
+    source_id: 'scale:major',
+    definition: {
+      name: 'major',
+      tuning_length: 12,
+      intervals: [2, 2, 1, 2, 2, 2, 1],
+      mode: 1,
+    },
+  },
+  transposition: 2,
+  translation_direction: 'up' as const,
+  base_frequency: 440,
+})
+
 export const projectFixture = (revision = 3): ProjectSnapshotDto => ({
-  schema_version: 1,
+  schema_version: 4,
   history_entry_id: 2,
   project_revision: revision,
   project: {
-    measure: {
-      cell: nestedCell,
-      time_signature: { numerator: 4, denominator: 4 },
+    sequence_bank: {
+      next_id: 2,
+      sequences: [{ id: 1, cell: nestedCell }],
     },
-    pitch: {
+    composition: {
+      columns: [{
+        duration: { numerator: 4, denominator: 4 },
+        pitch: {
       tuning: {
         name: '12EDO',
         definition: {
@@ -61,40 +86,39 @@ export const projectFixture = (revision = 3): ProjectSnapshotDto => ({
       transposition: 2,
       translation_direction: 'up',
       base_frequency: 440,
+        },
+      }],
+      rows: [{ channel_id: 'channel-1', cells: [1] }],
     },
   },
 })
 
 export const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
-  schema_version: 3,
+  schema_version: 4,
   history_entry_id: 2,
   project_revision: revision,
   project: {
-    measure_bank: {
+    sequence_bank: {
       next_id: 3,
-      measures: [
+      sequences: [
         {
           id: 1,
-          measure: {
-            cell: {
+          cell: {
               weight: 1,
               elements: [{ type: 'Note', pitch: 99, velocity: 1, delay: 0, gate: 1 }],
-            },
           },
         },
         {
           id: 2,
-          measure: {
-            cell: nestedCell,
-          },
+          cell: nestedCell,
         },
       ],
     },
     composition: {
       columns: [
-        { length: { numerator: 7, denominator: 8 } },
-        { length: { numerator: 4, denominator: 4 } },
-        { length: { numerator: 5, denominator: 16 } },
+        { duration: { numerator: 7, denominator: 8 }, pitch: pitchFixture() },
+        { duration: { numerator: 4, denominator: 4 }, pitch: pitchFixture() },
+        { duration: { numerator: 5, denominator: 16 }, pitch: pitchFixture() },
       ],
       rows: [
         {
@@ -111,43 +135,23 @@ export const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
         end_column: 0,
       },
     },
-    pitch: {
-      tuning: {
-        name: '12EDO',
-        definition: {
-          intervals: Array.from({ length: 12 }, (_, index) => index * 100),
-          octave: 1200,
-        },
-      },
-      scale: {
-        source_id: 'scale:major',
-        definition: {
-          name: 'major',
-          tuning_length: 12,
-          intervals: [2, 2, 1, 2, 2, 2, 1],
-          mode: 1,
-        },
-      },
-      transposition: 2,
-      translation_direction: 'up',
-      base_frequency: 440,
-    },
   },
 })
 
 export const libraryFixture = (revision = 4): LibrarySnapshotDto => ({
   schema_version: 1,
   library_revision: revision,
-  paths: { library: '/library', sequences: '/library/sequences', tunings: '/library/tunings' },
-  measures: [
+  paths: { library: '/library', content: '/library/content', tunings: '/library/tunings' },
+  cells: [
     {
       name: 'measure.xen',
       relative_path: 'measure.xen',
       stem: 'measure',
       path: '/library/sequences/measure.xen',
-      command: 'load measure "measure.xen"',
+      command: 'load cell "measure.xen"',
     },
   ],
+  compositions: [],
   tunings: [],
   scales: [
     {
@@ -175,4 +179,3 @@ export const libraryFixture = (revision = 4): LibrarySnapshotDto => ({
     library_directory: 'libraryDirectory',
   },
 })
-

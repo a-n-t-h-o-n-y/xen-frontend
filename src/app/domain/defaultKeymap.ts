@@ -106,8 +106,8 @@ for (const [key, sign] of [
   addModeShift('scale', key, `shift scale ${sign}1`, true)
 }
 
-add(trigger('+', true), command('double measure timeSignature'))
-add(trigger('-'), command('halve measure timeSignature'))
+add(trigger('+', true), command('double duration'))
+add(trigger('-'), command('halve duration'))
 add(trigger('Delete'), command('delete'))
 add(trigger('s'), command('split :N=2:'))
 add(trigger('n'), command('note :N=0:'))
@@ -138,7 +138,6 @@ for (const [key, name, shift, commandModifier] of [
   ['i', 'composition.column.insert_before', true, false],
   ['a', 'composition.column.insert_after', true, false],
   ['d', 'composition.column.delete', true, true],
-  ['t', 'composition.column.length', false, false],
   ['[', 'composition.loop.set_start', false, false],
   [']', 'composition.loop.set_end', false, false],
 ] as const) add(trigger(key, shift, commandModifier), emptyAction(name), 'composition')

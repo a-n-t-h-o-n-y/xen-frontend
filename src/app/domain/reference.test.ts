@@ -3,7 +3,7 @@ import { buildSessionReference, filterCommandReference } from './reference'
 
 describe('command reference', () => {
   const reference = buildSessionReference({
-    schema_version: 2,
+    schema_version: 3,
     commands: [
       {
         path: ['set', 'velocity'],
@@ -68,4 +68,3 @@ describe('command reference', () => {
     expect(filterCommandReference(reference.commands, 'range')[0]?.id).toBe('set velocity')
   })
 })
-

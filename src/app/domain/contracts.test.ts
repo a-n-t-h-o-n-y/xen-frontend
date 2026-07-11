@@ -12,7 +12,7 @@ import { arrangedProjectFixture, libraryFixture, projectFixture } from './testFi
 describe('schema contract validation', () => {
   it('accepts envelopes and rejects invalid payloads', () => {
     expect(parseEnvelope({
-      protocol: 'xen.bridge.v2',
+      protocol: 'xen.bridge.v3',
       type: 'response',
       name: 'state.get',
       request_id: '1',
@@ -28,12 +28,12 @@ describe('schema contract validation', () => {
 
   it('validates hello catalog and opaque keymap storage', () => {
     const hello = parseSessionHello({
-      protocol: 'xen.bridge.v2',
+      protocol: 'xen.bridge.v3',
       plugin_version: '1.0.0',
-      project_schema_version: 3,
+      project_schema_version: 4,
       library_schema_version: 1,
       catalog: {
-        schema_version: 2,
+        schema_version: 3,
         commands: [{
           path: ['set', 'pitch'],
           keywords: ['note'],
@@ -81,7 +81,7 @@ describe('schema contract validation', () => {
     expect(hello.catalog.commands[0]?.arguments[0]?.constraints[0]?.maximum).toBe(1)
     expect(() => parseSessionHello({
       ...hello,
-      project_schema_version: 4,
+      project_schema_version: 3,
     })).toThrow()
     expect(() => parseSessionHello({
       ...hello,
@@ -104,12 +104,10 @@ describe('schema contract validation', () => {
   })
 
   it('validates project, library, command response, and events', () => {
-    expect(parseProjectSnapshot(projectFixture()).project.pitch.transposition).toBe(2)
+    expect(parseProjectSnapshot(projectFixture()).project.composition.columns[0]?.pitch.transposition)
+      .toBe(2)
     const arrangedProject = parseProjectSnapshot(arrangedProjectFixture())
-    expect(arrangedProject.schema_version).toBe(3)
-    if (arrangedProject.schema_version !== 3) {
-      throw new Error('Expected an arranged project fixture')
-    }
+    expect(arrangedProject.schema_version).toBe(4)
     expect(arrangedProject.project.composition.rows[1]?.cells[0]).toBe(2)
     expect(arrangedProject.project.composition.loop_region?.start_column).toBe(2)
     expect(parseLibrarySnapshot(libraryFixture()).scales[0]?.id).toBe('chromatic')
@@ -119,18 +117,18 @@ describe('schema contract validation', () => {
       snapshot: projectFixture(),
     }).status.message).toBe('ok')
     expect(parseBridgeEvent({
-      protocol: 'xen.bridge.v2',
+      protocol: 'xen.bridge.v3',
       type: 'event',
       name: 'library.changed',
       payload: libraryFixture(),
     }).name).toBe('library.changed')
-    expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 4 })).toThrow()
+    expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 3 })).toThrow()
     expect(() => parseProjectSnapshot({
       ...arrangedProjectFixture(),
       project: {
         ...arrangedProjectFixture().project,
         composition: {
-          columns: [{ length: { numerator: 4, denominator: 4 } }],
+          columns: arrangedProjectFixture().project.composition.columns.slice(0, 1),
           rows: [{ channel_id: 'channel-1', cells: [404] }],
         },
       },
@@ -140,7 +138,7 @@ describe('schema contract validation', () => {
       project: {
         ...arrangedProjectFixture().project,
         composition: {
-          columns: [{ length: { numerator: 4, denominator: 4 } }],
+          columns: arrangedProjectFixture().project.composition.columns.slice(0, 1),
           rows: [{ channel_id: 'channel-1', cells: [1] }],
           loop_region: { start_column: 1, end_column: 0 },
         },

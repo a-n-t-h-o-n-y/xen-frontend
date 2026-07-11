@@ -4,16 +4,15 @@ import {
   compositionCellClear,
   compositionColumnDelete,
   compositionColumnInsert,
-  compositionColumnLength,
   compositionLoopBoundary,
   compositionRowChannel,
   compositionRowDelete,
   compositionRowInsert,
   compositionRowRename,
-  scaleMeasureTimeSignature,
+  scaleDuration,
   setBaseFrequency,
   setKey,
-  setMeasureTimeSignature,
+  setDuration,
   setMode,
   setTranslateDirection,
 } from './commands'
@@ -57,10 +56,6 @@ describe('composition command builders', () => {
     expect(compositionColumnDelete(1)).toBe('composition column delete 1')
   })
 
-  it('builds column length commands', () => {
-    expect(compositionColumnLength(2, '4/4')).toBe('composition column length 2 4/4')
-  })
-
   it('builds loop boundary commands for both boundaries', () => {
     expect(compositionLoopBoundary('start', 0)).toBe('composition loop start 0')
     expect(compositionLoopBoundary('end', 4)).toBe('composition loop end 4')
@@ -68,8 +63,8 @@ describe('composition command builders', () => {
 })
 
 describe('set command builders', () => {
-  it('builds set measure timeSignature commands', () => {
-    expect(setMeasureTimeSignature('3/4')).toBe('set measure timeSignature 3/4')
+  it('builds set duration commands', () => {
+    expect(setDuration('3/4')).toBe('set duration 3/4')
   })
 
   it('builds set key commands', () => {
@@ -89,8 +84,8 @@ describe('set command builders', () => {
     expect(setTranslateDirection('down')).toBe('set translateDirection down')
   })
 
-  it('builds scale measure timeSignature commands for both modes', () => {
-    expect(scaleMeasureTimeSignature('half')).toBe('halve measure timeSignature')
-    expect(scaleMeasureTimeSignature('double')).toBe('double measure timeSignature')
+  it('builds scale duration commands for both modes', () => {
+    expect(scaleDuration('half')).toBe('halve duration')
+    expect(scaleDuration('double')).toBe('double duration')
   })
 })

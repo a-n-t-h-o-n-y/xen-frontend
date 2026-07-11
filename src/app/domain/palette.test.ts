@@ -10,7 +10,7 @@ import { buildSessionReference } from './reference'
 import { libraryFixture } from './testFixtures'
 
 const commands = buildSessionReference({
-  schema_version: 2,
+  schema_version: 3,
   commands: [
     {
       path: ['transport', 'stop'],
@@ -64,7 +64,7 @@ describe('quick access palette domain', () => {
 
     expect(items.filter((item) => item.kind === 'command')).toHaveLength(2)
     expect(items.find((item) => item.kind === 'file')).toMatchObject({
-      fileKind: 'measure',
+      fileKind: 'cell',
       label: 'measure',
     })
     expect(items.find((item) => item.kind === 'tuning')).toMatchObject({

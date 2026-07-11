@@ -7,10 +7,10 @@ import {
 } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
 import {
-  scaleMeasureTimeSignature,
+  scaleDuration,
   setBaseFrequency,
   setKey,
-  setMeasureTimeSignature,
+  setDuration,
   setMode,
   setTranslateDirection,
 } from '../domain/commands'
@@ -115,7 +115,7 @@ export function useHeaderEditing({
 
       const normalized = formatTimeSignature(parsed)
       try {
-        await executeBackendCommand(setMeasureTimeSignature(normalized))
+        await executeBackendCommand(setDuration(normalized))
         setIsTimeSignatureEditing(false)
         return true
       } catch (error) {
@@ -225,7 +225,7 @@ export function useHeaderEditing({
         return
       }
 
-      void executeBackendCommand(scaleMeasureTimeSignature(mode)).catch(
+      void executeBackendCommand(scaleDuration(mode)).catch(
         (error) => {
           setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
           setStatusLevel('error')

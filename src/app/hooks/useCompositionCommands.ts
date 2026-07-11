@@ -6,7 +6,6 @@ import {
   compositionCellClear,
   compositionColumnDelete,
   compositionColumnInsert,
-  compositionColumnLength,
   compositionLoopBoundary,
   compositionRowChannel,
   compositionRowDelete,
@@ -179,7 +178,8 @@ export function useCompositionCommands({
       setStatusLevel('warning')
       return
     }
-    runCompositionCommand(compositionColumnLength(columnIndex, formatTimeSignature(parsed)))
+    void columnIndex
+    runCompositionCommand(`set duration ${formatTimeSignature(parsed)}`)
   }, [runCompositionCommand, setStatusLevel, setStatusMessage])
 
   const insertCompositionRow = useCallback((placement: 'before' | 'after', rowIndex: number): void => {

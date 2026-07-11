@@ -9,7 +9,7 @@ import { buildSessionReference } from './reference'
 
 describe('command completion', () => {
   const commands = buildSessionReference({
-    schema_version: 2,
+    schema_version: 3,
     commands: [
       {
         path: ['set', 'velocity'],
@@ -221,4 +221,3 @@ describe('command completion', () => {
     expect(getVisibleCompletionMode(true, false, false, analysis.mode)).toBe('commandSearch')
   })
 })
-

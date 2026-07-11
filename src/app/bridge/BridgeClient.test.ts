@@ -10,45 +10,36 @@ import {
 import type { ProjectSnapshotDto } from '../domain/contracts'
 
 const projectFixture = (): ProjectSnapshotDto => ({
-  schema_version: 3,
+  schema_version: 4,
   history_entry_id: 2,
   project_revision: 3,
   project: {
-    measure_bank: {
+    sequence_bank: {
       next_id: 2,
-      measures: [
+      sequences: [
         {
           id: 1,
-          measure: {
-            cell: {
+          cell: {
               weight: 1,
               elements: [{ type: 'Note', pitch: 0, velocity: 1, delay: 0, gate: 1 }],
-            },
           },
         },
       ],
     },
     composition: {
-      columns: [{ length: { numerator: 4, denominator: 4 } }],
+      columns: [{ duration: { numerator: 4, denominator: 4 }, pitch: {
+        tuning: { name: '12EDO', definition: { intervals: [], octave: 1200 } },
+        scale: null,
+        transposition: 0,
+        translation_direction: 'up',
+        base_frequency: 440,
+      } }],
       rows: [
         {
           channel_id: 'channel-1',
           cells: [1],
         },
       ],
-    },
-    pitch: {
-      tuning: {
-        name: '12EDO',
-        definition: {
-          intervals: Array.from({ length: 12 }, (_, index) => index * 100),
-          octave: 1200,
-        },
-      },
-      scale: null,
-      transposition: 0,
-      translation_direction: 'up',
-      base_frequency: 440,
     },
   },
 })
@@ -58,7 +49,7 @@ const responseEnvelope = (
   requestId: string,
   payload: Record<string, unknown>
 ) => ({
-  protocol: 'xen.bridge.v2',
+  protocol: 'xen.bridge.v3',
   type: 'response',
   name,
   request_id: requestId,
@@ -89,7 +80,7 @@ describe('BridgeClient', () => {
 
     expect(payload.project_revision).toBe(3)
     expect(JSON.parse(rawRequest)).toEqual({
-      protocol: 'xen.bridge.v2',
+      protocol: 'xen.bridge.v3',
       type: 'request',
       name: 'state.get',
       request_id: 'req-test',
@@ -97,7 +88,7 @@ describe('BridgeClient', () => {
     })
   })
 
-  it('serializes null active measure targets as null in command requests', async () => {
+  it('serializes the required cursor with a nullable sequence id', async () => {
     let rawRequest = ''
     const client = createClient(async (requestJson) => {
       rawRequest = requestJson
@@ -113,11 +104,15 @@ describe('BridgeClient', () => {
       context: {
         expected_project_revision: 3,
         selection: { path: [] },
-        active_measure_target: null,
+        cursor: { row_index: 0, column_index: 0, sequence_id: null },
       },
     })
 
-    expect(JSON.parse(rawRequest).payload.context.active_measure_target).toBeNull()
+    expect(JSON.parse(rawRequest).payload.context.cursor).toEqual({
+      row_index: 0,
+      column_index: 0,
+      sequence_id: null,
+    })
   })
 
   it('serializes instance listener channels in session binding requests', async () => {

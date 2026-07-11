@@ -36,11 +36,11 @@ export type CommandExecuteRequest = {
   context: {
     expected_project_revision: number
     selection: SelectionDto
-    active_measure_target: {
+    cursor: {
       row_index: number
       column_index: number
-      measure_id: number
-    } | null
+      sequence_id: number | null
+    }
   }
 }
 
@@ -146,11 +146,11 @@ const requestSchemas = {
     context: z.object({
       expected_project_revision: z.number().int().nonnegative(),
       selection: selectionSchema,
-      active_measure_target: z.object({
+      cursor: z.object({
         row_index: z.number().int().nonnegative(),
         column_index: z.number().int().nonnegative(),
-        measure_id: z.number().int().nonnegative(),
-      }).nullable(),
+        sequence_id: z.number().int().nonnegative().nullable(),
+      }),
     }),
   }),
   'keymap.read': z.object({}).strict(),

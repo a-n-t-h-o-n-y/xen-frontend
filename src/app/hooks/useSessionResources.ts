@@ -5,10 +5,11 @@ const createInitialLibrarySnapshot = (): LibrarySnapshot => ({
   revision: 0,
   paths: {
     library: '',
-    sequences: '',
+    content: '',
     tunings: '',
   },
-  measures: [],
+  cells: [],
+  compositions: [],
   tunings: [],
   scales: [],
   chords: [],

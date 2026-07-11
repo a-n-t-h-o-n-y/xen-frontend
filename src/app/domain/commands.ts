@@ -43,11 +43,6 @@ export const compositionColumnInsert = (
 export const compositionColumnDelete = (columnIndex: number): string =>
   `composition column delete ${columnIndex}`
 
-export const compositionColumnLength = (
-  columnIndex: number,
-  timeSignature: string
-): string => `composition column length ${columnIndex} ${timeSignature}`
-
 export const compositionLoopBoundary = (
   boundary: 'start' | 'end',
   columnIndex: number
@@ -57,8 +52,7 @@ export const compositionLoopBoundary = (
    Set command builders
    ========================================================= */
 
-export const setMeasureTimeSignature = (timeSignature: string): string =>
-  `set measure timeSignature ${timeSignature}`
+export const setDuration = (duration: string): string => `set duration ${duration}`
 
 export const setKey = (value: number): string => `set key ${value}`
 
@@ -69,8 +63,8 @@ export const setMode = (modeIndex: number): string => `set mode ${modeIndex}`
 export const setTranslateDirection = (direction: TranslateDirection): string =>
   `set translateDirection ${direction}`
 
-export const scaleMeasureTimeSignature = (mode: 'half' | 'double'): string =>
-  `${mode === 'double' ? 'double' : 'halve'} measure timeSignature`
+export const scaleDuration = (mode: 'half' | 'double'): string =>
+  `${mode === 'double' ? 'double' : 'halve'} duration`
 
 /* =========================================================
    Command context + executor

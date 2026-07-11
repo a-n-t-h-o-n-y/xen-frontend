@@ -56,7 +56,9 @@ export function useProjectViewModel(
       return null
     }
 
-    const pitchState = projectSnapshot.pitch
+    const pitchState = projectSnapshot.composition?.columns[
+      activeMeasureTarget?.columnIndex ?? 0
+    ]?.pitch ?? projectSnapshot.pitch
     const activeScale = pitchState.scale
     const rawTuningLength = pitchState.tuning.definition.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
