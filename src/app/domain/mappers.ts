@@ -185,7 +185,7 @@ export const libraryFromDto = (snapshot: LibrarySnapshotDto): LibrarySnapshot =>
 export const triggerFromDto = (trigger: KeymapTriggerDto): KeymapTrigger => ({
   key: trigger.key,
   modifiers: trigger.modifiers,
-  when: trigger.when ? { inputMode: trigger.when.input_mode } : undefined,
+  ...(trigger.when ? { when: { inputMode: trigger.when.input_mode } } : {}),
 })
 
 export const triggerToDto = (trigger: KeymapTrigger): KeymapTriggerDto => ({

@@ -14,8 +14,7 @@ import {
 } from '../domain/uiActions'
 import type { CommandReferenceEntry, InputMode, KeymapResource, MessageLevel } from '../domain/models'
 import type { StatusCellMetaItem } from '../presentation/viewModels'
-
-type WorkspaceView = 'composition' | 'sequencer' | 'library'
+import { WorkspaceControls, type WorkspaceView } from './status/WorkspaceControls'
 
 type StatusSectionProps = {
   currentInputMode: InputMode
@@ -273,58 +272,17 @@ export function StatusSection({
         </div>
       ) : null}
       <div className={`statusBar${modulatorRail ? ' statusBar-modulatorDocked' : ''}`}>
-      <div className="statusLeft">
-        <span className="modeBadge mono" aria-label={`Input mode ${currentInputMode}`}>
-          {currentInputModeLetter}
-        </span>
-        <button
-          type="button"
-          className="statusSettingsButton"
-          onClick={onOpenSettings}
-          aria-label="Open settings"
-          title="Settings"
-        >
-          <span aria-hidden="true">⚙</span>
-        </button>
-        <div className="workspaceSwitch" role="group" aria-label="Workspace view">
-          <button
-            type="button"
-            className={`workspaceSwitchButton${workspaceView === 'composition' ? ' workspaceSwitchButton-active' : ''}`}
-            aria-pressed={workspaceView === 'composition'}
-            onClick={() => setWorkspaceView('composition')}
-            disabled={workspaceDisabled}
-          >
-            Comp
-          </button>
-          <button
-            type="button"
-            className={`workspaceSwitchButton${workspaceView === 'sequencer' ? ' workspaceSwitchButton-active' : ''}`}
-            aria-pressed={workspaceView === 'sequencer'}
-            onClick={() => setWorkspaceView('sequencer')}
-            disabled={workspaceDisabled}
-          >
-            Seq
-          </button>
-          <button
-            type="button"
-            className={`workspaceSwitchButton${workspaceView === 'library' ? ' workspaceSwitchButton-active' : ''}`}
-            aria-pressed={workspaceView === 'library'}
-            onClick={() => setWorkspaceView('library')}
-            disabled={workspaceDisabled}
-          >
-            Lib
-          </button>
-        </div>
-        <button
-          type="button"
-          className={`statusModeButton${isModulatorMode ? ' statusModeButton-active' : ''}`}
-          aria-pressed={isModulatorMode}
-          onClick={() => setIsModulatorMode((previous) => !previous)}
-          disabled={modulatorDisabled}
-        >
-          Mod
-        </button>
-      </div>
+      <WorkspaceControls
+        currentInputMode={currentInputMode}
+        currentInputModeLetter={currentInputModeLetter}
+        workspaceView={workspaceView}
+        setWorkspaceView={setWorkspaceView}
+        isModulatorMode={isModulatorMode}
+        setIsModulatorMode={setIsModulatorMode}
+        workspaceDisabled={workspaceDisabled}
+        modulatorDisabled={modulatorDisabled}
+        onOpenSettings={onOpenSettings}
+      />
       {isCommandMode ? (
         <form className="statusCommandForm" onSubmit={(event) => {
           event.preventDefault()

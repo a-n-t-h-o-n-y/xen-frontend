@@ -407,7 +407,7 @@ export function SequencerSection({
             </div>
             {isModulatorMode ? (
               <ModulatorOverlay
-                selectedOutline={selectedOutline}
+                selectedOutline={selectedOutline ?? null}
                 wavePadDragRef={wavePadDragRef}
                 clampNumber={clampNumber}
                 waveHandleA={waveHandleA}

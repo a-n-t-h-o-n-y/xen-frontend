@@ -80,9 +80,9 @@ const editDistance = (left: string, right: string): number => {
     for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
       const cost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1
       current[rightIndex] = Math.min(
-        current[rightIndex - 1] + 1,
-        previous[rightIndex] + 1,
-        previous[rightIndex - 1] + cost
+        current[rightIndex - 1]! + 1,
+        previous[rightIndex]! + 1,
+        previous[rightIndex - 1]! + cost
       )
     }
     previous.splice(0, previous.length, ...current)
@@ -96,7 +96,9 @@ const typoThreshold = (query: string): number => Math.max(1, Math.floor(query.le
 const matchesOrderedTokenPrefix = (queryWords: string[], commandWords: string[]): boolean => {
   if (queryWords.length === 0) return false
   if (queryWords.length === 1) {
-    return commandWords.some((commandWord) => commandWord.startsWith(queryWords[0]))
+    const queryWord = queryWords[0]
+    return queryWord !== undefined &&
+      commandWords.some((commandWord) => commandWord.startsWith(queryWord))
   }
 
   return queryWords.every((word, index) => commandWords[index]?.startsWith(word) ?? false)

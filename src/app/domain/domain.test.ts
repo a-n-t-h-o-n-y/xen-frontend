@@ -295,7 +295,7 @@ describe('schema contract validation', () => {
         overrides: [],
       },
     })
-    expect(hello.keymap.bindings.sequence[0]?.target.type).toBe('ui_action')
+    expect(hello.keymap.bindings.sequence![0]?.target.type).toBe('ui_action')
     expect(hello.catalog.commands[0]?.arguments[0]?.constraints[0]?.maximum).toBe(1)
     expect(() => parseSessionHello({
       ...hello,
@@ -649,7 +649,7 @@ describe('command completion', () => {
 
   it('strips pattern prefixes before command matching', () => {
     const analysis = analyzeCommandCompletion('+2  1 3 set vel', commands)
-    const joined = applyCommandCompletion('+2  1 3 set vel', analysis.segment, analysis.candidates[0].command)
+    const joined = applyCommandCompletion('+2  1 3 set vel', analysis.segment, analysis.candidates[0]!.command)
 
     expect(analysis.candidates[0]?.command.id).toBe('set velocity')
     expect(analysis.segment.patternPrefix).toBe('+2  1 3 ')
@@ -669,7 +669,7 @@ describe('command completion', () => {
 
   it('matches multi-word commands and inserts the canonical command', () => {
     const analysis = analyzeCommandCompletion('copy; +1 trans st', commands)
-    const nextText = applyCommandCompletion('copy; +1 trans st', analysis.segment, analysis.candidates[0].command)
+    const nextText = applyCommandCompletion('copy; +1 trans st', analysis.segment, analysis.candidates[0]!.command)
 
     expect(analysis.candidates[0]?.command.id).toBe('transport stop')
     expect(nextText).toBe('copy; +1 transport stop ')
@@ -1210,13 +1210,13 @@ describe('keymap routing', () => {
   })
 
   it('does not conflict with the binding original trigger', () => {
-    const trigger = resource.bindings.sequence[1]!.trigger
+    const trigger = resource.bindings.sequence![1]!.trigger
     expect(findKeymapTriggerConflict(resource, 'sequence', trigger, trigger)).toBeNull()
   })
 
   it('formats typed triggers and targets with stable identities', () => {
-    const binding = resource.bindings.sequence[0]!
-    const workspaceBinding = resource.bindings.sequence[1]!
+    const binding = resource.bindings.sequence![0]!
+    const workspaceBinding = resource.bindings.sequence![1]!
     expect(triggerIdentity(binding.trigger)).toContain('h')
     expect(formatKeymapTrigger(binding.trigger)).toContain('Shift')
     expect(formatKeymapTarget(binding.target)).toBe('Move left by 2')
@@ -1231,11 +1231,11 @@ describe('keymap routing', () => {
   })
 
   it('maps keymap override requests back to DTO trigger conditions', () => {
-    const trigger = resource.bindings.sequence[0]!.trigger
+    const trigger = resource.bindings.sequence![0]!.trigger
     expect(keymapOverrideSetRequestToDto(4, {
       context: 'sequence',
       trigger,
-      target: resource.bindings.sequence[0]!.target,
+      target: resource.bindings.sequence![0]!.target,
     })).toMatchObject({
       expected_revision: 4,
       context: 'sequence',
@@ -1251,7 +1251,7 @@ describe('keymap routing', () => {
   })
 
   it('parses no-argument workspace UI actions', () => {
-    const binding = resource.bindings.sequence[1]!
+    const binding = resource.bindings.sequence![1]!
     expect(binding.target).toMatchObject({
       type: 'ui_action',
       action: 'workspace.view.toggle',

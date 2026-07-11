@@ -98,8 +98,9 @@ export const parsePatternPrefix = (value: string): PatternPrefix | null => {
   let cursor = 0
   let offset = 0
   let hasOffsetToken = false
-  if (/^\+\d+$/.test(tokens[0])) {
-    offset = Math.max(0, Math.trunc(Number(tokens[0].slice(1))))
+  const firstToken = tokens[0]
+  if (firstToken && /^\+\d+$/.test(firstToken)) {
+    offset = Math.max(0, Math.trunc(Number(firstToken.slice(1))))
     hasOffsetToken = true
     cursor += 1
   }
@@ -107,7 +108,7 @@ export const parsePatternPrefix = (value: string): PatternPrefix | null => {
   const intervals: number[] = []
   while (cursor < tokens.length) {
     const token = tokens[cursor]
-    if (!/^\d+$/.test(token)) {
+    if (!token || !/^\d+$/.test(token)) {
       break
     }
 
@@ -266,8 +267,13 @@ export const parseTimeSignatureInput = (value: string): TimeSignatureParts | nul
     return null
   }
 
-  const numerator = Number.parseInt(match[1], 10)
-  const denominator = Number.parseInt(match[2], 10)
+  const numeratorText = match[1]
+  const denominatorText = match[2]
+  if (!numeratorText || !denominatorText) {
+    return null
+  }
+  const numerator = Number.parseInt(numeratorText, 10)
+  const denominator = Number.parseInt(denominatorText, 10)
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator)) {
     return null
   }

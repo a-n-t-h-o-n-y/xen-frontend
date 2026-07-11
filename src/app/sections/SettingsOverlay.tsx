@@ -7,7 +7,7 @@ import {
   triggersEqual,
 } from '../domain/keymap'
 import { useFocusTrap } from '../hooks/useFocusTrap'
-import { filterCommandReference } from '../domain/reference'
+import { CommandReferenceSection } from './settings/CommandReferenceSection'
 import {
   formatKeymapContext,
   uiActionRegistry,
@@ -59,28 +59,11 @@ const inputModes: InputMode[] = ['pitch', 'velocity', 'delay', 'gate', 'scale']
 const modTargets: ModTarget[] = ['pitch', 'velocity', 'delay', 'gate', 'weights']
 const uiActionOptions = Object.values(uiActionRegistry)
 
-const formatTargetRequirement = (requirement: CommandReferenceEntry['targetRequirement']): string => ({
-  none: 'No target',
-  cell: 'Cell',
-  element: 'Element',
-  cell_or_element: 'Cell or element',
-})[requirement]
-
-const formatConstraint = (
-  constraint: CommandReferenceEntry['arguments'][number]['constraints'][number]
-): string => {
-  const parts = [constraint.kind]
-  if (constraint.minimum !== null) parts.push(`min ${constraint.minimum}`)
-  if (constraint.maximum !== null) parts.push(`max ${constraint.maximum}`)
-  if (constraint.values.length > 0) parts.push(constraint.values.join(', '))
-  return parts.join(' · ')
-}
-
 const editorFromBinding = (context: string, binding?: KeymapBinding): EditorState => {
   const target = binding?.target
   return {
     context,
-    originalTrigger: binding?.trigger,
+    ...(binding ? { originalTrigger: binding.trigger } : {}),
     trigger: binding?.trigger ?? null,
     targetType: target?.type === 'command'
       ? 'command'
@@ -105,6 +88,11 @@ const editorFromBinding = (context: string, binding?: KeymapBinding): EditorStat
       : 'pitch',
     whenMode: binding?.trigger.when?.inputMode ?? '',
   }
+}
+
+const withInputMode = (trigger: KeymapTrigger, inputMode: InputMode | ''): KeymapTrigger => {
+  const baseTrigger = { key: trigger.key, modifiers: trigger.modifiers }
+  return inputMode ? { ...baseTrigger, when: { inputMode } } : baseTrigger
 }
 
 const targetFromEditor = (editor: EditorState): KeymapTarget => {
@@ -174,7 +162,6 @@ export function SettingsOverlay({
   const [capturing, setCapturing] = useState(false)
   const [conflict, setConflict] = useState<KeymapBinding | null>(null)
   const [activeSection, setActiveSection] = useState<'shortcuts' | 'commands'>('shortcuts')
-  const [commandSearch, setCommandSearch] = useState('')
   const settingsPanelRef = useRef<HTMLElement | null>(null)
   const shortcutEditorRef = useRef<HTMLElement | null>(null)
   const shortcutEditorOpenerRef = useRef<HTMLElement | null>(null)
@@ -187,10 +174,6 @@ export function SettingsOverlay({
       ...resource.overrides.map((override) => override.context),
     ])).sort()
   }, [resource])
-  const filteredCommands = useMemo(
-    () => filterCommandReference(commands, commandSearch),
-    [commandSearch, commands]
-  )
 
   const closeEditor = useCallback((restoreFocus = true): void => {
     setEditor(null)
@@ -247,10 +230,7 @@ export function SettingsOverlay({
 
   const saveEditor = async (replaceConflict = false): Promise<void> => {
     if (!editor?.trigger) return
-    const trigger: KeymapTrigger = {
-      ...editor.trigger,
-      when: editor.whenMode ? { inputMode: editor.whenMode } : undefined,
-    }
+    const trigger = withInputMode(editor.trigger, editor.whenMode)
     const context = editor.context.trim()
     const existing = findKeymapTriggerConflict(resource, context, trigger, editor.originalTrigger)
     if (existing && !replaceConflict) {
@@ -406,97 +386,7 @@ export function SettingsOverlay({
                 })}
               </>
             ) : (
-              <section className="commandReference" aria-labelledby="commands-title">
-                <div className="settingsSectionIntro">
-                  <div>
-                    <h3 id="commands-title">Commands</h3>
-                    <p>Browse the command catalog received when this session started.</p>
-                  </div>
-                </div>
-                {commands.length > 0 ? (
-                  <>
-                    <div className="referenceCommandSearchField commandReferenceSearch">
-                      <input
-                        type="search"
-                        className="referenceCommandSearchInput mono"
-                        value={commandSearch}
-                        onChange={(event) => setCommandSearch(event.target.value)}
-                        placeholder="Search commands and arguments…"
-                        aria-label="Search commands"
-                      />
-                      {commandSearch ? (
-                        <button
-                          type="button"
-                          className="referenceCommandSearchClear"
-                          aria-label="Clear command search"
-                          onClick={() => setCommandSearch('')}
-                        >
-                          ×
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="commandReferenceList">
-                      {filteredCommands.length > 0 ? filteredCommands.map((command) => (
-                        <details className="commandReferenceRow" key={command.id}>
-                          <summary className="commandReferenceSummary">
-                            <span className="commandReferenceSummaryText">
-                              <span className="commandReferenceSignature mono">{command.signature}</span>
-                              <span className="commandReferenceDescription">{command.description}</span>
-                            </span>
-                            <span className="commandReferenceChevron" aria-hidden="true">▸</span>
-                          </summary>
-                          <div className="commandReferenceDetails">
-                            <dl className="commandReferenceMetadata">
-                              <div>
-                                <dt>Target</dt>
-                                <dd>{formatTargetRequirement(command.targetRequirement)}</dd>
-                              </div>
-                              <div>
-                                <dt>Pattern prefix</dt>
-                                <dd>{command.acceptsPatternPrefix ? 'Supported' : 'Not supported'}</dd>
-                              </div>
-                            </dl>
-                            <div className="commandArguments">
-                              <h4>Arguments</h4>
-                              {command.arguments.length > 0 ? command.arguments.map((argument) => (
-                                <div className="commandArgument" key={`${command.id}-${argument.displayName}`}>
-                                  <div className="commandArgumentHeader">
-                                    <span className="mono">{argument.displayName}</span>
-                                    <span>{argument.required ? 'Required' : 'Optional'}</span>
-                                  </div>
-                                  <dl className="commandArgumentMetadata">
-                                    <div>
-                                      <dt>Kind</dt>
-                                      <dd>{argument.kind}</dd>
-                                    </div>
-                                    <div>
-                                      <dt>Default</dt>
-                                      <dd>{argument.defaultValue ?? 'None'}</dd>
-                                    </div>
-                                  </dl>
-                                  {argument.constraints.length > 0 ? (
-                                    <ul className="commandConstraints">
-                                      {argument.constraints.map((constraint, index) => (
-                                        <li key={`${constraint.kind}-${index}`}>
-                                          {formatConstraint(constraint)}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  ) : <p className="commandNoConstraints">No constraints</p>}
-                                </div>
-                              )) : <p className="commandNoArguments">This command has no arguments.</p>}
-                            </div>
-                          </div>
-                        </details>
-                      )) : (
-                        <p className="settingsEmpty">No commands match that search.</p>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <p className="settingsEmpty">No command catalog data received.</p>
-                )}
-              </section>
+              <CommandReferenceSection commands={commands} />
             )}
           </main>
         </div>
@@ -548,10 +438,11 @@ export function SettingsOverlay({
                   setConflict(null)
                 }}
               >
-                {capturing ? 'Press a shortcut…' : editor.trigger ? formatKeymapTrigger({
-                  ...editor.trigger,
-                  when: editor.whenMode ? { inputMode: editor.whenMode } : undefined,
-                }) : 'Click to record'}
+                {capturing
+                  ? 'Press a shortcut…'
+                  : editor.trigger
+                    ? formatKeymapTrigger(withInputMode(editor.trigger, editor.whenMode))
+                    : 'Click to record'}
               </button>
             </label>
             <label className="settingsField">
@@ -607,7 +498,7 @@ export function SettingsOverlay({
                   <span>Amount</span>
                   <input type="number" min="1" step="1" value={editor.amount} onChange={(event) => setEditor({
                     ...editor,
-                    amount: Math.max(1, Number.parseInt(event.target.value, 10) || 1),
+                    amount: Math.max(0, Number.parseInt(event.target.value, 10) || 0),
                   })} />
                 </label>
               </div>
@@ -664,6 +555,8 @@ export function SettingsOverlay({
                   busy ||
                   !editor.context.trim() ||
                   !editor.trigger ||
+                  ((editor.targetType === 'selection.move' ||
+                    editor.targetType === 'composition.selection.move') && editor.amount < 1) ||
                   (editor.targetType === 'command' && !editor.command.trim())
                 }
                 onClick={() => void saveEditor()}

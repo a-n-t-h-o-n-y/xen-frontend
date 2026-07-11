@@ -123,7 +123,7 @@ export const getLargestElement = (values: number[]): number => {
     return 0
   }
 
-  return values[values.length - 1]
+  return values[values.length - 1]!
 }
 
 export const euclidMod = (value: number, modulo: number): number => {
@@ -151,7 +151,7 @@ export const generateValidPitches = (scale: ScaleLike, tuningLength: number): nu
 
   const validPitches = [0]
   for (const interval of rotatedIntervals) {
-    const nextPitch = validPitches[validPitches.length - 1] + interval
+    const nextPitch = validPitches[validPitches.length - 1]! + interval
     if (nextPitch < tuningLength) {
       validPitches.push(nextPitch)
     }

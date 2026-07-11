@@ -11,6 +11,7 @@ import { useKeyboardController } from './app/hooks/useKeyboardController'
 import { useModulatorController } from './app/hooks/useModulatorController'
 import { useProjectViewModel } from './app/hooks/useProjectViewModel'
 import { useScaleMenu } from './app/hooks/useScaleMenu'
+import { useSettingsOverlayState } from './app/hooks/useSettingsOverlayState'
 import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
 import { CompositionSection } from './app/sections/CompositionSection'
@@ -46,8 +47,6 @@ function App() {
     selection: { path: [] },
     inputMode: 'pitch',
   })
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const settingsOpenerRef = useRef<HTMLElement | null>(null)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('sequencer')
   const [compositionSelection, setCompositionSelection] = useState<CompositionSelection>(
     INITIAL_COMPOSITION_SELECTION
@@ -142,6 +141,7 @@ function App() {
     setLibraryLoading,
     setPlayheadPhase,
   })
+  const settingsOverlay = useSettingsOverlayState(keymapController.clearError)
 
   const installEditorState = useCallback((nextState: EditorState): void => {
     editorStateRef.current = nextState
@@ -353,7 +353,7 @@ function App() {
   useKeyboardController({
     bridgeUnavailableMessage,
     isProjectReady,
-    settingsOpen,
+    settingsOpen: settingsOverlay.open,
     isCommandMode,
     openCommandMode,
     executeBackendCommand,
@@ -606,13 +606,7 @@ function App() {
         commandDisabled={!isProjectReady}
         workspaceDisabled={!isProjectReady}
         modulatorDisabled={!isProjectReady || workspaceView !== 'sequencer'}
-        onOpenSettings={() => {
-          settingsOpenerRef.current = document.activeElement instanceof HTMLElement
-            ? document.activeElement
-            : null
-          keymapController.clearError()
-          setSettingsOpen(true)
-        }}
+        onOpenSettings={settingsOverlay.openOverlay}
         modulatorRail={isProjectReady && isModulatorMode && workspaceView === 'sequencer' ? (
           <ModulatorsPanel
             activeModulatorTab={activeModulatorTab}
@@ -632,18 +626,12 @@ function App() {
         ) : null}
       />
       <SettingsOverlay
-        open={settingsOpen}
+        open={settingsOverlay.open}
         resource={keymapController.resource}
         commands={sessionReference.commands}
         busy={keymapController.busy}
         error={keymapController.error}
-        onClose={() => {
-          setSettingsOpen(false)
-          window.requestAnimationFrame(() => {
-            const opener = settingsOpenerRef.current
-            if (opener?.isConnected) opener.focus()
-          })
-        }}
+        onClose={settingsOverlay.closeOverlay}
         onSetOverride={keymapController.setOverride}
         onDisable={keymapController.disable}
         onRestore={keymapController.restore}

@@ -6,6 +6,8 @@ import type {
   TargetControl,
 } from '../domain/modulation'
 
+const INITIAL_MODULATOR = createInitialModulatorPanelState()
+
 type PadDragState = {
   pointerId: number
   target: ModTarget
@@ -40,7 +42,9 @@ export function useModulatorPanelState() {
   const liveEmitFrameRef = useRef<number | null>(null)
   const liveEmitCommandsRef = useRef<string[] | null>(null)
   const waveMenuRef = useRef<HTMLDivElement | null>(null)
-  const activeModulator = modulatorInstances[activeModulatorTab] ?? modulatorInstances[0]
+  const activeModulator = modulatorInstances[activeModulatorTab] ??
+    modulatorInstances[0] ??
+    INITIAL_MODULATOR
 
   const updateActiveModulator = useCallback(
     (

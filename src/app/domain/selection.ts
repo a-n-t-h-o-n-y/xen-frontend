@@ -28,6 +28,9 @@ export const resolveSelection = (
 
   for (let index = 0; index < selection.path.length; index += 1) {
     const step = selection.path[index]
+    if (!step) {
+      return null
+    }
     if (index % 2 === 0) {
       if (step.kind !== 'element' || step.index >= currentCell.elements.length) {
         return null
@@ -43,7 +46,11 @@ export const resolveSelection = (
     ) {
       return null
     }
-    currentCell = currentElement.cells[step.index]
+    const nextCell = currentElement.cells[step.index]
+    if (!nextCell) {
+      return null
+    }
+    currentCell = nextCell
     currentElement = null
     cellPath.push(step.index)
   }
@@ -149,7 +156,7 @@ export const moveSelection = (
       }
       if (elements.length === 1) {
         const element = elements[0]
-        if (element.type === 'Sequence' && element.cells.length > 0) {
+        if (element?.type === 'Sequence' && element.cells.length > 0) {
           path.push({ kind: 'element', index: 0 }, { kind: 'cell', index: 0 })
           continue
         }
