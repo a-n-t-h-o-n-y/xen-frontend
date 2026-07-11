@@ -345,7 +345,8 @@ The composition matrix should be a new section component, likely
 ## First Build Slice
 
 1. Extend frontend project models and mappers to expose schema `2` composition data.
-2. Add `composition` as a workspace view beside `sequencer` and `library`.
+2. Add `composition` as a workspace view beside `sequencer` (the former Library
+   workspace was later replaced by Quick Access).
 3. Render a read-only matrix with proportional columns, row output labels, measure
    labels, and selection highlight.
 4. Add keymapped matrix selection movement for arrows and `hjkl`.

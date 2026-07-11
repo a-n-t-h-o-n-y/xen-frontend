@@ -43,7 +43,7 @@ export const ingestKeymapResource = (
   current: KeymapResource | null,
   incoming: KeymapResource
 ): { resource: KeymapResource; installed: boolean } => {
-  if (current && incoming.revision <= current.revision) {
+  if (current && incoming.revision === current.revision) {
     return { resource: current, installed: false }
   }
   return { resource: incoming, installed: true }

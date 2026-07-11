@@ -213,6 +213,7 @@ export type KeymapResource = {
   keySemantics: 'KeyboardEvent.key'
   bindings: Record<string, KeymapBinding[]>
   overrides: KeymapOverride[]
+  document: Record<string, unknown> | null
 }
 
 export type CommandContext = {

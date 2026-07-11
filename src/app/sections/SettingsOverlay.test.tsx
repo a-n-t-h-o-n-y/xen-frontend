@@ -23,6 +23,7 @@ const resource: KeymapResource = {
     }],
   },
   overrides: [],
+  document: null,
 }
 
 const renderOverlay = (overrides: Partial<Parameters<typeof SettingsOverlay>[0]> = {}) => {

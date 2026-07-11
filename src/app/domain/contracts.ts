@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const BRIDGE_PROTOCOL = 'xen.bridge.v1'
+export const BRIDGE_PROTOCOL = 'xen.bridge.v2'
 export const PROJECT_SCHEMA_VERSION = 3
 export const LEGACY_PROJECT_SCHEMA_VERSION = 1
 export const LIBRARY_SCHEMA_VERSION = 1
@@ -283,7 +283,10 @@ export const catalogSchema = z.object({
 export const inputModeSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'scale'])
 
 export const keymapTriggerSchema = z.object({
-  key: z.string().min(1),
+  key: z.string().min(1).max(64).refine(
+    (key) => !/^[A-Z]$/.test(key),
+    'Single ASCII letter keymap triggers must be lowercase'
+  ),
   modifiers: z.object({
     shift: z.boolean(),
     command: z.boolean(),
@@ -305,7 +308,7 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
     action: z.literal('selection.move'),
     arguments: z.object({
       direction: z.enum(['left', 'right', 'up', 'down']),
-      amount: z.number().int().positive(),
+      amount: z.number().int().positive().max(1_000),
     }),
   }),
   z.object({
@@ -351,7 +354,7 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
     action: z.literal('composition.selection.move'),
     arguments: z.object({
       direction: z.enum(['left', 'right', 'up', 'down']),
-      amount: z.number().int().positive(),
+      amount: z.number().int().positive().max(1_000),
     }),
   }),
   z.object({
@@ -402,17 +405,33 @@ export const keymapBindingSchema = z.object({
 })
 
 export const keymapOverrideSchema = z.object({
-  context: z.string().min(1),
+  context: z.string().min(1).max(64).regex(/^[a-z0-9_.-]+$/),
   trigger: keymapTriggerSchema,
   target: keymapTargetSchema.nullable(),
 })
 
-export const keymapResourceSchema = z.object({
+export const keymapDocumentSchema = z.object({
   schema_version: z.literal(KEYMAP_SCHEMA_VERSION),
-  revision: nonNegativeInteger,
-  key_semantics: z.literal('KeyboardEvent.key'),
-  bindings: z.record(z.string(), z.array(keymapBindingSchema)),
+  revision: nonNegativeInteger.optional(),
   overrides: z.array(keymapOverrideSchema),
+}).passthrough().superRefine((document, context) => {
+  const identities = new Set<string>()
+  document.overrides.forEach((override, index) => {
+    const identity = JSON.stringify([override.context, override.trigger])
+    if (identities.has(identity)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['overrides', index],
+        message: 'Duplicate keymap override',
+      })
+    }
+    identities.add(identity)
+  })
+})
+
+export const keymapStorageResourceSchema = z.object({
+  revision: nonNegativeInteger,
+  document: z.unknown().nullable(),
 })
 
 export const sessionHelloSchema = z.object({
@@ -424,7 +443,7 @@ export const sessionHelloSchema = z.object({
   ]),
   library_schema_version: z.literal(LIBRARY_SCHEMA_VERSION),
   catalog: catalogSchema,
-  keymap: keymapResourceSchema,
+  keymap: keymapStorageResourceSchema,
 })
 
 export const envelopeSchema = z.object({
@@ -458,7 +477,7 @@ export const bridgeEventSchema = z.discriminatedUnion('name', [
   envelopeSchema.extend({
     type: z.literal('event'),
     name: z.literal('keymap.changed'),
-    payload: keymapResourceSchema,
+    payload: keymapStorageResourceSchema,
   }),
   envelopeSchema.extend({
     type: z.literal('event'),
@@ -494,7 +513,8 @@ export type KeymapTriggerDto = z.infer<typeof keymapTriggerSchema>
 export type KeymapTargetDto = z.infer<typeof keymapTargetSchema>
 export type KeymapBindingDto = z.infer<typeof keymapBindingSchema>
 export type KeymapOverrideDto = z.infer<typeof keymapOverrideSchema>
-export type KeymapResourceDto = z.infer<typeof keymapResourceSchema>
+export type KeymapDocumentDto = z.infer<typeof keymapDocumentSchema>
+export type KeymapStorageResourceDto = z.infer<typeof keymapStorageResourceSchema>
 
 export const parseEnvelope = (value: unknown): EnvelopeDto => envelopeSchema.parse(value)
 export const parseSessionHello = (value: unknown): SessionHelloDto => sessionHelloSchema.parse(value)
@@ -505,5 +525,7 @@ export const parseLibrarySnapshot = (value: unknown): LibrarySnapshotDto =>
 export const parseCommandResponse = (value: unknown): CommandExecuteResponseDto =>
   commandResponseSchema.parse(value)
 export const parseBridgeEvent = (value: unknown) => bridgeEventSchema.parse(value)
-export const parseKeymapResource = (value: unknown): KeymapResourceDto =>
-  keymapResourceSchema.parse(value)
+export const parseKeymapDocument = (value: unknown): KeymapDocumentDto =>
+  keymapDocumentSchema.parse(value)
+export const parseKeymapStorageResource = (value: unknown): KeymapStorageResourceDto =>
+  keymapStorageResourceSchema.parse(value)

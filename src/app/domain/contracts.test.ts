@@ -12,7 +12,7 @@ import { arrangedProjectFixture, libraryFixture, projectFixture } from './testFi
 describe('schema contract validation', () => {
   it('accepts envelopes and rejects invalid payloads', () => {
     expect(parseEnvelope({
-      protocol: 'xen.bridge.v1',
+      protocol: 'xen.bridge.v2',
       type: 'response',
       name: 'state.get',
       request_id: '1',
@@ -26,9 +26,9 @@ describe('schema contract validation', () => {
     })).toThrow()
   })
 
-  it('validates hello catalog and merged keymap', () => {
+  it('validates hello catalog and opaque keymap storage', () => {
     const hello = parseSessionHello({
-      protocol: 'xen.bridge.v1',
+      protocol: 'xen.bridge.v2',
       plugin_version: '1.0.0',
       project_schema_version: 3,
       library_schema_version: 1,
@@ -55,11 +55,11 @@ describe('schema contract validation', () => {
         }],
       },
       keymap: {
-        schema_version: 1,
         revision: 2,
-        key_semantics: 'KeyboardEvent.key',
-        bindings: {
-          sequence: [{
+        document: {
+          schema_version: 1,
+          overrides: [{
+            context: 'sequence',
             trigger: {
               key: 'ArrowLeft',
               modifiers: { shift: false, command: false, alt: false },
@@ -71,10 +71,9 @@ describe('schema contract validation', () => {
             },
           }],
         },
-        overrides: [],
       },
     })
-    expect(hello.keymap.bindings.sequence![0]?.target.type).toBe('ui_action')
+    expect(hello.keymap.revision).toBe(2)
     expect(hello.catalog.commands[0]?.arguments[0]?.constraints[0]?.maximum).toBe(1)
     expect(() => parseSessionHello({
       ...hello,
@@ -116,7 +115,7 @@ describe('schema contract validation', () => {
       snapshot: projectFixture(),
     }).status.message).toBe('ok')
     expect(parseBridgeEvent({
-      protocol: 'xen.bridge.v1',
+      protocol: 'xen.bridge.v2',
       type: 'event',
       name: 'library.changed',
       payload: libraryFixture(),

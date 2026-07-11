@@ -2,17 +2,12 @@ import { useCallback, useRef, useState } from 'react'
 import { BridgePayloadError } from '../bridge/BridgeClient'
 import {
   keymapFromDto,
-  keymapOverrideRemoveRequestToDto,
-  keymapOverrideSetRequestToDto,
+  keymapOverridesToDocument,
 } from '../domain/mappers'
 import { ingestKeymapResource } from '../domain/resources'
 import { getErrorMessage } from '../utils/errors'
 import { triggersEqual } from '../domain/keymap'
-import type {
-  BridgeMethodMap,
-  KeymapResetRequest,
-  RequestOptions,
-} from '../bridge/BridgeClient'
+import type { BridgeMethodMap, RequestOptions } from '../bridge/BridgeClient'
 import type {
   KeymapResource,
   KeymapTarget,
@@ -24,24 +19,6 @@ type BridgeRequest = <K extends keyof BridgeMethodMap>(
   payload: BridgeMethodMap[K]['request'],
   options?: RequestOptions
 ) => Promise<BridgeMethodMap[K]['response']>
-
-type KeymapMutationMethod =
-  | 'keymap.override.set'
-  | 'keymap.override.remove'
-  | 'keymap.reset'
-
-type KeymapMutationPayload = {
-  'keymap.override.set': {
-    context: string
-    trigger: KeymapTrigger
-    target: KeymapTarget | null
-  }
-  'keymap.override.remove': {
-    context: string
-    trigger: KeymapTrigger
-  }
-  'keymap.reset': Omit<KeymapResetRequest, 'expected_revision'>
-}
 
 type UseKeymapControllerArgs = {
   request: BridgeRequest
@@ -67,30 +44,25 @@ export function useKeymapController({ request }: UseKeymapControllerArgs) {
   }, [])
 
   const refresh = useCallback(async (): Promise<void> => {
-    ingestKeymap(keymapFromDto(await request('keymap.get', {})))
+    ingestKeymap(keymapFromDto(await request('keymap.read', {})))
   }, [ingestKeymap, request])
 
-  const mutate = useCallback(async <K extends KeymapMutationMethod>(
-    name: K,
-    payload: KeymapMutationPayload[K]
+  const persistOverrides = useCallback(async (
+    createOverrides: (current: KeymapResource) => KeymapResource['overrides']
   ): Promise<void> => {
     const current = keymapRef.current
     if (!current) throw new Error('Keymap is not loaded')
     setBusy(true)
     setError(null)
     try {
-      const requestPayload = name === 'keymap.override.set'
-        ? keymapOverrideSetRequestToDto(current.revision, payload as KeymapMutationPayload['keymap.override.set'])
-        : name === 'keymap.override.remove'
-          ? keymapOverrideRemoveRequestToDto(
-              current.revision,
-              payload as KeymapMutationPayload['keymap.override.remove']
-            )
-          : { expected_revision: current.revision }
-      const response = await request(name, requestPayload as BridgeMethodMap[K]['request'])
+      const overrides = createOverrides(current)
+      const response = await request('keymap.write', {
+        expected_revision: current.revision,
+        document: keymapOverridesToDocument(current.document, overrides),
+      })
       ingestKeymap(keymapFromDto(response))
     } catch (caught) {
-      if (caught instanceof BridgePayloadError && caught.code === 'invalid_request') {
+      if (caught instanceof BridgePayloadError && caught.code === 'conflict') {
         await refresh()
         const retryError = new Error(
           'Shortcuts changed elsewhere. The latest version was loaded; retry your edit.'
@@ -112,34 +84,62 @@ export function useKeymapController({ request }: UseKeymapControllerArgs) {
     target: KeymapTarget,
     originalTrigger?: KeymapTrigger
   ): Promise<void> => {
-    await mutate('keymap.override.set', { context, trigger, target })
-    if (!originalTrigger || triggersEqual(originalTrigger, trigger)) return
-
-    const originalWasOverride = keymapRef.current?.overrides.some((override) =>
-      override.context === context && triggersEqual(override.trigger, originalTrigger)
-    )
-    if (originalWasOverride) {
-      await mutate('keymap.override.remove', { context, trigger: originalTrigger })
-    } else {
-      await mutate('keymap.override.set', {
-        context,
-        trigger: originalTrigger,
-        target: null,
-      })
-    }
-  }, [mutate])
+    await persistOverrides((current) => {
+      const overrides = current.overrides.filter((override) =>
+        override.context !== context ||
+        (!triggersEqual(override.trigger, trigger) &&
+          (!originalTrigger || !triggersEqual(override.trigger, originalTrigger)))
+      )
+      overrides.push({ context, trigger, target })
+      if (originalTrigger && !triggersEqual(originalTrigger, trigger)) {
+        const originalWasOverride = current.overrides.some((override) =>
+          override.context === context && triggersEqual(override.trigger, originalTrigger)
+        )
+        if (!originalWasOverride) {
+          overrides.push({ context, trigger: originalTrigger, target: null })
+        }
+      }
+      return overrides
+    })
+  }, [persistOverrides])
 
   const disable = useCallback((context: string, trigger: KeymapTrigger): Promise<void> =>
-    mutate('keymap.override.set', { context, trigger, target: null }),
-  [mutate])
+    persistOverrides((current) => [
+      ...current.overrides.filter((override) =>
+        override.context !== context || !triggersEqual(override.trigger, trigger)
+      ),
+      { context, trigger, target: null },
+    ]),
+  [persistOverrides])
 
   const restore = useCallback((context: string, trigger: KeymapTrigger): Promise<void> =>
-    mutate('keymap.override.remove', { context, trigger }),
-  [mutate])
+    persistOverrides((current) => current.overrides.filter((override) =>
+      override.context !== context || !triggersEqual(override.trigger, trigger)
+    )),
+  [persistOverrides])
 
-  const reset = useCallback((): Promise<void> =>
-    mutate('keymap.reset', {}),
-  [mutate])
+  const reset = useCallback(async (): Promise<void> => {
+    const current = keymapRef.current
+    if (!current) throw new Error('Keymap is not loaded')
+    setBusy(true)
+    setError(null)
+    try {
+      ingestKeymap(keymapFromDto(await request('keymap.delete', {
+        expected_revision: current.revision,
+      })))
+    } catch (caught) {
+      if (caught instanceof BridgePayloadError && caught.code === 'conflict') {
+        await refresh()
+        const message = 'Shortcuts changed elsewhere. The latest version was loaded; retry reset.'
+        setError(message)
+        throw new Error(message)
+      }
+      setError(getErrorMessage(caught))
+      throw caught
+    } finally {
+      setBusy(false)
+    }
+  }, [ingestKeymap, refresh, request])
 
   return {
     keymapRef,

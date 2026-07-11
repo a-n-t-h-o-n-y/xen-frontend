@@ -4,9 +4,7 @@ import {
   BRIDGE_PROTOCOL,
   commandResponseSchema,
   envelopeSchema,
-  keymapResourceSchema,
-  keymapTargetSchema,
-  keymapTriggerSchema,
+  keymapStorageResourceSchema,
   librarySnapshotSchema,
   projectSnapshotSchema,
   selectionSchema,
@@ -15,9 +13,7 @@ import {
 import { createRequestId } from '../utils/requestId'
 import type {
   CommandExecuteResponseDto,
-  KeymapResourceDto,
-  KeymapTargetDto,
-  KeymapTriggerDto,
+  KeymapStorageResourceDto,
   LibrarySnapshotDto,
   ProjectSnapshotDto,
   SelectionDto,
@@ -47,20 +43,12 @@ export type CommandExecuteRequest = {
   }
 }
 
-export type KeymapOverrideSetRequest = {
+export type KeymapWriteRequest = {
   expected_revision: number
-  context: string
-  trigger: KeymapTriggerDto
-  target: KeymapTargetDto | null
+  document: unknown
 }
 
-export type KeymapOverrideRemoveRequest = {
-  expected_revision: number
-  context: string
-  trigger: KeymapTriggerDto
-}
-
-export type KeymapResetRequest = {
+export type KeymapDeleteRequest = {
   expected_revision: number
 }
 
@@ -89,21 +77,17 @@ export type BridgeMethodMap = {
     request: CommandExecuteRequest
     response: CommandExecuteResponseDto
   }
-  'keymap.get': {
+  'keymap.read': {
     request: EmptyRequest
-    response: KeymapResourceDto
+    response: KeymapStorageResourceDto
   }
-  'keymap.override.set': {
-    request: KeymapOverrideSetRequest
-    response: KeymapResourceDto
+  'keymap.write': {
+    request: KeymapWriteRequest
+    response: KeymapStorageResourceDto
   }
-  'keymap.override.remove': {
-    request: KeymapOverrideRemoveRequest
-    response: KeymapResourceDto
-  }
-  'keymap.reset': {
-    request: KeymapResetRequest
-    response: KeymapResourceDto
+  'keymap.delete': {
+    request: KeymapDeleteRequest
+    response: KeymapStorageResourceDto
   }
 }
 
@@ -127,16 +111,11 @@ const backendErrorSchema = z.object({
 })
 
 const keymapRevisionSchema = z.number().int().nonnegative()
-const keymapOverrideSetRequestSchema = z.object({
+const keymapWriteRequestSchema = z.object({
   expected_revision: keymapRevisionSchema,
-  context: z.string().min(1),
-  trigger: keymapTriggerSchema,
-  target: keymapTargetSchema.nullable(),
+  document: z.unknown(),
 })
-const keymapOverrideRemoveRequestSchema = keymapOverrideSetRequestSchema.omit({
-  target: true,
-})
-const keymapResetRequestSchema = z.object({
+const keymapDeleteRequestSchema = z.object({
   expected_revision: keymapRevisionSchema,
 })
 
@@ -146,10 +125,9 @@ const responseSchemas = {
   'state.get': projectSnapshotSchema,
   'library.get': librarySnapshotSchema,
   'command.execute': commandResponseSchema,
-  'keymap.get': keymapResourceSchema,
-  'keymap.override.set': keymapResourceSchema,
-  'keymap.override.remove': keymapResourceSchema,
-  'keymap.reset': keymapResourceSchema,
+  'keymap.read': keymapStorageResourceSchema,
+  'keymap.write': keymapStorageResourceSchema,
+  'keymap.delete': keymapStorageResourceSchema,
 } satisfies { [K in BridgeMethod]: z.ZodType<BridgeMethodMap[K]['response']> }
 
 const requestSchemas = {
@@ -175,10 +153,9 @@ const requestSchemas = {
       }).nullable(),
     }),
   }),
-  'keymap.get': z.object({}).strict(),
-  'keymap.override.set': keymapOverrideSetRequestSchema,
-  'keymap.override.remove': keymapOverrideRemoveRequestSchema,
-  'keymap.reset': keymapResetRequestSchema,
+  'keymap.read': z.object({}).strict(),
+  'keymap.write': keymapWriteRequestSchema,
+  'keymap.delete': keymapDeleteRequestSchema,
 } satisfies { [K in BridgeMethod]: z.ZodType<BridgeMethodMap[K]['request']> }
 
 const defaultTimeouts = {
@@ -187,10 +164,9 @@ const defaultTimeouts = {
   'state.get': 5_000,
   'library.get': 5_000,
   'command.execute': 15_000,
-  'keymap.get': 5_000,
-  'keymap.override.set': 15_000,
-  'keymap.override.remove': 15_000,
-  'keymap.reset': 15_000,
+  'keymap.read': 5_000,
+  'keymap.write': 15_000,
+  'keymap.delete': 15_000,
 } satisfies Record<BridgeMethod, number>
 
 export class BridgeTimeoutError extends Error {

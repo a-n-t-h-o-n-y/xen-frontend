@@ -2,9 +2,9 @@ import type {
   CatalogDto,
   CommandExecuteResponseDto,
   MeasureEntryDto,
-  KeymapBindingDto,
+  KeymapDocumentDto,
   KeymapOverrideDto,
-  KeymapResourceDto,
+  KeymapStorageResourceDto,
   KeymapTargetDto,
   KeymapTriggerDto,
   LibrarySnapshotDto,
@@ -25,7 +25,10 @@ import type {
   Scale,
   SessionReference,
 } from './models'
-import type { KeymapBinding, KeymapOverride, KeymapTarget, KeymapTrigger } from './keymap'
+import type { KeymapOverride, KeymapTarget, KeymapTrigger } from './keymap'
+import { defaultKeymapBindings } from './defaultKeymap'
+import { mergeKeymapOverrides } from './keymap'
+import { parseKeymapDocument } from './contracts'
 
 export const scaleFromDto = (definition: ScaleDefinitionDto): Scale => ({
   name: definition.name,
@@ -197,28 +200,23 @@ export const triggerToDto = (trigger: KeymapTrigger): KeymapTriggerDto => ({
 export const targetFromDto = (target: KeymapTargetDto): KeymapTarget => target
 export const targetToDto = (target: KeymapTarget): KeymapTargetDto => target
 
-const bindingFromDto = (binding: KeymapBindingDto): KeymapBinding => ({
-  trigger: triggerFromDto(binding.trigger),
-  target: targetFromDto(binding.target),
-})
-
 const overrideFromDto = (override: KeymapOverrideDto): KeymapOverride => ({
   context: override.context,
   trigger: triggerFromDto(override.trigger),
   target: override.target ? targetFromDto(override.target) : null,
 })
 
-export const keymapFromDto = (resource: KeymapResourceDto): KeymapResource => ({
+export const keymapFromDto = (resource: KeymapStorageResourceDto): KeymapResource => {
+  const document = resource.document === null ? null : parseKeymapDocument(resource.document)
+  const overrides = document?.overrides.map(overrideFromDto) ?? []
+  return {
   revision: resource.revision,
-  keySemantics: resource.key_semantics,
-  bindings: Object.fromEntries(
-    Object.entries(resource.bindings).map(([context, bindings]) => [
-      context,
-      bindings.map(bindingFromDto),
-    ])
-  ),
-  overrides: resource.overrides.map(overrideFromDto),
-})
+  keySemantics: 'KeyboardEvent.key',
+  bindings: mergeKeymapOverrides(defaultKeymapBindings, overrides),
+  overrides,
+  document,
+  }
+}
 
 export const sessionReferenceFromCatalogDto = (catalog: CatalogDto): SessionReference => ({
   commands: catalog.commands.map((command) => {
@@ -272,28 +270,15 @@ export const commandContextToDto = (context: CommandContext) => ({
     : null,
 })
 
-export const keymapOverrideSetRequestToDto = (
-  expectedRevision: number,
-  payload: {
-    context: string
-    trigger: KeymapTrigger
-    target: KeymapTarget | null
-  }
-) => ({
-  expected_revision: expectedRevision,
-  context: payload.context,
-  trigger: triggerToDto(payload.trigger),
-  target: payload.target ? targetToDto(payload.target) : null,
-})
-
-export const keymapOverrideRemoveRequestToDto = (
-  expectedRevision: number,
-  payload: {
-    context: string
-    trigger: KeymapTrigger
-  }
-) => ({
-  expected_revision: expectedRevision,
-  context: payload.context,
-  trigger: triggerToDto(payload.trigger),
+export const keymapOverridesToDocument = (
+  currentDocument: Record<string, unknown> | null,
+  overrides: readonly KeymapOverride[]
+): KeymapDocumentDto => ({
+  ...(currentDocument ?? {}),
+  schema_version: 1,
+  overrides: overrides.map((override) => ({
+    context: override.context,
+    trigger: triggerToDto(override.trigger),
+    target: override.target ? targetToDto(override.target) : null,
+  })),
 })

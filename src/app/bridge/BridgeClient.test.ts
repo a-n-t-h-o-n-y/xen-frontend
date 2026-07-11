@@ -58,7 +58,7 @@ const responseEnvelope = (
   requestId: string,
   payload: Record<string, unknown>
 ) => ({
-  protocol: 'xen.bridge.v1',
+  protocol: 'xen.bridge.v2',
   type: 'response',
   name,
   request_id: requestId,
@@ -89,7 +89,7 @@ describe('BridgeClient', () => {
 
     expect(payload.project_revision).toBe(3)
     expect(JSON.parse(rawRequest)).toEqual({
-      protocol: 'xen.bridge.v1',
+      protocol: 'xen.bridge.v2',
       type: 'request',
       name: 'state.get',
       request_id: 'req-test',
@@ -132,6 +132,25 @@ describe('BridgeClient', () => {
     })
 
     expect(JSON.parse(rawRequest).payload).toEqual({ channel_id: 'drums' })
+  })
+
+  it('writes opaque keymap documents using the storage revision', async () => {
+    let rawRequest = ''
+    const client = createClient(async (requestJson) => {
+      rawRequest = requestJson
+      return responseEnvelope('keymap.write', 'req-test', {
+        revision: 12,
+        document: { schema_version: 1, overrides: [], future_setting: true },
+      })
+    })
+
+    const result = await client.request('keymap.write', {
+      expected_revision: 8,
+      document: { schema_version: 1, overrides: [], future_setting: true },
+    })
+
+    expect(JSON.parse(rawRequest).payload.expected_revision).toBe(8)
+    expect(result.document).toMatchObject({ future_setting: true })
   })
 
   it('rejects mismatched response method names', async () => {

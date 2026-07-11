@@ -143,6 +143,34 @@ export const triggerIdentity = (trigger: KeymapTrigger): string => [
 export const triggersEqual = (left: KeymapTrigger, right: KeymapTrigger): boolean =>
   triggerIdentity(left) === triggerIdentity(right)
 
+export const mergeKeymapOverrides = (
+  defaults: Readonly<Record<string, readonly KeymapBinding[]>>,
+  overrides: readonly KeymapOverride[]
+): Record<string, KeymapBinding[]> => {
+  const merged = Object.fromEntries(
+    Object.entries(defaults).map(([context, contextBindings]) => [
+      context,
+      contextBindings.map((binding) => ({ ...binding })),
+    ])
+  )
+  for (const override of overrides) {
+    const contextBindings = merged[override.context] ?? []
+    const index = contextBindings.findIndex((binding) =>
+      triggersEqual(binding.trigger, override.trigger)
+    )
+    if (override.target === null) {
+      if (index >= 0) contextBindings.splice(index, 1)
+    } else if (index >= 0) {
+      contextBindings[index] = { trigger: override.trigger, target: override.target }
+    } else {
+      contextBindings.push({ trigger: override.trigger, target: override.target })
+    }
+    if (contextBindings.length > 0) merged[override.context] = contextBindings
+    else delete merged[override.context]
+  }
+  return merged
+}
+
 export const matchesKeymapTrigger = (
   trigger: KeymapTrigger,
   event: KeyboardEvent,

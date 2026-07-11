@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { parseKeymapResource } from './contracts'
 import {
   expandNumericPlaceholders,
   findKeymapBinding,
@@ -9,30 +8,25 @@ import {
   normalizeKey,
   triggerIdentity,
 } from './keymap'
-import {
-  keymapFromDto,
-  keymapOverrideRemoveRequestToDto,
-  keymapOverrideSetRequestToDto,
-} from './mappers'
 import { ingestKeymapResource } from './resources'
 import {
   formatKeymapContext,
   getCommandKeymapContext,
   runCommandUiAction,
 } from './uiActions'
+import type { KeymapResource } from './models'
 
 describe('keymap routing', () => {
-  const resource = keymapFromDto(parseKeymapResource({
-    schema_version: 1,
+  const resource: KeymapResource = {
     revision: 4,
-    key_semantics: 'KeyboardEvent.key',
+    keySemantics: 'KeyboardEvent.key',
     bindings: {
       sequence: [
         {
           trigger: {
             key: 'h',
             modifiers: { shift: true, command: false, alt: false },
-            when: { input_mode: 'pitch' },
+            when: { inputMode: 'pitch' },
           },
           target: {
             type: 'ui_action',
@@ -203,7 +197,8 @@ describe('keymap routing', () => {
       ],
     },
     overrides: [],
-  }))
+    document: null,
+  }
 
   it('normalizes only ASCII capital letters and expands numeric placeholders', () => {
     expect(normalizeKey('H')).toBe('h')
@@ -315,26 +310,6 @@ describe('keymap routing', () => {
     expect(getCommandKeymapContext(true)).toBe('command.completions')
   })
 
-  it('maps keymap override requests back to DTO trigger conditions', () => {
-    const trigger = resource.bindings.sequence![0]!.trigger
-    expect(keymapOverrideSetRequestToDto(4, {
-      context: 'sequence',
-      trigger,
-      target: resource.bindings.sequence![0]!.target,
-    })).toMatchObject({
-      expected_revision: 4,
-      context: 'sequence',
-      trigger: { when: { input_mode: 'pitch' } },
-    })
-    expect(keymapOverrideRemoveRequestToDto(4, {
-      context: 'sequence',
-      trigger,
-    })).toMatchObject({
-      expected_revision: 4,
-      trigger: { when: { input_mode: 'pitch' } },
-    })
-  })
-
   it('parses no-argument workspace UI actions', () => {
     const binding = resource.bindings.sequence![1]!
     expect(binding.target).toMatchObject({
@@ -344,9 +319,10 @@ describe('keymap routing', () => {
     })
   })
 
-  it('installs only newer keymap revisions', () => {
+  it('installs changed content-derived keymap revisions', () => {
     expect(ingestKeymapResource(null, resource).installed).toBe(true)
     expect(ingestKeymapResource(resource, { ...resource, revision: 4 }).installed).toBe(false)
+    expect(ingestKeymapResource(resource, { ...resource, revision: 3 }).installed).toBe(true)
     expect(ingestKeymapResource(resource, { ...resource, revision: 5 }).installed).toBe(true)
   })
 

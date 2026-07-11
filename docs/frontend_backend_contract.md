@@ -16,7 +16,7 @@ All messages use:
 
 ```ts
 type Envelope = {
-  protocol: 'xen.bridge.v1'
+  protocol: 'xen.bridge.v2'
   type: 'request' | 'response' | 'event'
   name: string
   request_id?: string
@@ -42,13 +42,13 @@ Start with `session.hello`:
 
 ```ts
 type SessionHelloRequest = {
-  protocol: 'xen.bridge.v1'
+  protocol: 'xen.bridge.v2'
   frontend_app: string
   frontend_version: string
 }
 
 type SessionHello = {
-  protocol: 'xen.bridge.v1'
+  protocol: 'xen.bridge.v2'
   plugin_version: string
   project_schema_version: 1
   library_schema_version: 1
@@ -233,24 +233,26 @@ not add a bridge endpoint.
 
 ## Keymap
 
-The backend owns default bindings, persisted overrides, validation, revisioning, and
-publication. The frontend owns browser event matching, context selection, UI-action
-dispatch, and the shortcut settings UI. The frontend must not write the keymap file
-directly.
+The backend treats the keymap document as opaque JSON and owns filesystem access,
+atomic persistence, content-derived revisions, concurrency checks, and publication.
+The frontend owns default bindings, document validation and migration, override
+merging, browser event matching, context selection, action dispatch, and editing.
 
 Key triggers use `KeyboardEvent.key`, not `KeyboardEvent.code`. The `command`
 modifier means `metaKey` on macOS and `ctrlKey` on Windows/Linux. Normalize single
 ASCII letters to lowercase; preserve other key values exactly.
 
-`session.hello.payload.keymap`, `keymap.get`, keymap mutation responses, and
+`session.hello.payload.keymap`, keymap storage responses, and
 `keymap.changed` all use:
 
 ```ts
 type KeymapResource = {
-  schema_version: 1
   revision: number
-  key_semantics: 'KeyboardEvent.key'
-  bindings: Record<string, KeymapBinding[]>
+  document: unknown | null
+}
+
+type KeymapDocument = {
+  schema_version: 1
   overrides: KeymapOverride[]
 }
 
@@ -313,28 +315,25 @@ Current UI actions:
 Command targets are sent to `command.execute`. UI actions are handled locally and
 must not be sent to the backend command parser.
 
-Keymap mutation requests:
+The storage API is:
 
 ```ts
-type KeymapOverrideSetRequest = {
-  expected_revision: number
-  context: string
-  trigger: KeymapTrigger
-  target: KeymapTarget | null
-}
+keymap.read({})
 
-type KeymapOverrideRemoveRequest = {
+keymap.write({
   expected_revision: number
-  context: string
-  trigger: KeymapTrigger
-}
+  document: unknown
+})
 
-type KeymapResetRequest = {
+keymap.delete({
   expected_revision: number
-}
+})
 ```
 
-All mutation responses return the complete updated `KeymapResource`.
+All responses return the complete storage `KeymapResource`. A missing or deleted
+file has `document: null`. Revisions are opaque content identities, not ordered
+counters; clients install resources whose revision differs from the current one.
+The frontend writes complete documents and preserves unknown document fields.
 
 ## Events
 

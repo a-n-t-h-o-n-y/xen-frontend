@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { libraryFromDto, projectFromDto } from './mappers'
+import {
+  keymapFromDto,
+  keymapOverridesToDocument,
+  libraryFromDto,
+  projectFromDto,
+} from './mappers'
 import { arrangedProjectFixture, libraryFixture, projectFixture } from './testFixtures'
 
 describe('DTO to domain mappers', () => {
@@ -78,5 +83,39 @@ describe('DTO to domain mappers', () => {
       libraryDirectory: 'libraryDirectory',
     })
   })
-})
 
+  it('merges persisted overrides into frontend-owned keymap defaults', () => {
+    const keymap = keymapFromDto({
+      revision: 42,
+      document: {
+        schema_version: 1,
+        revision: 9,
+        future_setting: true,
+        overrides: [{
+          context: 'sequence',
+          trigger: {
+            key: 'h',
+            modifiers: { shift: false, command: false, alt: false },
+          },
+          target: null,
+        }],
+      },
+    })
+
+    expect(keymap.revision).toBe(42)
+    expect(keymap.bindings.sequence?.some((binding) =>
+      binding.trigger.key === 'h' && !binding.trigger.modifiers.shift
+    )).toBe(false)
+    expect(keymap.bindings.sequence?.some((binding) => binding.trigger.key === 'l')).toBe(true)
+    expect(keymap.document).toMatchObject({ revision: 9, future_setting: true })
+  })
+
+  it('uses defaults for a missing file and preserves unknown document fields on edits', () => {
+    const keymap = keymapFromDto({ revision: 7, document: null })
+    expect(keymap.bindings.composition).not.toHaveLength(0)
+    expect(keymap.overrides).toEqual([])
+
+    expect(keymapOverridesToDocument({ schema_version: 1, future_setting: true }, []))
+      .toEqual({ schema_version: 1, future_setting: true, overrides: [] })
+  })
+})
