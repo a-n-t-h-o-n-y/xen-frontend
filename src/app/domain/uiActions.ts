@@ -222,38 +222,38 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
   },
   'command.open': {
     id: 'command.open',
-    label: 'Open command bar',
-    section: 'Command Bar',
+    label: 'Open Quick Access commands',
+    section: 'Quick Access',
     argumentKind: 'none',
   },
   'command.cancel': {
     id: 'command.cancel',
     label: 'Cancel command',
-    section: 'Command Bar',
+    section: 'Quick Access',
     argumentKind: 'none',
   },
   'command.submit': {
     id: 'command.submit',
     label: 'Submit command',
-    section: 'Command Bar',
+    section: 'Quick Access',
     argumentKind: 'none',
   },
   'command.close_if_empty': {
     id: 'command.close_if_empty',
-    label: 'Close command bar if empty',
-    section: 'Command Bar',
+    label: 'Close Quick Access if empty',
+    section: 'Quick Access',
     argumentKind: 'none',
   },
   'command.history.previous': {
     id: 'command.history.previous',
     label: 'Previous command',
-    section: 'Command Bar',
+    section: 'Quick Access',
     argumentKind: 'none',
   },
   'command.history.next': {
     id: 'command.history.next',
     label: 'Next command',
-    section: 'Command Bar',
+    section: 'Quick Access',
     argumentKind: 'none',
   },
   'command.completion.accept': {
@@ -285,8 +285,8 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
 export const keymapContextLabels: Record<string, string> = {
   sequence: 'Sequencer',
   composition: 'Composition',
-  'command.input': 'Command Bar',
-  'command.completions': 'Command Completions',
+  'command.input': 'Quick Access',
+  'command.completions': 'Quick Access Completions',
 }
 
 export const commandUiActionSet = new Set<string>(commandUiActionIds)

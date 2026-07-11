@@ -38,7 +38,7 @@ type UseCompositionCommandsArgs = {
   installActiveMeasureTarget: (target: ActiveMeasureTarget | null) => void
   installEditorState: (state: EditorState) => void
   installWorkspaceView: (
-    view: 'composition' | 'sequencer' | 'library'
+    view: 'composition' | 'sequencer'
   ) => void
 }
 

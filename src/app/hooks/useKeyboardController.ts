@@ -20,14 +20,14 @@ import type {
 } from '../domain/models'
 import type { ModTarget } from '../domain/modulation'
 
-type WorkspaceView = 'composition' | 'sequencer' | 'library'
+type WorkspaceView = 'composition' | 'sequencer'
 
 type UseKeyboardControllerArgs = {
   bridgeUnavailableMessage: string | null
   isProjectReady: boolean
   settingsOpen: boolean
-  isCommandMode: boolean
-  openCommandMode: () => void
+  isQuickAccessOpen: boolean
+  openCommandPalette: () => void
   executeBackendCommand: (command: string) => Promise<void>
   projectRef: MutableRefObject<ProjectSnapshot | null>
   editorStateRef: MutableRefObject<EditorState>
@@ -54,8 +54,8 @@ export function useKeyboardController({
   bridgeUnavailableMessage,
   isProjectReady,
   settingsOpen,
-  isCommandMode,
-  openCommandMode,
+  isQuickAccessOpen,
+  openCommandPalette,
   executeBackendCommand,
   projectRef,
   editorStateRef,
@@ -392,7 +392,7 @@ export function useKeyboardController({
               isCommandUiActionId(matchedBinding.target.action) &&
               matchedBinding.target.action === 'command.open'
             ) {
-              openCommandMode()
+              openCommandPalette()
             }
           } catch (error) {
             setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
@@ -403,7 +403,7 @@ export function useKeyboardController({
         return
       }
 
-      if (!isCommandMode && isDigitKey) {
+      if (!isQuickAccessOpen && isDigitKey) {
         pendingNumberRef.current = `${pendingNumberRef.current}${event.key}`
         event.preventDefault()
         return
@@ -411,13 +411,13 @@ export function useKeyboardController({
 
       pendingNumberRef.current = ''
 
-      if (isCommandMode) {
+      if (isQuickAccessOpen) {
         return
       }
 
       if (event.key === ':' && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.preventDefault()
-        openCommandMode()
+        openCommandPalette()
       }
     }
 
@@ -433,10 +433,10 @@ export function useKeyboardController({
     compositionSelectionRef,
     installCompositionSelection,
     installEditorState,
-    isCommandMode,
+    isQuickAccessOpen,
     isProjectReady,
     keymapRef,
-    openCommandMode,
+    openCommandPalette,
     projectRef,
     runSelectedCompositionAction,
     selectActiveModulatorTab,
@@ -466,7 +466,7 @@ export function useKeyboardController({
 
       const editableTarget = isEditableTarget(event.target)
 
-      if (bridgeUnavailableMessage !== null || !isProjectReady || editableTarget || isCommandMode) {
+      if (bridgeUnavailableMessage !== null || !isProjectReady || editableTarget || isQuickAccessOpen) {
         return
       }
 
@@ -515,7 +515,7 @@ export function useKeyboardController({
     handleCompositionCellCopy,
     handleCompositionCellCut,
     handleCompositionCellPaste,
-    isCommandMode,
+    isQuickAccessOpen,
     isProjectReady,
     setStatusLevel,
     setStatusMessage,

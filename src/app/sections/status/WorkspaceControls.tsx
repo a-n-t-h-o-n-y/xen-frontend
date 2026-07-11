@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 
-export type WorkspaceView = 'composition' | 'sequencer' | 'library'
+export type WorkspaceView = 'composition' | 'sequencer'
 
 type WorkspaceControlsProps = {
   currentInputMode: string
@@ -43,7 +43,6 @@ export function WorkspaceControls({
         {([
           ['composition', 'Comp'],
           ['sequencer', 'Seq'],
-          ['library', 'Lib'],
         ] as const).map(([view, label]) => (
           <button
             type="button"

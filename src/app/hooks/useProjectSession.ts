@@ -36,7 +36,6 @@ type UseProjectSessionArgs = {
   setEditorState: Dispatch<SetStateAction<EditorState>>
   setSessionReference: Dispatch<SetStateAction<SessionReference>>
   setLibrarySnapshot: Dispatch<SetStateAction<LibrarySnapshot>>
-  setLibraryLoading: Dispatch<SetStateAction<boolean>>
   setPlayheadPhase: Dispatch<SetStateAction<number | null>>
 }
 
@@ -47,7 +46,6 @@ export function useProjectSession({
   setEditorState,
   setSessionReference,
   setLibrarySnapshot,
-  setLibraryLoading,
   setPlayheadPhase,
 }: UseProjectSessionArgs) {
   const eventTokenRef = useRef<unknown>(null)
@@ -150,7 +148,6 @@ export function useProjectSession({
         setSessionReference(sessionReferenceFromCatalogDto(hello.catalog))
         ingestKeymap(keymapFromDto(hello.keymap))
         setStatusMessage('Connected')
-        setLibraryLoading(true)
 
         const [snapshot, librarySnapshot] = await Promise.all([
           request('state.get', {}, { signal: abortController.signal }),
@@ -158,14 +155,12 @@ export function useProjectSession({
         ])
         const installedSnapshot = ingestProject(snapshot)
         ingestLibrary(librarySnapshot)
-        setLibraryLoading(false)
         if (!isMounted) return
         setProjectState({ status: 'ready', snapshot: installedSnapshot })
         setStatusMessage('Project loaded')
         setStatusLevel('info')
       } catch (error) {
         if (!isMounted) return
-        setLibraryLoading(false)
         const message = getErrorMessage(error)
         const bridgeUnavailable = message.startsWith('JUCE bridge unavailable:')
         if (bridgeUnavailable) {
@@ -192,7 +187,6 @@ export function useProjectSession({
     ingestLibrary,
     ingestProject,
     request,
-    setLibraryLoading,
     setLibrarySnapshot,
     setPlayheadPhase,
     setSessionReference,

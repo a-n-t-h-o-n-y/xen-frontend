@@ -27,8 +27,8 @@ describe('WorkspaceControls', () => {
     expect(screen.getByLabelText('Input mode velocity')).toHaveTextContent('V')
     expect(screen.getByRole('button', { name: 'Seq' })).toHaveAttribute('aria-pressed', 'true')
 
-    await user.click(screen.getByRole('button', { name: 'Lib' }))
-    expect(setWorkspaceView).toHaveBeenCalledWith('library')
+    await user.click(screen.getByRole('button', { name: 'Comp' }))
+    expect(setWorkspaceView).toHaveBeenCalledWith('composition')
 
     await user.click(screen.getByRole('button', { name: 'Mod' }))
     const update = setIsModulatorMode.mock.calls[0]?.[0]
@@ -55,6 +55,7 @@ describe('WorkspaceControls', () => {
     )
 
     expect(screen.getByRole('button', { name: 'Comp' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Lib' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Mod' })).toBeDisabled()
   })
 })

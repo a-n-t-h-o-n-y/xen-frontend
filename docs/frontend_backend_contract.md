@@ -226,6 +226,11 @@ type LibraryCommandEntry = {
 Project and library revisions are independent. Active tuning and scale live in the
 project snapshot, not the library snapshot.
 
+The frontend aggregates measures, tunings, and scales into Quick Access. Measures
+currently appear in its Files scope; chords remain cached as command-argument data
+and are not standalone Quick Access actions. This is presentation behavior and does
+not add a bridge endpoint.
+
 ## Keymap
 
 The backend owns default bindings, persisted overrides, validation, revisioning, and
@@ -280,8 +285,11 @@ type KeymapOverride = {
 Current frontend contexts:
 
 - `sequence`: sequencer/default editing shortcuts.
-- `command.input`: command bar focused without active completions.
-- `command.completions`: command bar focused with completions active.
+- `command.input`: Quick Access command input focused without active completions.
+- `command.completions`: Quick Access command input focused with completions active.
+
+The `command.*` identifiers are retained for wire compatibility even though the
+status-bar command surface has been replaced by Quick Access.
 
 Current UI actions:
 

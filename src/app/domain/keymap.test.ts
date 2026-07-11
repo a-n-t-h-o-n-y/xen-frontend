@@ -310,7 +310,7 @@ describe('keymap routing', () => {
       .toBe('Move composition right by 1')
     expect(formatKeymapTarget(resource.bindings['command.input']![0]!.target)).toBe('Cancel command')
     expect(formatKeymapContext('composition')).toBe('Composition')
-    expect(formatKeymapContext('command.completions')).toBe('Command Completions')
+    expect(formatKeymapContext('command.completions')).toBe('Quick Access Completions')
     expect(getCommandKeymapContext(false)).toBe('command.input')
     expect(getCommandKeymapContext(true)).toBe('command.completions')
   })
@@ -421,4 +421,3 @@ describe('keymap routing', () => {
     ])
   })
 })
-

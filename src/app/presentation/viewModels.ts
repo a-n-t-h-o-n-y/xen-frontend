@@ -1,16 +1,6 @@
 import { clampNumber, getChildCells, getPrimaryElement } from '../domain/music'
 import type { Cell, MusicElement, NoteSpanIR } from '../domain/music'
-import type { LibraryCommandEntry, PatternPrefix } from '../domain/models'
-
-export type LibraryHierarchyRow = {
-  kind: 'directory' | 'file'
-  key: string
-  label: string
-  depth: number
-  entry?: LibraryCommandEntry
-}
-
-export type TuningSortMode = 'name' | 'noteCount' | 'octave'
+import type { PatternPrefix } from '../domain/models'
 
 export type BgOverlayState = {
   sequenceIndex: number
@@ -34,56 +24,6 @@ export type TimeSignatureParts = {
 
 export const getSequenceOverlayColor = (_sequenceIndex: number, alpha: number): string =>
   `rgb(245 196 90 / ${clampNumber(alpha, 0, 1)})`
-
-export const formatOctaveForDisplay = (value: number): string => {
-  const rounded = value.toFixed(2)
-  return rounded.endsWith('.00') ? rounded.slice(0, -3) : rounded
-}
-
-export const getHierarchyRows = (
-  entries: LibraryCommandEntry[],
-  options?: { sortByName?: boolean }
-): LibraryHierarchyRow[] => {
-  const directoryRows = new Set<string>()
-  const rows: LibraryHierarchyRow[] = []
-
-  const sortedEntries = options?.sortByName === false
-    ? [...entries]
-    : [...entries].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-
-  for (const entry of sortedEntries) {
-    const normalized = entry.name.replace(/\\/g, '/')
-    const parts = normalized.split('/').filter((part) => part.length > 0)
-    const fallbackLabel = entry.name || entry.stem
-    const leafLabel = parts[parts.length - 1] ?? fallbackLabel
-    const directories = parts.slice(0, -1)
-
-    let currentPath = ''
-    directories.forEach((directory, index) => {
-      currentPath = currentPath ? `${currentPath}/${directory}` : directory
-      if (directoryRows.has(currentPath)) {
-        return
-      }
-      directoryRows.add(currentPath)
-      rows.push({
-        kind: 'directory',
-        key: `dir:${currentPath}`,
-        label: directory,
-        depth: index,
-      })
-    })
-
-    rows.push({
-      kind: 'file',
-      key: `file:${normalized}:${entry.path || entry.name}`,
-      label: leafLabel,
-      depth: directories.length,
-      entry,
-    })
-  }
-
-  return rows
-}
 
 export const parsePatternPrefix = (value: string): PatternPrefix | null => {
   const tokens = value

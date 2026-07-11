@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { HeaderSection } from './app/sections/HeaderSection'
-import { useCommandState } from './app/hooks/useCommandState'
 import { useCompositionCommands } from './app/hooks/useCompositionCommands'
 import { useHeaderEditing } from './app/hooks/useHeaderEditing'
-import { useLibraryPanelState } from './app/hooks/useLibraryPanelState'
 import { useModulatorPanelState } from './app/hooks/useModulatorPanelState'
 import { useProjectSession } from './app/hooks/useProjectSession'
-import { useCommandController } from './app/hooks/useCommandController'
 import { useKeyboardController } from './app/hooks/useKeyboardController'
 import { useModulatorController } from './app/hooks/useModulatorController'
 import { useProjectViewModel } from './app/hooks/useProjectViewModel'
+import { useQuickAccessPalette } from './app/hooks/useQuickAccessPalette'
 import { useScaleMenu } from './app/hooks/useScaleMenu'
+import { useSessionResources } from './app/hooks/useSessionResources'
 import { useSettingsOverlayState } from './app/hooks/useSettingsOverlayState'
 import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
@@ -18,17 +17,13 @@ import { CompositionSection } from './app/sections/CompositionSection'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { StatusSection } from './app/sections/StatusSection'
 import { SettingsOverlay } from './app/sections/SettingsOverlay'
-import { LibraryPanel } from './app/sections/bottom/LibraryPanel'
+import { QuickAccessPalette } from './app/sections/QuickAccessPalette'
 import { ModulatorsPanel } from './app/sections/bottom/ModulatorsPanel'
 import {
   DEFAULT_TUNING_LENGTH,
   createTransportState,
 } from './app/constants'
-import { getErrorMessage } from './app/utils/errors'
 import { clampNumber } from './app/domain/music'
-import {
-  formatOctaveForDisplay,
-} from './app/presentation/viewModels'
 import type {
   Cell,
   ActiveMeasureTarget,
@@ -37,7 +32,7 @@ import type {
   TransportState,
 } from './app/domain/models'
 
-type WorkspaceView = 'composition' | 'sequencer' | 'library'
+type WorkspaceView = 'composition' | 'sequencer'
 
 const EMPTY_ROOT_CELL: Cell = { weight: 1, elements: [] }
 const INITIAL_COMPOSITION_SELECTION: CompositionSelection = { rowIndex: 0, columnIndex: 0 }
@@ -56,31 +51,6 @@ function App() {
   const compositionSelectionRef = useRef<CompositionSelection>(compositionSelection)
   const workspaceViewRef = useRef<WorkspaceView>(workspaceView)
   const [isModulatorMode, setIsModulatorMode] = useState(false)
-  const {
-    isCommandMode,
-    commandText,
-    setCommandText,
-    commandHistory,
-    setCommandHistory,
-    historyIndex,
-    setHistoryIndex,
-    completionMode,
-    setCompletionMode,
-    isCompletionDismissed,
-    setIsCompletionDismissed,
-    selectedCompletionIndex,
-    setSelectedCompletionIndex,
-    isCompletionNavigationActive,
-    setIsCompletionNavigationActive,
-    isHistoryNavigationFrozen,
-    setIsHistoryNavigationFrozen,
-    recentCommandIds,
-    setRecentCommandIds,
-    liveCommandBufferRef,
-    openCommandMode,
-    closeCommandMode,
-  } = useCommandState()
-  const commandInputRef = useRef<HTMLInputElement>(null)
   const timeSignatureInputRef = useRef<HTMLInputElement>(null)
   const keyInputRef = useRef<HTMLInputElement>(null)
   const baseFrequencyInputRef = useRef<HTMLInputElement>(null)
@@ -91,22 +61,11 @@ function App() {
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
   const [modulatorPreviewWidth, setModulatorPreviewWidth] = useState(0)
   const {
-    tuningSearch,
-    setTuningSearch,
-    tuningSearchInputRef,
-    measureSearch,
-    setMeasureSearch,
-    measureSearchInputRef,
-    tuningSortMode,
-    setTuningSortMode,
     sessionReference,
     setSessionReference,
     librarySnapshot,
     setLibrarySnapshot,
-    setLibraryLoading,
-    tuningHierarchyRows,
-    measureHierarchyRows,
-  } = useLibraryPanelState()
+  } = useSessionResources()
   const {
     activeModulatorTab,
     selectActiveModulatorTab,
@@ -138,10 +97,24 @@ function App() {
     setEditorState,
     setSessionReference,
     setLibrarySnapshot,
-    setLibraryLoading,
     setPlayheadPhase,
   })
   const settingsOverlay = useSettingsOverlayState(keymapController.clearError)
+  const quickAccess = useQuickAccessPalette({
+    commands: sessionReference.commands,
+    executeBackendCommand,
+    setStatusMessage,
+    setStatusLevel,
+  })
+  const openQuickAccess = quickAccess.open
+  const openAllQuickAccess = useCallback((): void => {
+    setOpenScaleMenu(false)
+    openQuickAccess('all')
+  }, [openQuickAccess, setOpenScaleMenu])
+  const openCommandPalette = useCallback((): void => {
+    setOpenScaleMenu(false)
+    openQuickAccess('commands')
+  }, [openQuickAccess, setOpenScaleMenu])
 
   const installEditorState = useCallback((nextState: EditorState): void => {
     editorStateRef.current = nextState
@@ -155,21 +128,6 @@ function App() {
     : projectState.status === 'error'
       ? projectState.message
       : 'Project is loading'
-
-  const { submitCommand } = useCommandController({
-    isCommandMode,
-    commandText,
-    commandInputRef,
-    setCommandHistory,
-    setHistoryIndex,
-    liveCommandBufferRef,
-    closeCommandMode,
-    setRecentCommandIds,
-    commands: sessionReference.commands,
-    executeBackendCommand,
-    setStatusMessage,
-    setStatusLevel,
-  })
 
   const installCompositionSelection = useCallback((nextSelection: CompositionSelection): void => {
     compositionSelectionRef.current = nextSelection
@@ -354,8 +312,8 @@ function App() {
     bridgeUnavailableMessage,
     isProjectReady,
     settingsOpen: settingsOverlay.open,
-    isCommandMode,
-    openCommandMode,
+    isQuickAccessOpen: quickAccess.state.open,
+    openCommandPalette,
     executeBackendCommand,
     projectRef,
     editorStateRef,
@@ -383,22 +341,6 @@ function App() {
       setOpenWaveMenu(null)
     }
   }, [isModulatorMode, setOpenWaveMenu])
-
-  const runLibraryCommand = useCallback(
-    async (command: string): Promise<void> => {
-      if (!command || bridgeUnavailableMessage !== null || !isProjectReady) {
-        return
-      }
-
-      try {
-        await executeBackendCommand(command)
-      } catch (error) {
-        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
-        setStatusLevel('error')
-      }
-    },
-    [bridgeUnavailableMessage, executeBackendCommand, isProjectReady, setStatusLevel, setStatusMessage]
-  )
 
   useEffect(() => {
     const handleContextMenu = (event: MouseEvent): void => {
@@ -451,6 +393,7 @@ function App() {
         scaleMode={scaleMode}
         applyModeSelection={applyModeSelection}
         tuningName={tuningName}
+        onOpenQuickAccess={openAllQuickAccess}
       />
       <section className="workspaceSection" aria-label="Workspace">
         {!isProjectReady ? (
@@ -538,29 +481,6 @@ function App() {
                 setModulatorPreviewWidth={setModulatorPreviewWidth}
               />
             </div>
-            <div
-              className="workspacePane"
-              hidden={workspaceView !== 'library'}
-              aria-hidden={workspaceView !== 'library'}
-            >
-              <LibraryPanel
-                librarySnapshot={librarySnapshot}
-                activeTuningName={tuningName}
-                activeScaleId={scaleSourceId}
-                runLibraryCommand={runLibraryCommand}
-                tuningSearchInputRef={tuningSearchInputRef}
-                tuningSearch={tuningSearch}
-                setTuningSearch={setTuningSearch}
-                tuningSortMode={tuningSortMode}
-                setTuningSortMode={setTuningSortMode}
-                tuningHierarchyRows={tuningHierarchyRows}
-                formatOctaveForDisplay={formatOctaveForDisplay}
-                measureSearchInputRef={measureSearchInputRef}
-                measureSearch={measureSearch}
-                setMeasureSearch={setMeasureSearch}
-                measureHierarchyRows={measureHierarchyRows}
-              />
-            </div>
           </>
         ) : (
           <div className="workspaceNotice" role="status" aria-live="polite">
@@ -576,37 +496,15 @@ function App() {
         setWorkspaceView={installWorkspaceView}
         isModulatorMode={isModulatorMode}
         setIsModulatorMode={setIsModulatorMode}
-        isCommandMode={isCommandMode}
-        submitCommand={submitCommand}
-        keymapResource={keymapController.resource}
-        commandInputRef={commandInputRef}
-        commandText={commandText}
-        setCommandText={setCommandText}
-        historyIndex={historyIndex}
-        setHistoryIndex={setHistoryIndex}
-        closeCommandMode={closeCommandMode}
-        commandHistory={commandHistory}
-        liveCommandBufferRef={liveCommandBufferRef}
-        commands={sessionReference.commands}
-        completionMode={completionMode}
-        setCompletionMode={setCompletionMode}
-        isCompletionDismissed={isCompletionDismissed}
-        setIsCompletionDismissed={setIsCompletionDismissed}
-        selectedCompletionIndex={selectedCompletionIndex}
-        setSelectedCompletionIndex={setSelectedCompletionIndex}
-        isCompletionNavigationActive={isCompletionNavigationActive}
-        setIsCompletionNavigationActive={setIsCompletionNavigationActive}
-        isHistoryNavigationFrozen={isHistoryNavigationFrozen}
-        setIsHistoryNavigationFrozen={setIsHistoryNavigationFrozen}
-        recentCommandIds={recentCommandIds}
-        setRecentCommandIds={setRecentCommandIds}
         statusLevel={statusLevel}
         statusMessage={statusMessage}
         selectedCellMeta={selectedCellMeta}
-        commandDisabled={!isProjectReady}
         workspaceDisabled={!isProjectReady}
         modulatorDisabled={!isProjectReady || workspaceView !== 'sequencer'}
-        onOpenSettings={settingsOverlay.openOverlay}
+        onOpenSettings={() => {
+          quickAccess.close(false)
+          settingsOverlay.openOverlay()
+        }}
         modulatorRail={isProjectReady && isModulatorMode && workspaceView === 'sequencer' ? (
           <ModulatorsPanel
             activeModulatorTab={activeModulatorTab}
@@ -624,6 +522,15 @@ function App() {
             tuningLength={tuningLength}
           />
         ) : null}
+      />
+      <QuickAccessPalette
+        controller={quickAccess}
+        commands={sessionReference.commands}
+        librarySnapshot={librarySnapshot}
+        activeTuningName={tuningName}
+        activeScaleId={scaleSourceId}
+        keymapResource={keymapController.resource}
+        currentInputMode={editorState.inputMode}
       />
       <SettingsOverlay
         open={settingsOverlay.open}

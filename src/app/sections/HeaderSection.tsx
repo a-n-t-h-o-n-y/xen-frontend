@@ -41,6 +41,7 @@ type HeaderSectionProps = {
   scaleMode: number
   applyModeSelection: (modeIndex: number) => Promise<void>
   tuningName: string
+  onOpenQuickAccess: () => void
 }
 
 export function HeaderSection({
@@ -83,6 +84,7 @@ export function HeaderSection({
   scaleMode,
   applyModeSelection,
   tuningName,
+  onOpenQuickAccess,
 }: HeaderSectionProps) {
   return (
     <header className="header">
@@ -233,8 +235,19 @@ export function HeaderSection({
           )}
         </div>
       </div>
-      <div className="headerSpacer" aria-hidden="true">
-        <span className="headerAppName">XenSequencer</span>
+      <div className="headerSpacer">
+        <button
+          type="button"
+          className="headerQuickAccessTrigger"
+          onClick={onOpenQuickAccess}
+          disabled={disabledReason !== null}
+          aria-label="Open quick access"
+        >
+          <span className="headerQuickAccessIcon" aria-hidden="true">⌕</span>
+          <span className="headerQuickAccessLabel">
+            Search files, tunings, scales, and commands
+          </span>
+        </button>
       </div>
       <div className="headerField headerField-scale">
         <span className="fieldLabel">Scale</span>
