@@ -55,7 +55,7 @@ describe('schema contract validation', () => {
         }],
       },
       keymap: {
-        revision: 2,
+        revision: '18446744073709551615',
         document: {
           schema_version: 1,
           overrides: [{
@@ -73,7 +73,11 @@ describe('schema contract validation', () => {
         },
       },
     })
-    expect(hello.keymap.revision).toBe(2)
+    expect(hello.keymap.revision).toBe('18446744073709551615')
+    expect(() => parseSessionHello({
+      ...hello,
+      keymap: { revision: 9_223_372_036_854_776_000, document: null },
+    })).toThrow()
     expect(hello.catalog.commands[0]?.arguments[0]?.constraints[0]?.maximum).toBe(1)
     expect(() => parseSessionHello({
       ...hello,

@@ -86,7 +86,7 @@ describe('DTO to domain mappers', () => {
 
   it('merges persisted overrides into frontend-owned keymap defaults', () => {
     const keymap = keymapFromDto({
-      revision: 42,
+      revision: '18446744073709551615',
       document: {
         schema_version: 1,
         revision: 9,
@@ -102,7 +102,7 @@ describe('DTO to domain mappers', () => {
       },
     })
 
-    expect(keymap.revision).toBe(42)
+    expect(keymap.revision).toBe('18446744073709551615')
     expect(keymap.bindings.sequence?.some((binding) =>
       binding.trigger.key === 'h' && !binding.trigger.modifiers.shift
     )).toBe(false)
@@ -111,7 +111,7 @@ describe('DTO to domain mappers', () => {
   })
 
   it('uses defaults for a missing file and preserves unknown document fields on edits', () => {
-    const keymap = keymapFromDto({ revision: 7, document: null })
+    const keymap = keymapFromDto({ revision: '7', document: null })
     expect(keymap.bindings.composition).not.toHaveLength(0)
     expect(keymap.overrides).toEqual([])
 

@@ -18,7 +18,7 @@ import type { KeymapResource } from './models'
 
 describe('keymap routing', () => {
   const resource: KeymapResource = {
-    revision: 4,
+    revision: '4',
     keySemantics: 'KeyboardEvent.key',
     bindings: {
       sequence: [
@@ -321,9 +321,9 @@ describe('keymap routing', () => {
 
   it('installs changed content-derived keymap revisions', () => {
     expect(ingestKeymapResource(null, resource).installed).toBe(true)
-    expect(ingestKeymapResource(resource, { ...resource, revision: 4 }).installed).toBe(false)
-    expect(ingestKeymapResource(resource, { ...resource, revision: 3 }).installed).toBe(true)
-    expect(ingestKeymapResource(resource, { ...resource, revision: 5 }).installed).toBe(true)
+    expect(ingestKeymapResource(resource, { ...resource, revision: '4' }).installed).toBe(false)
+    expect(ingestKeymapResource(resource, { ...resource, revision: '3' }).installed).toBe(true)
+    expect(ingestKeymapResource(resource, { ...resource, revision: '5' }).installed).toBe(true)
   })
 
   it('runs command UI actions with applicability checks', () => {

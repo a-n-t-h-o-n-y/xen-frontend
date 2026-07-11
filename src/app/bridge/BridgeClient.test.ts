@@ -139,17 +139,17 @@ describe('BridgeClient', () => {
     const client = createClient(async (requestJson) => {
       rawRequest = requestJson
       return responseEnvelope('keymap.write', 'req-test', {
-        revision: 12,
+        revision: '18446744073709551615',
         document: { schema_version: 1, overrides: [], future_setting: true },
       })
     })
 
     const result = await client.request('keymap.write', {
-      expected_revision: 8,
+      expected_revision: '9223372036854775808',
       document: { schema_version: 1, overrides: [], future_setting: true },
     })
 
-    expect(JSON.parse(rawRequest).payload.expected_revision).toBe(8)
+    expect(JSON.parse(rawRequest).payload.expected_revision).toBe('9223372036854775808')
     expect(result.document).toMatchObject({ future_setting: true })
   })
 

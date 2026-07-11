@@ -8,17 +8,17 @@ describe('useKeymapController', () => {
     const requestMock = vi.fn(async (name: string, payload: unknown) => {
       if (name === 'keymap.write') {
         const request = payload as { document: unknown }
-        return { revision: 20, document: request.document }
+        return { revision: '20', document: request.document }
       }
-      if (name === 'keymap.delete') return { revision: 0, document: null }
-      return { revision: 10, document: null }
+      if (name === 'keymap.delete') return { revision: '0', document: null }
+      return { revision: '10', document: null }
     })
     const request = requestMock as unknown as Parameters<typeof useKeymapController>[0]['request']
     const { result } = renderHook(() => useKeymapController({ request }))
 
     act(() => {
       result.current.ingestKeymap(keymapFromDto({
-        revision: 10,
+        revision: '10',
         document: { schema_version: 1, future_setting: true, overrides: [] },
       }))
     })
@@ -30,17 +30,17 @@ describe('useKeymapController', () => {
     await act(() => result.current.disable('sequence', trigger))
 
     expect(requestMock).toHaveBeenCalledWith('keymap.write', {
-      expected_revision: 10,
+      expected_revision: '10',
       document: {
         schema_version: 1,
         future_setting: true,
         overrides: [{ context: 'sequence', trigger, target: null }],
       },
     })
-    expect(result.current.resource?.revision).toBe(20)
+    expect(result.current.resource?.revision).toBe('20')
 
     await act(() => result.current.reset())
-    expect(requestMock).toHaveBeenLastCalledWith('keymap.delete', { expected_revision: 20 })
+    expect(requestMock).toHaveBeenLastCalledWith('keymap.delete', { expected_revision: '20' })
     expect(result.current.resource?.document).toBeNull()
     expect(result.current.resource?.bindings.sequence).not.toHaveLength(0)
   })

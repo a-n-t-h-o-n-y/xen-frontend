@@ -247,7 +247,7 @@ ASCII letters to lowercase; preserve other key values exactly.
 
 ```ts
 type KeymapResource = {
-  revision: number
+  revision: string
   document: unknown | null
 }
 
@@ -321,18 +321,19 @@ The storage API is:
 keymap.read({})
 
 keymap.write({
-  expected_revision: number
+  expected_revision: string
   document: unknown
 })
 
 keymap.delete({
-  expected_revision: number
+  expected_revision: string
 })
 ```
 
 All responses return the complete storage `KeymapResource`. A missing or deleted
-file has `document: null`. Revisions are opaque content identities, not ordered
-counters; clients install resources whose revision differs from the current one.
+file has `document: null`. Revisions are opaque decimal strings that may exceed
+JavaScript's safe integer range. They are content identities, not ordered counters;
+clients preserve them unchanged and install resources whose revision differs from the current one.
 The frontend writes complete documents and preserves unknown document fields.
 
 ## Events

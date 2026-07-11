@@ -209,7 +209,7 @@ export type SessionHello = {
 }
 
 export type KeymapResource = {
-  revision: number
+  revision: string
   keySemantics: 'KeyboardEvent.key'
   bindings: Record<string, KeymapBinding[]>
   overrides: KeymapOverride[]

@@ -10,7 +10,7 @@ const trigger = {
 } as const
 
 const resource: KeymapResource = {
-  revision: 1,
+  revision: '1',
   keySemantics: 'KeyboardEvent.key',
   bindings: {
     sequence: [{

@@ -9,6 +9,7 @@ export const KEYMAP_SCHEMA_VERSION = 1
 
 const finiteNumber = z.number().finite()
 const nonNegativeInteger = z.number().int().nonnegative()
+export const keymapRevisionSchema = z.string().regex(/^\d+$/, 'Expected a decimal revision string')
 const modTargetIdSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'weights'])
 
 export const selectionStepSchema = z.object({
@@ -430,7 +431,7 @@ export const keymapDocumentSchema = z.object({
 })
 
 export const keymapStorageResourceSchema = z.object({
-  revision: nonNegativeInteger,
+  revision: keymapRevisionSchema,
   document: z.unknown().nullable(),
 })
 

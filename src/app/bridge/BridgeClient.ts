@@ -5,6 +5,7 @@ import {
   commandResponseSchema,
   envelopeSchema,
   keymapStorageResourceSchema,
+  keymapRevisionSchema,
   librarySnapshotSchema,
   projectSnapshotSchema,
   selectionSchema,
@@ -44,12 +45,12 @@ export type CommandExecuteRequest = {
 }
 
 export type KeymapWriteRequest = {
-  expected_revision: number
+  expected_revision: string
   document: unknown
 }
 
 export type KeymapDeleteRequest = {
-  expected_revision: number
+  expected_revision: string
 }
 
 export type SessionBindingSetRequest = {
@@ -110,7 +111,6 @@ const backendErrorSchema = z.object({
   }),
 })
 
-const keymapRevisionSchema = z.number().int().nonnegative()
 const keymapWriteRequestSchema = z.object({
   expected_revision: keymapRevisionSchema,
   document: z.unknown(),
