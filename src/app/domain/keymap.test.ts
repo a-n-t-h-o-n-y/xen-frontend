@@ -6,394 +6,128 @@ import {
   formatKeymapTarget,
   formatKeymapTrigger,
   normalizeKey,
+  triggerFromKeyboardEvent,
   triggerIdentity,
 } from './keymap'
-import { ingestKeymapResource } from './resources'
-import {
-  formatKeymapContext,
-  getCommandKeymapContext,
-  runCommandUiAction,
-} from './uiActions'
-import type { KeymapResource } from './models'
+import { formatKeymapContext, getCommandKeymapContext } from './uiActions'
+import { usesMetaForCommand } from '../platform'
+import type { InputMode, KeymapBinding, KeymapResource, KeymapTrigger } from './models'
+
+const trigger = (
+  value: string,
+  options: Partial<KeymapTrigger['modifiers']> = {},
+  inputMode?: InputMode
+): KeymapTrigger => ({
+  match: { kind: 'key', value },
+  modifiers: {
+    shift: false,
+    alt: false,
+    primary: false,
+    control: false,
+    meta: false,
+    ...options,
+  },
+  ...(inputMode ? { when: { inputMode } } : {}),
+})
+
+const binding = (bindingTrigger: KeymapTrigger, action = 'workspace.view.toggle'): KeymapBinding => ({
+  trigger: bindingTrigger,
+  target: { type: 'ui_action', action, arguments: {} } as KeymapBinding['target'],
+})
+
+const resource = (bindings: Record<string, KeymapBinding[]>): KeymapResource => ({
+  revision: '1',
+  keySemantics: 'KeyboardEvent.key-or-code',
+  bindings,
+  document: { schemaVersion: 2, bindings },
+  source: 'stored',
+  loadError: null,
+})
+
+const keyboardEvent = (key: string, init: KeyboardEventInit = {}): KeyboardEvent =>
+  new KeyboardEvent('keydown', { key, code: init.code ?? `Key${key.toUpperCase()}`, ...init })
 
 describe('keymap routing', () => {
-  const resource: KeymapResource = {
-    revision: '4',
-    keySemantics: 'KeyboardEvent.key',
-    bindings: {
-      sequence: [
-        {
-          trigger: {
-            key: 'h',
-            modifiers: { shift: true, command: false, alt: false },
-            when: { inputMode: 'pitch' },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'selection.move',
-            arguments: { direction: 'left', amount: 2 },
-          },
-        },
-        {
-          trigger: {
-            key: 'l',
-            modifiers: { shift: true, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'workspace.view.toggle',
-            arguments: {},
-          },
-        },
-      ],
-      'command.input': [
-        {
-          trigger: {
-            key: 'Escape',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'command.cancel',
-            arguments: {},
-          },
-        },
-      ],
-      'command.completions': [
-        {
-          trigger: {
-            key: 'Escape',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'command.completion.dismiss',
-            arguments: {},
-          },
-        },
-      ],
-      composition: [
-        {
-          trigger: {
-            key: 'l',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.selection.move',
-            arguments: { direction: 'right', amount: 1 },
-          },
-        },
-        {
-          trigger: {
-            key: 'Enter',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.cell.edit_measure',
-            arguments: {},
-          },
-        },
-        {
-          trigger: {
-            key: '[',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.loop.set_start',
-            arguments: {},
-          },
-        },
-        {
-          trigger: {
-            key: ']',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.loop.set_end',
-            arguments: {},
-          },
-        },
-        {
-          trigger: {
-            key: 'n',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.cell.rename_or_create_measure',
-            arguments: {},
-          },
-        },
-        {
-          trigger: {
-            key: 'c',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.cell.copy',
-            arguments: {},
-          },
-        },
-        {
-          trigger: {
-            key: 'v',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.cell.paste',
-            arguments: {},
-          },
-        },
-        {
-          trigger: {
-            key: 'x',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.cell.cut',
-            arguments: {},
-          },
-        },
-        {
-          trigger: {
-            key: 'd',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.cell.duplicate_right',
-            arguments: {},
-          },
-        },
-        {
-          trigger: {
-            key: 'o',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.row.channel',
-            arguments: {},
-          },
-        },
-        {
-          trigger: {
-            key: 't',
-            modifiers: { shift: false, command: false, alt: false },
-          },
-          target: {
-            type: 'ui_action',
-            action: 'composition.column.length',
-            arguments: {},
-          },
-        },
-      ],
-    },
-    overrides: [],
-    document: null,
-  }
-
-  it('normalizes only ASCII capital letters and expands numeric placeholders', () => {
+  it('normalizes ASCII capitals and expands numeric placeholders', () => {
     expect(normalizeKey('H')).toBe('h')
     expect(normalizeKey('ArrowLeft')).toBe('ArrowLeft')
-    expect(normalizeKey('É')).toBe('É')
     expect(expandNumericPlaceholders('duplicate :N=2:', '7')).toBe('duplicate 7')
     expect(expandNumericPlaceholders('duplicate :N=2:', '')).toBe('duplicate 2')
   })
 
-  it('matches exact key, modifiers, context, and input mode', () => {
-    const event = {
-      key: 'H',
-      shiftKey: true,
-      ctrlKey: false,
-      metaKey: false,
-      altKey: false,
-    } as KeyboardEvent
-    expect(findKeymapBinding(resource, 'sequence', event, 'pitch')?.target.type).toBe('ui_action')
-    expect(findKeymapBinding(resource, 'sequence', event, 'gate')).toBeNull()
-    expect(findKeymapBinding(resource, 'other', event, 'pitch')).toBeNull()
+  it('matches complete physical modifier state without dropping Meta', () => {
+    const keymap = resource({ sequencer: [binding(trigger('c'))] })
+    expect(findKeymapBinding(keymap, 'sequencer', keyboardEvent('c'), 'pitch')).not.toBeNull()
+    expect(findKeymapBinding(
+      keymap,
+      'sequencer',
+      keyboardEvent('c', { metaKey: true }),
+      'pitch'
+    )).toBeNull()
   })
 
-  it('parses command UI actions and matches identical triggers in separate contexts', () => {
-    const event = {
-      key: 'Escape',
-      shiftKey: false,
-      ctrlKey: false,
-      metaKey: false,
-      altKey: false,
-    } as KeyboardEvent
-
-    expect(findKeymapBinding(resource, 'command.input', event, 'pitch')?.target)
-      .toMatchObject({ type: 'ui_action', action: 'command.cancel', arguments: {} })
-    expect(findKeymapBinding(resource, 'command.completions', event, 'pitch')?.target)
-      .toMatchObject({ type: 'ui_action', action: 'command.completion.dismiss', arguments: {} })
+  it('records primary and secondary accelerators distinctly', () => {
+    const primary = triggerFromKeyboardEvent(keyboardEvent('k', { ctrlKey: true }))
+    const secondary = triggerFromKeyboardEvent(keyboardEvent('k', { metaKey: true }))
+    expect(primary.modifiers.primary).toBe(true)
+    expect(primary.modifiers.control).toBe(false)
+    expect(secondary.modifiers.primary).toBe(false)
+    expect(secondary.modifiers.meta).toBe(true)
   })
 
-  it('parses composition UI actions in their own context', () => {
-    const moveEvent = {
-      key: 'l',
-      shiftKey: false,
-      ctrlKey: false,
-      metaKey: false,
-      altKey: false,
-    } as KeyboardEvent
-    const enterEvent = {
-      key: 'Enter',
-      shiftKey: false,
-      ctrlKey: false,
-      metaKey: false,
-      altKey: false,
-    } as KeyboardEvent
-
-    expect(findKeymapBinding(resource, 'composition', moveEvent, 'pitch')?.target)
-      .toMatchObject({ type: 'ui_action', action: 'composition.selection.move' })
-    expect(findKeymapBinding(resource, 'composition', enterEvent, 'pitch')?.target)
-      .toMatchObject({ type: 'ui_action', action: 'composition.cell.edit_measure' })
+  it('supports physical code matching', () => {
+    const physical = trigger('unused')
+    physical.match = { kind: 'code', value: 'KeyH' }
+    const keymap = resource({ sequencer: [binding(physical)] })
+    expect(findKeymapBinding(
+      keymap,
+      'sequencer',
+      keyboardEvent('q', { code: 'KeyH' }),
+      'pitch'
+    )).not.toBeNull()
   })
 
-  it('parses new editable composition UI actions', () => {
-    for (const [key, action] of [
-      ['n', 'composition.cell.rename_or_create_measure'],
-      ['c', 'composition.cell.copy'],
-      ['v', 'composition.cell.paste'],
-      ['x', 'composition.cell.cut'],
-      ['d', 'composition.cell.duplicate_right'],
-      ['o', 'composition.row.channel'],
-      ['t', 'composition.column.length'],
-    ] as const) {
-      expect(findKeymapBinding(resource, 'composition', {
-        key,
-        shiftKey: false,
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-      } as KeyboardEvent, 'pitch')?.target).toMatchObject({
-        type: 'ui_action',
-        action,
-        arguments: {},
-      })
-    }
-  })
-
-  it('finds trigger conflicts only inside the requested context', () => {
-    const escapeTrigger = resource.bindings['command.input']![0]!.trigger
-    const conflict = findKeymapTriggerConflict(resource, 'command.input', escapeTrigger)
-    expect(conflict?.target).toMatchObject({ type: 'ui_action', action: 'command.cancel' })
-    expect(findKeymapTriggerConflict(resource, 'sequence', escapeTrigger)).toBeNull()
-  })
-
-  it('does not conflict with the binding original trigger', () => {
-    const trigger = resource.bindings.sequence![1]!.trigger
-    expect(findKeymapTriggerConflict(resource, 'sequence', trigger, trigger)).toBeNull()
-  })
-
-  it('formats typed triggers and targets with stable identities', () => {
-    const binding = resource.bindings.sequence![0]!
-    const workspaceBinding = resource.bindings.sequence![1]!
-    expect(triggerIdentity(binding.trigger)).toContain('h')
-    expect(formatKeymapTrigger(binding.trigger)).toContain('Shift')
-    expect(formatKeymapTarget(binding.target)).toBe('Move left by 2')
-    expect(formatKeymapTarget(workspaceBinding.target)).toBe('Toggle workspace view')
-    expect(formatKeymapTarget(resource.bindings.composition![0]!.target))
-      .toBe('Move composition right by 1')
-    expect(formatKeymapTarget(resource.bindings['command.input']![0]!.target)).toBe('Cancel command')
-    expect(formatKeymapContext('composition')).toBe('Composition')
-    expect(formatKeymapContext('command.completions')).toBe('Quick Access Completions')
-    expect(getCommandKeymapContext(false)).toBe('command.input')
-    expect(getCommandKeymapContext(true)).toBe('command.completions')
-  })
-
-  it('parses no-argument workspace UI actions', () => {
-    const binding = resource.bindings.sequence![1]!
-    expect(binding.target).toMatchObject({
+  it('prefers input-mode-specific bindings over unconditional bindings', () => {
+    const generic = binding(trigger('p'), 'workspace.view.toggle')
+    const specific = binding(trigger('p', {}, 'velocity'), 'input_mode.set')
+    specific.target = {
       type: 'ui_action',
-      action: 'workspace.view.toggle',
-      arguments: {},
-    })
+      action: 'input_mode.set',
+      arguments: { mode: 'pitch' },
+    }
+    const keymap = resource({ sequencer: [generic, specific] })
+    expect(findKeymapBinding(keymap, 'sequencer', keyboardEvent('p'), 'velocity')?.target)
+      .toMatchObject({ action: 'input_mode.set' })
+    expect(findKeymapBinding(keymap, 'sequencer', keyboardEvent('p'), 'pitch')?.target)
+      .toMatchObject({ action: 'workspace.view.toggle' })
   })
 
-  it('installs changed content-derived keymap revisions', () => {
-    expect(ingestKeymapResource(null, resource).installed).toBe(true)
-    expect(ingestKeymapResource(resource, { ...resource, revision: '4' }).installed).toBe(false)
-    expect(ingestKeymapResource(resource, { ...resource, revision: '3' }).installed).toBe(true)
-    expect(ingestKeymapResource(resource, { ...resource, revision: '5' }).installed).toBe(true)
+  it('finds exact conflicts only within a context', () => {
+    const escape = trigger('Escape')
+    const keymap = resource({ 'quick_access.command': [binding(escape, 'command.cancel')] })
+    expect(findKeymapTriggerConflict(keymap, 'quick_access.command', escape)).not.toBeNull()
+    expect(findKeymapTriggerConflict(keymap, 'sequencer', escape)).toBeNull()
+    expect(findKeymapTriggerConflict(keymap, 'quick_access.command', escape, escape)).toBeNull()
   })
 
-  it('runs command UI actions with applicability checks', () => {
-    const calls: string[] = []
-    const handlers = {
-      cancel: () => calls.push('cancel'),
-      submit: () => calls.push('submit'),
-      closeIfEmpty: () => calls.push('closeIfEmpty'),
-      historyPrevious: () => calls.push('historyPrevious'),
-      historyNext: () => calls.push('historyNext'),
-      completionAccept: () => calls.push('completionAccept'),
-      completionDismiss: () => calls.push('completionDismiss'),
-      completionPrevious: () => calls.push('completionPrevious'),
-      completionNext: () => calls.push('completionNext'),
-    }
-    const baseState = {
-      commandText: 'set',
-      historyIndex: -1,
-      commandHistory: ['copy'],
-      isCompletionVisible: false,
-      isCompletionDismissed: false,
-      isExactCommandInput: false,
-      completionMode: 'none' as const,
-    }
+  it('detects semantic accelerator conflicts that resolve to the same physical stroke', () => {
+    const physicalControl = trigger('n', usesMetaForCommand ? { meta: true } : { control: true })
+    const primary = trigger('n', { primary: true })
+    const keymap = resource({ 'quick_access.command': [binding(physicalControl)] })
+    expect(findKeymapTriggerConflict(keymap, 'quick_access.command', primary)).not.toBeNull()
+  })
 
-    expect(runCommandUiAction('command.submit', baseState, handlers)).toBe(true)
-    expect(runCommandUiAction('command.close_if_empty', baseState, handlers)).toBe(false)
-    expect(runCommandUiAction('command.history.previous', baseState, handlers)).toBe(true)
-    expect(runCommandUiAction('command.history.next', baseState, handlers)).toBe(false)
-    expect(runCommandUiAction('command.completion.accept', baseState, handlers)).toBe(false)
-    expect(runCommandUiAction('command.cancel', {
-      ...baseState,
-      completionMode: 'commandSearch',
-    }, handlers)).toBe(true)
-    expect(runCommandUiAction('command.completion.next', {
-      ...baseState,
-      isCompletionVisible: true,
-    }, handlers)).toBe(true)
-    expect(runCommandUiAction('command.completion.previous', {
-      ...baseState,
-      isCompletionVisible: true,
-    }, handlers)).toBe(true)
-    expect(runCommandUiAction('command.completion.dismiss', {
-      ...baseState,
-      completionMode: 'commandSearch',
-    }, handlers)).toBe(true)
-    expect(runCommandUiAction('command.close_if_empty', {
-      ...baseState,
-      commandText: '',
-    }, handlers)).toBe(true)
-    expect(runCommandUiAction('command.submit', {
-      ...baseState,
-      isCompletionVisible: true,
-    }, handlers)).toBe(true)
-    expect(runCommandUiAction('command.submit', {
-      ...baseState,
-      isCompletionVisible: true,
-      isExactCommandInput: true,
-    }, handlers)).toBe(true)
-
-    expect(calls).toEqual([
-      'submit',
-      'historyPrevious',
-      'completionDismiss',
-      'completionNext',
-      'completionPrevious',
-      'completionDismiss',
-      'closeIfEmpty',
-      'completionAccept',
-      'submit',
-    ])
+  it('formats v2 triggers, targets, contexts, and stable identities', () => {
+    const shortcut = trigger('h', { shift: true, primary: true })
+    expect(triggerIdentity(shortcut)).toContain('key')
+    expect(formatKeymapTrigger(shortcut)).toContain('Shift')
+    expect(formatKeymapTarget({
+      type: 'ui_action',
+      action: 'selection.move',
+      arguments: { direction: 'left', amount: 2 },
+    })).toBe('Move left by 2')
+    expect(formatKeymapContext('quick_access.completions')).toBe('Quick Access Completions')
+    expect(getCommandKeymapContext(false)).toBe('quick_access.command')
+    expect(getCommandKeymapContext(true)).toBe('quick_access.completions')
   })
 })

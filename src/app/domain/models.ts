@@ -1,5 +1,5 @@
 import type { Cell, Measure, Selection, SelectionPath } from './music'
-import type { InputMode, KeymapBinding, KeymapOverride, KeymapTarget, KeymapTrigger } from './keymap'
+import type { InputMode, KeymapBinding, KeymapDocument, KeymapTarget, KeymapTrigger } from './keymap'
 
 export type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
 export type TranslateDirection = 'up' | 'down'
@@ -212,10 +212,11 @@ export type SessionHello = {
 
 export type KeymapResource = {
   revision: string
-  keySemantics: 'KeyboardEvent.key'
+  keySemantics: 'KeyboardEvent.key-or-code'
   bindings: Record<string, KeymapBinding[]>
-  overrides: KeymapOverride[]
-  document: Record<string, unknown> | null
+  document: KeymapDocument
+  source: 'default' | 'stored'
+  loadError: string | null
 }
 
 export type CommandContext = {
@@ -228,6 +229,7 @@ export type {
   Cell,
   InputMode,
   KeymapBinding,
+  KeymapDocument,
   KeymapTarget,
   KeymapTrigger,
   Measure,

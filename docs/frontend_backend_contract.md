@@ -235,12 +235,14 @@ not add a bridge endpoint.
 
 The backend treats the keymap document as opaque JSON and owns filesystem access,
 atomic persistence, content-derived revisions, concurrency checks, and publication.
-The frontend owns default bindings, document validation and migration, override
-merging, browser event matching, context selection, action dispatch, and editing.
+The frontend owns default bindings, schema validation, browser event matching,
+context selection, action dispatch, and editing. Invalid or unsupported documents
+are ignored in favor of built-in defaults until the user resets or replaces them.
 
-Key triggers use `KeyboardEvent.key`, not `KeyboardEvent.code`. The `command`
-modifier means `metaKey` on macOS and `ctrlKey` on Windows/Linux. Normalize single
-ASCII letters to lowercase; preserve other key values exactly.
+Key triggers may use logical `KeyboardEvent.key` or physical `KeyboardEvent.code`.
+The `primary` modifier means `metaKey` on macOS and `ctrlKey` on Windows/Linux;
+physical Control and Meta remain independently representable. Normalize single
+ASCII logical letters to lowercase; preserve other values exactly.
 
 `session.hello.payload.keymap`, keymap storage responses, and
 `keymap.changed` all use:
@@ -252,16 +254,21 @@ type KeymapResource = {
 }
 
 type KeymapDocument = {
-  schema_version: 1
-  overrides: KeymapOverride[]
+  schema_version: 2
+  bindings: Record<string, KeymapBinding[]>
 }
 
 type KeymapTrigger = {
-  key: string
+  match: {
+    kind: 'key' | 'code'
+    value: string
+  }
   modifiers: {
     shift: boolean
-    command: boolean
     alt: boolean
+    primary: boolean
+    control: boolean
+    meta: boolean
   }
   when?: {
     input_mode: 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
@@ -275,29 +282,28 @@ type KeymapTarget =
 type KeymapBinding = {
   trigger: KeymapTrigger
   target: KeymapTarget
-}
-
-type KeymapOverride = {
-  context: string
-  trigger: KeymapTrigger
-  target: KeymapTarget | null
+  repeat?: 'allow' | 'ignore'
 }
 ```
 
 Current frontend contexts:
 
-- `sequence`: sequencer/default editing shortcuts.
-- `command.input`: Quick Access command input focused without active completions.
-- `command.completions`: Quick Access command input focused with completions active.
+- `sequencer`: sequencer/default editing shortcuts.
+- `composition`: composition editing shortcuts.
+- `quick_access.browse`: Quick Access resource browsing.
+- `quick_access.command`: Quick Access command input without active completions.
+- `quick_access.completions`: Quick Access command input with completions active.
 
-The `command.*` identifiers are retained for wire compatibility even though the
-status-bar command surface has been replaced by Quick Access.
+Keymap schema v1 is intentionally unsupported and is not migrated.
 
 Current UI actions:
 
 - `selection.move`
 - `input_mode.set`
 - `workspace.view.toggle`
+- `edit.copy`
+- `edit.cut`
+- `edit.paste`
 - `modulator.mode.toggle`
 - `modulator.slot.select`
 - `modulator.target.toggle`

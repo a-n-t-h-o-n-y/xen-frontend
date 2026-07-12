@@ -23,9 +23,6 @@ export type FrontendUiActionId =
   | 'workspace.view.sequencer'
   | 'composition.selection.move'
   | 'composition.cell.edit_measure'
-  | 'composition.cell.copy'
-  | 'composition.cell.cut'
-  | 'composition.cell.paste'
   | 'composition.cell.duplicate_right'
   | 'composition.cell.rename_or_create_measure'
   | 'composition.cell.clear'
@@ -40,6 +37,9 @@ export type FrontendUiActionId =
   | 'composition.column.length'
   | 'composition.loop.set_start'
   | 'composition.loop.set_end'
+  | 'edit.copy'
+  | 'edit.cut'
+  | 'edit.paste'
   | 'modulator.mode.toggle'
   | 'modulator.slot.select'
   | 'modulator.target.toggle'
@@ -97,24 +97,6 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
   'composition.cell.edit_measure': {
     id: 'composition.cell.edit_measure',
     label: 'Edit composition cell measure',
-    section: 'Composition',
-    argumentKind: 'none',
-  },
-  'composition.cell.copy': {
-    id: 'composition.cell.copy',
-    label: 'Copy composition cell',
-    section: 'Composition',
-    argumentKind: 'none',
-  },
-  'composition.cell.cut': {
-    id: 'composition.cell.cut',
-    label: 'Cut composition cell',
-    section: 'Composition',
-    argumentKind: 'none',
-  },
-  'composition.cell.paste': {
-    id: 'composition.cell.paste',
-    label: 'Paste composition cell',
     section: 'Composition',
     argumentKind: 'none',
   },
@@ -202,6 +184,24 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     section: 'Composition',
     argumentKind: 'none',
   },
+  'edit.copy': {
+    id: 'edit.copy',
+    label: 'Copy',
+    section: 'Editing',
+    argumentKind: 'none',
+  },
+  'edit.cut': {
+    id: 'edit.cut',
+    label: 'Cut',
+    section: 'Editing',
+    argumentKind: 'none',
+  },
+  'edit.paste': {
+    id: 'edit.paste',
+    label: 'Paste',
+    section: 'Editing',
+    argumentKind: 'none',
+  },
   'modulator.mode.toggle': {
     id: 'modulator.mode.toggle',
     label: 'Toggle modulator mode',
@@ -283,22 +283,37 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
 }
 
 export const keymapContextLabels: Record<string, string> = {
-  sequence: 'Sequencer',
+  sequencer: 'Sequencer',
   composition: 'Composition',
-  'command.input': 'Quick Access',
-  'command.completions': 'Quick Access Completions',
+  'quick_access.browse': 'Quick Access Browse',
+  'quick_access.command': 'Quick Access Command',
+  'quick_access.completions': 'Quick Access Completions',
 }
+
+export const keymapContexts = Object.keys(keymapContextLabels)
 
 export const commandUiActionSet = new Set<string>(commandUiActionIds)
 
 export const isCommandUiActionId = (action: string): action is CommandUiActionId =>
   commandUiActionSet.has(action)
 
+export const isUiActionAllowedInContext = (
+  action: FrontendUiActionId,
+  context: string
+): boolean => {
+  if (action === 'command.open') return context === 'sequencer' || context === 'composition'
+  if (action.startsWith('command.')) return context.startsWith('quick_access.')
+  if (action.startsWith('composition.')) return context === 'composition'
+  if (action.startsWith('edit.')) return context === 'sequencer' || context === 'composition'
+  if (action.startsWith('workspace.')) return context === 'sequencer' || context === 'composition'
+  return context === 'sequencer'
+}
+
 export const formatKeymapContext = (context: string): string =>
   keymapContextLabels[context] ?? context
 
 export const getCommandKeymapContext = (isCompletionPopupActive: boolean): string =>
-  isCompletionPopupActive ? 'command.completions' : 'command.input'
+  isCompletionPopupActive ? 'quick_access.completions' : 'quick_access.command'
 
 export const formatUiActionTarget = (
   target: Extract<KeymapTarget, { type: 'ui_action' }>
@@ -357,11 +372,7 @@ export const runCommandUiAction = (
       }
       return true
     case 'command.submit':
-      if (state.isCompletionVisible && !state.isExactCommandInput) {
-        handlers.completionAccept()
-      } else {
-        handlers.submit()
-      }
+      handlers.submit()
       return true
     case 'command.close_if_empty':
       if (state.commandText.length === 0) {

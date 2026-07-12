@@ -9,6 +9,7 @@ import { compositionCellAssign, compositionCellClear } from '../domain/commands'
 import { moveSelection, projectRootCell } from '../domain/selection'
 import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
+import { usesMetaForCommand } from '../platform'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   ActiveMeasureTarget,
@@ -34,6 +35,7 @@ type UseKeyboardControllerArgs = {
   activeMeasureTargetRef: MutableRefObject<ActiveMeasureTarget | null>
   keymapRef: MutableRefObject<KeymapResource | null>
   installEditorState: (nextState: EditorState) => void
+  workspaceView: WorkspaceView
   workspaceViewRef: MutableRefObject<WorkspaceView>
   compositionSelectionRef: MutableRefObject<CompositionSelection>
   installCompositionSelection: (nextSelection: CompositionSelection) => void
@@ -62,6 +64,7 @@ export function useKeyboardController({
   activeMeasureTargetRef,
   keymapRef,
   installEditorState,
+  workspaceView,
   workspaceViewRef,
   compositionSelectionRef,
   installCompositionSelection,
@@ -80,9 +83,7 @@ export function useKeyboardController({
   const pendingNumberRef = useRef('')
   const compositionClipboardRef = useRef<string | null>(null)
   const optimisticCompositionCellNamesRef = useRef<Map<string, string>>(new Map())
-  const lastShortcutCommandRef = useRef<{ command: 'copy' | 'cut' | 'paste'; at: number } | null>(
-    null
-  )
+  const pendingNumberTimerRef = useRef<number | null>(null)
 
   const getCompositionCellKey = (selection: CompositionSelection): string =>
     `${selection.rowIndex}:${selection.columnIndex}`
@@ -143,7 +144,11 @@ export function useKeyboardController({
     }
 
     compositionClipboardRef.current = measureName
-    clipboardData?.setData('text/plain', measureName)
+    if (clipboardData) {
+      clipboardData.setData('text/plain', measureName)
+    } else if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(measureName).catch(() => undefined)
+    }
     setStatusMessage(`Copied composition measure ${measureName}.`)
     setStatusLevel('info')
     return true
@@ -209,13 +214,13 @@ export function useKeyboardController({
     clipboardText?: string,
     clipboardData?: DataTransfer | null
   ): boolean => {
-    if (action === 'composition.cell.copy') {
+    if (action === 'edit.copy') {
       return handleCompositionCellCopy(clipboardData)
     }
-    if (action === 'composition.cell.cut') {
+    if (action === 'edit.cut') {
       return handleCompositionCellCut(clipboardData)
     }
-    if (action === 'composition.cell.paste') {
+    if (action === 'edit.paste') {
       return handleCompositionCellPaste(clipboardText)
     }
     if (action === 'composition.cell.duplicate_right') {
@@ -232,6 +237,27 @@ export function useKeyboardController({
   const toggleWorkspaceView = useCallback((): void => {
     setWorkspaceView((current) => current === 'sequencer' ? 'composition' : 'sequencer')
   }, [setWorkspaceView])
+
+  useEffect(() => {
+    pendingNumberRef.current = ''
+    if (pendingNumberTimerRef.current !== null) {
+      window.clearTimeout(pendingNumberTimerRef.current)
+      pendingNumberTimerRef.current = null
+    }
+  }, [isQuickAccessOpen, settingsOpen, workspaceView])
+
+  useEffect(() => {
+    const clearOnEditableFocus = (event: FocusEvent): void => {
+      if (!isEditableTarget(event.target)) return
+      pendingNumberRef.current = ''
+      if (pendingNumberTimerRef.current !== null) {
+        window.clearTimeout(pendingNumberTimerRef.current)
+        pendingNumberTimerRef.current = null
+      }
+    }
+    document.addEventListener('focusin', clearOnEditableFocus)
+    return () => document.removeEventListener('focusin', clearOnEditableFocus)
+  }, [])
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent): void => {
@@ -259,7 +285,7 @@ export function useKeyboardController({
 
       const activeContext = workspaceViewRef.current === 'composition'
         ? 'composition'
-        : 'sequence'
+        : 'sequencer'
 
       const matchedBinding = findKeymapBinding(
         keymapRef.current,
@@ -269,6 +295,22 @@ export function useKeyboardController({
       )
 
       if (matchedBinding) {
+        if (event.repeat && matchedBinding.repeat !== 'allow') {
+          return
+        }
+        const editAction = matchedBinding.target.type === 'ui_action' &&
+          matchedBinding.target.action.startsWith('edit.')
+          ? matchedBinding.target.action.slice('edit.'.length)
+          : null
+        const nativeClipboardKey = editAction === 'copy' ? 'c' : editAction === 'cut' ? 'x' : 'v'
+        const isNativeClipboardKey = editAction !== null &&
+          ((usesMetaForCommand && event.metaKey && !event.ctrlKey) ||
+            (!usesMetaForCommand && event.ctrlKey && !event.metaKey)) &&
+          event.key.toLowerCase() === nativeClipboardKey
+        if (isNativeClipboardKey) {
+          pendingNumberRef.current = ''
+          return
+        }
         event.preventDefault()
         void (async () => {
           try {
@@ -277,17 +319,6 @@ export function useKeyboardController({
                 matchedBinding.target.command,
                 pendingNumberRef.current
               )
-              const normalizedCommand = command.trim().toLowerCase()
-              if (
-                normalizedCommand === 'copy' ||
-                normalizedCommand === 'cut' ||
-                normalizedCommand === 'paste'
-              ) {
-                lastShortcutCommandRef.current = {
-                  command: normalizedCommand,
-                  at: Date.now(),
-                }
-              }
               await executeBackendCommand(command)
               return
             }
@@ -344,6 +375,25 @@ export function useKeyboardController({
 
             if (matchedBinding.target.action === 'composition.cell.edit_measure') {
               editSelectedCompositionCell()
+              return
+            }
+
+            if (
+              matchedBinding.target.action === 'edit.copy' ||
+              matchedBinding.target.action === 'edit.cut' ||
+              matchedBinding.target.action === 'edit.paste'
+            ) {
+              const command = matchedBinding.target.action.slice('edit.'.length)
+              if (workspaceViewRef.current === 'composition') {
+                if (command === 'paste' && navigator.clipboard?.readText) {
+                  const text = await navigator.clipboard.readText().catch(() => '')
+                  handleCompositionCellPaste(text)
+                } else {
+                  handleCompositionCellAction(matchedBinding.target.action)
+                }
+              } else {
+                await executeBackendCommand(command)
+              }
               return
             }
 
@@ -405,6 +455,13 @@ export function useKeyboardController({
 
       if (!isQuickAccessOpen && isDigitKey) {
         pendingNumberRef.current = `${pendingNumberRef.current}${event.key}`
+        if (pendingNumberTimerRef.current !== null) {
+          window.clearTimeout(pendingNumberTimerRef.current)
+        }
+        pendingNumberTimerRef.current = window.setTimeout(() => {
+          pendingNumberRef.current = ''
+          pendingNumberTimerRef.current = null
+        }, 1_500)
         event.preventDefault()
         return
       }
@@ -415,14 +472,17 @@ export function useKeyboardController({
         return
       }
 
-      if (event.key === ':' && !event.metaKey && !event.ctrlKey && !event.altKey) {
-        event.preventDefault()
-        openCommandPalette()
-      }
     }
 
     window.addEventListener('keydown', handleGlobalKeyDown)
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown)
+      pendingNumberRef.current = ''
+      if (pendingNumberTimerRef.current !== null) {
+        window.clearTimeout(pendingNumberTimerRef.current)
+        pendingNumberTimerRef.current = null
+      }
+    }
   }, [
     bridgeUnavailableMessage,
     editorStateRef,
@@ -430,6 +490,7 @@ export function useKeyboardController({
     executeBackendCommand,
     editSelectedCompositionCell,
     handleCompositionCellAction,
+    handleCompositionCellPaste,
     compositionSelectionRef,
     installCompositionSelection,
     installEditorState,
@@ -455,18 +516,33 @@ export function useKeyboardController({
 
   useEffect(() => {
     const handleClipboardCommand = (command: string, event: ClipboardEvent): void => {
-      const recentShortcut = lastShortcutCommandRef.current
+      const editableTarget = isEditableTarget(event.target)
+
       if (
-        recentShortcut &&
-        recentShortcut.command === command &&
-        Date.now() - recentShortcut.at < 250
+        bridgeUnavailableMessage !== null || !isProjectReady || editableTarget ||
+        isQuickAccessOpen || settingsOpen
       ) {
         return
       }
 
-      const editableTarget = isEditableTarget(event.target)
-
-      if (bridgeUnavailableMessage !== null || !isProjectReady || editableTarget || isQuickAccessOpen) {
+      const key = command === 'copy' ? 'c' : command === 'cut' ? 'x' : 'v'
+      const keyboardEvent = new KeyboardEvent('keydown', {
+        key,
+        code: `Key${key.toUpperCase()}`,
+        ctrlKey: !usesMetaForCommand,
+        metaKey: usesMetaForCommand,
+      })
+      const context = workspaceViewRef.current === 'composition' ? 'composition' : 'sequencer'
+      const binding = findKeymapBinding(
+        keymapRef.current,
+        context,
+        keyboardEvent,
+        editorStateRef.current.inputMode
+      )
+      if (
+        binding?.target.type !== 'ui_action' ||
+        binding.target.action !== `edit.${command}`
+      ) {
         return
       }
 
@@ -515,10 +591,13 @@ export function useKeyboardController({
     handleCompositionCellCopy,
     handleCompositionCellCut,
     handleCompositionCellPaste,
+    editorStateRef,
     isQuickAccessOpen,
     isProjectReady,
+    keymapRef,
     setStatusLevel,
     setStatusMessage,
+    settingsOpen,
     workspaceViewRef,
   ])
 }

@@ -6,6 +6,8 @@ import { QuickAccessPalette } from './QuickAccessPalette'
 import { libraryFromDto } from '../domain/mappers'
 import { buildSessionReference } from '../domain/reference'
 import { libraryFixture } from '../domain/testFixtures'
+import { defaultKeymapDocument } from '../domain/defaultKeymap'
+import type { KeymapResource } from '../domain/models'
 
 const commands = buildSessionReference({
   schema_version: 3,
@@ -36,8 +38,22 @@ const commands = buildSessionReference({
 }).commands
 
 const library = libraryFromDto(libraryFixture())
+const keymapResource: KeymapResource = {
+  revision: '0',
+  keySemantics: 'KeyboardEvent.key-or-code',
+  bindings: defaultKeymapDocument.bindings,
+  document: defaultKeymapDocument,
+  source: 'default',
+  loadError: null,
+}
 
-function PaletteHarness({ execute = vi.fn().mockResolvedValue(undefined) }) {
+function PaletteHarness({
+  execute = vi.fn().mockResolvedValue(undefined),
+  keymap = keymapResource,
+}: {
+  execute?: (command: string) => Promise<void>
+  keymap?: KeymapResource
+}) {
   const controller = useQuickAccessPalette({
     commands,
     executeBackendCommand: execute,
@@ -54,7 +70,7 @@ function PaletteHarness({ execute = vi.fn().mockResolvedValue(undefined) }) {
         librarySnapshot={library}
         activeTuningName="12EDO"
         activeScaleId="scale:major"
-        keymapResource={null}
+        keymapResource={keymap}
         currentInputMode="pitch"
       />
     </>
@@ -130,6 +146,28 @@ describe('QuickAccessPalette', () => {
     await user.click(screen.getByRole('option', { name: /Measure: measure/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('native rejected it')
+    expect(screen.getByRole('dialog', { name: 'Quick access' })).toBeInTheDocument()
+  })
+
+  it('does not fall back to hardcoded command keys when a binding is deleted', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined)
+    const bindings = structuredClone(defaultKeymapDocument.bindings)
+    bindings['quick_access.command'] = bindings['quick_access.command']?.filter((binding) =>
+      binding.trigger.match.value !== 'Enter'
+    ) ?? []
+    const keymap = {
+      ...keymapResource,
+      bindings,
+      document: { schemaVersion: 2 as const, bindings },
+    }
+    const user = userEvent.setup()
+    render(<PaletteHarness execute={execute} keymap={keymap} />)
+
+    await user.click(screen.getByRole('button', { name: 'Open commands' }))
+    await user.type(screen.getByRole('combobox'), 'transport stop')
+    await user.keyboard('{Enter}')
+
+    expect(execute).not.toHaveBeenCalled()
     expect(screen.getByRole('dialog', { name: 'Quick access' })).toBeInTheDocument()
   })
 })

@@ -5,11 +5,16 @@ import type { KeymapResource } from './models'
 export type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
 
 export type KeymapTrigger = {
-  key: string
+  match: {
+    kind: 'key' | 'code'
+    value: string
+  }
   modifiers: {
     shift: boolean
-    command: boolean
     alt: boolean
+    primary: boolean
+    control: boolean
+    meta: boolean
   }
   when?: {
     inputMode: InputMode
@@ -44,9 +49,6 @@ export type UiActionKeymapTarget =
         | 'workspace.view.composition'
         | 'workspace.view.sequencer'
         | 'composition.cell.edit_measure'
-        | 'composition.cell.copy'
-        | 'composition.cell.cut'
-        | 'composition.cell.paste'
         | 'composition.cell.duplicate_right'
         | 'composition.cell.rename_or_create_measure'
         | 'composition.cell.clear'
@@ -61,8 +63,10 @@ export type UiActionKeymapTarget =
         | 'composition.column.length'
         | 'composition.loop.set_start'
         | 'composition.loop.set_end'
+        | 'edit.copy'
+        | 'edit.cut'
+        | 'edit.paste'
         | 'modulator.mode.toggle'
-        | 'command.cancel'
       arguments: Record<string, never>
     }
   | {
@@ -91,6 +95,7 @@ export type UiActionKeymapTarget =
       type: 'ui_action'
       action:
         | 'command.open'
+        | 'command.cancel'
         | 'command.submit'
         | 'command.close_if_empty'
         | 'command.history.previous'
@@ -107,12 +112,12 @@ export type KeymapTarget = CommandKeymapTarget | UiActionKeymapTarget
 export type KeymapBinding = {
   trigger: KeymapTrigger
   target: KeymapTarget
+  repeat?: 'allow' | 'ignore'
 }
 
-export type KeymapOverride = {
-  context: string
-  trigger: KeymapTrigger
-  target: KeymapTarget | null
+export type KeymapDocument = {
+  schemaVersion: 2
+  bindings: Record<string, KeymapBinding[]>
 }
 
 export const expandNumericPlaceholders = (command: string, pendingDigits: string): string =>
@@ -123,52 +128,66 @@ export const expandNumericPlaceholders = (command: string, pendingDigits: string
 export const normalizeKey = (key: string): string =>
   /^[A-Z]$/.test(key) ? key.toLowerCase() : key
 
-export const triggerFromKeyboardEvent = (event: KeyboardEvent): KeymapTrigger => ({
-  key: normalizeKey(event.key),
-  modifiers: {
-    shift: event.shiftKey,
-    command: usesMetaForCommand ? event.metaKey : event.ctrlKey,
-    alt: event.altKey,
-  },
+const physicalModifiers = (event: KeyboardEvent) => ({
+  shift: event.shiftKey,
+  alt: event.altKey,
+  control: event.ctrlKey,
+  meta: event.metaKey,
+})
+
+export const triggerFromKeyboardEvent = (
+  event: KeyboardEvent,
+  kind: 'key' | 'code' = 'key'
+): KeymapTrigger => {
+  const onlyPlatformPrimary = usesMetaForCommand
+    ? event.metaKey && !event.ctrlKey
+    : event.ctrlKey && !event.metaKey
+  return {
+    match: {
+      kind,
+      value: kind === 'key' ? normalizeKey(event.key) : event.code,
+    },
+    modifiers: {
+      shift: event.shiftKey,
+      alt: event.altKey,
+      primary: onlyPlatformPrimary,
+      control: onlyPlatformPrimary ? false : event.ctrlKey,
+      meta: onlyPlatformPrimary ? false : event.metaKey,
+    },
+  }
+}
+
+const expectedPhysicalModifiers = (trigger: KeymapTrigger) => ({
+  shift: trigger.modifiers.shift,
+  alt: trigger.modifiers.alt,
+  control: trigger.modifiers.control || (trigger.modifiers.primary && !usesMetaForCommand),
+  meta: trigger.modifiers.meta || (trigger.modifiers.primary && usesMetaForCommand),
 })
 
 export const triggerIdentity = (trigger: KeymapTrigger): string => [
-  trigger.key,
+  trigger.match.kind,
+  trigger.match.value,
   trigger.modifiers.shift ? '1' : '0',
-  trigger.modifiers.command ? '1' : '0',
   trigger.modifiers.alt ? '1' : '0',
+  trigger.modifiers.primary ? '1' : '0',
+  trigger.modifiers.control ? '1' : '0',
+  trigger.modifiers.meta ? '1' : '0',
   trigger.when?.inputMode ?? '',
 ].join('\u0000')
 
 export const triggersEqual = (left: KeymapTrigger, right: KeymapTrigger): boolean =>
   triggerIdentity(left) === triggerIdentity(right)
 
-export const mergeKeymapOverrides = (
-  defaults: Readonly<Record<string, readonly KeymapBinding[]>>,
-  overrides: readonly KeymapOverride[]
-): Record<string, KeymapBinding[]> => {
-  const merged = Object.fromEntries(
-    Object.entries(defaults).map(([context, contextBindings]) => [
-      context,
-      contextBindings.map((binding) => ({ ...binding })),
-    ])
-  )
-  for (const override of overrides) {
-    const contextBindings = merged[override.context] ?? []
-    const index = contextBindings.findIndex((binding) =>
-      triggersEqual(binding.trigger, override.trigger)
-    )
-    if (override.target === null) {
-      if (index >= 0) contextBindings.splice(index, 1)
-    } else if (index >= 0) {
-      contextBindings[index] = { trigger: override.trigger, target: override.target }
-    } else {
-      contextBindings.push({ trigger: override.trigger, target: override.target })
-    }
-    if (contextBindings.length > 0) merged[override.context] = contextBindings
-    else delete merged[override.context]
-  }
-  return merged
+export const triggersConflict = (left: KeymapTrigger, right: KeymapTrigger): boolean => {
+  const leftModifiers = expectedPhysicalModifiers(left)
+  const rightModifiers = expectedPhysicalModifiers(right)
+  return left.match.kind === right.match.kind &&
+    left.match.value === right.match.value &&
+    leftModifiers.shift === rightModifiers.shift &&
+    leftModifiers.alt === rightModifiers.alt &&
+    leftModifiers.control === rightModifiers.control &&
+    leftModifiers.meta === rightModifiers.meta &&
+    left.when?.inputMode === right.when?.inputMode
 }
 
 export const matchesKeymapTrigger = (
@@ -176,13 +195,19 @@ export const matchesKeymapTrigger = (
   event: KeyboardEvent,
   inputMode: InputMode
 ): boolean => {
-  const eventTrigger = triggerFromKeyboardEvent(event)
-  return trigger.key === eventTrigger.key &&
-    trigger.modifiers.shift === eventTrigger.modifiers.shift &&
-    trigger.modifiers.command === eventTrigger.modifiers.command &&
-    trigger.modifiers.alt === eventTrigger.modifiers.alt &&
+  const expected = expectedPhysicalModifiers(trigger)
+  const actual = physicalModifiers(event)
+  const value = trigger.match.kind === 'key' ? normalizeKey(event.key) : event.code
+  return trigger.match.value === value &&
+    expected.shift === actual.shift &&
+    expected.control === actual.control &&
+    expected.meta === actual.meta &&
+    expected.alt === actual.alt &&
     (trigger.when === undefined || trigger.when.inputMode === inputMode)
 }
+
+const bindingSpecificity = (binding: KeymapBinding): number =>
+  Number(Boolean(binding.trigger.when)) * 2 + Number(!binding.trigger.modifiers.primary)
 
 export const findKeymapBinding = (
   resource: KeymapResource | null,
@@ -190,9 +215,10 @@ export const findKeymapBinding = (
   event: KeyboardEvent,
   inputMode: InputMode
 ): KeymapBinding | null =>
-  resource?.bindings[context]?.find((binding) =>
-    matchesKeymapTrigger(binding.trigger, event, inputMode)
-  ) ?? null
+  resource?.bindings[context]
+    ?.filter((binding) => matchesKeymapTrigger(binding.trigger, event, inputMode))
+    .sort((left, right) => bindingSpecificity(right) - bindingSpecificity(left))[0]
+    ?? null
 
 export const findKeymapTriggerConflict = (
   resource: KeymapResource | null,
@@ -201,7 +227,7 @@ export const findKeymapTriggerConflict = (
   originalTrigger?: KeymapTrigger
 ): KeymapBinding | null =>
   resource?.bindings[context]?.find((binding) =>
-    triggersEqual(binding.trigger, trigger) &&
+    triggersConflict(binding.trigger, trigger) &&
     (!originalTrigger || !triggersEqual(binding.trigger, originalTrigger))
   ) ?? null
 
@@ -219,10 +245,14 @@ const displayKey = (key: string): string => {
 
 export const formatKeymapTrigger = (trigger: KeymapTrigger): string => {
   const parts: string[] = []
-  if (trigger.modifiers.command) parts.push(usesMetaForCommand ? 'Cmd' : 'Ctrl')
+  if (trigger.modifiers.primary) parts.push(usesMetaForCommand ? 'Cmd' : 'Ctrl')
+  if (trigger.modifiers.control) parts.push('Ctrl')
+  if (trigger.modifiers.meta) parts.push(usesMetaForCommand ? 'Cmd' : 'Meta')
   if (trigger.modifiers.alt) parts.push(usesMetaForCommand ? 'Option' : 'Alt')
   if (trigger.modifiers.shift) parts.push('Shift')
-  parts.push(displayKey(trigger.key))
+  parts.push(trigger.match.kind === 'code'
+    ? `${trigger.match.value} (physical)`
+    : displayKey(trigger.match.value))
   if (trigger.when) parts.push(`in ${trigger.when.inputMode}`)
   return parts.join(' + ')
 }

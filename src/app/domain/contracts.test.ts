@@ -4,12 +4,43 @@ import {
   parseCommandResponse,
   parseEnvelope,
   parseLibrarySnapshot,
+  parseKeymapDocument,
   parseProjectSnapshot,
   parseSessionHello,
 } from './contracts'
 import { arrangedProjectFixture, libraryFixture, projectFixture } from './testFixtures'
 
 describe('schema contract validation', () => {
+  it('validates complete schema-v2 keymap documents and rejects v1', () => {
+    const trigger = {
+      match: { kind: 'key', value: 'q' },
+      modifiers: {
+        shift: false,
+        alt: false,
+        primary: false,
+        control: false,
+        meta: false,
+      },
+    }
+    const binding = {
+      trigger,
+      target: {
+        type: 'ui_action' as const,
+        action: 'input_mode.set' as const,
+        arguments: { mode: 'pitch' as const },
+      },
+    }
+    expect(parseKeymapDocument({
+      schema_version: 2,
+      bindings: { sequencer: [binding] },
+    }).bindings.sequencer).toHaveLength(1)
+    expect(() => parseKeymapDocument({ schema_version: 1, overrides: [] })).toThrow()
+    expect(() => parseKeymapDocument({
+      schema_version: 2,
+      bindings: { sequencer: [binding, binding] },
+    })).toThrow('Duplicate keymap binding')
+  })
+
   it('accepts envelopes and rejects invalid payloads', () => {
     expect(parseEnvelope({
       protocol: 'xen.bridge.v3',

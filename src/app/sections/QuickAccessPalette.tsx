@@ -12,7 +12,11 @@ import {
   type PaletteItem,
   type PaletteScope,
 } from '../domain/palette'
-import { getCommandKeymapContext, isCommandUiActionId } from '../domain/uiActions'
+import {
+  getCommandKeymapContext,
+  isCommandUiActionId,
+  runCommandUiAction,
+} from '../domain/uiActions'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import type { QuickAccessController } from '../hooks/useQuickAccessPalette'
 import type {
@@ -217,95 +221,59 @@ export function QuickAccessPalette({
 
   const runCommandAction = (action: string): boolean => {
     if (!isCommandUiActionId(action)) return false
-    switch (action) {
-      case 'command.cancel':
-        cancelCommandLayer()
-        return true
-      case 'command.submit':
-        void activateCommandSelection()
-        return true
-      case 'command.close_if_empty':
-        if (state.query.length > 0) return false
-        controller.close()
-        return true
-      case 'command.history.previous':
-        if (state.commandHistory.length === 0) return false
-        navigateHistoryPrevious()
-        return true
-      case 'command.history.next':
-        if (state.historyIndex === -1) return false
-        navigateHistoryNext()
-        return true
-      case 'command.completion.accept':
-        if (!selectedItem) return false
-        acceptCommandCompletion()
-        return true
-      case 'command.completion.dismiss':
-        dispatch({ type: 'patch', patch: { isCompletionDismissed: true } })
-        return true
-      case 'command.completion.previous':
-        navigate(-1)
-        return true
-      case 'command.completion.next':
-        navigate(1)
-        return true
-      case 'command.open':
-        return false
-    }
+    return runCommandUiAction(action, {
+      commandText: state.query,
+      historyIndex: state.historyIndex,
+      commandHistory: state.commandHistory,
+      isCompletionVisible: selectedItem !== null,
+      isCompletionDismissed: state.isCompletionDismissed,
+      isExactCommandInput: completion.isExactCommandInput,
+      completionMode: completion.mode,
+    }, {
+      cancel: cancelCommandLayer,
+      submit: () => void activateSelection(),
+      closeIfEmpty: () => {
+        if (state.returnBrowse) dispatch({ type: 'return_to_browse' })
+        else controller.close()
+      },
+      historyPrevious: navigateHistoryPrevious,
+      historyNext: navigateHistoryNext,
+      completionAccept: acceptCommandCompletion,
+      completionDismiss: () => dispatch({
+        type: 'patch',
+        patch: { isCompletionDismissed: true },
+      }),
+      completionPrevious: () => navigate(-1),
+      completionNext: () => navigate(1),
+    })
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (state.mode === 'command') {
-      const matchedBinding = findKeymapBinding(
-        keymapResource,
-        getCommandKeymapContext(commandItems.length > 0),
-        event.nativeEvent,
-        currentInputMode
-      )
-      if (matchedBinding?.target.type === 'ui_action' && runCommandAction(matchedBinding.target.action)) {
-        event.preventDefault()
-        return
-      }
-    }
-
-    if (event.key === 'Escape') {
+    const context = state.mode === 'browse'
+      ? 'quick_access.browse'
+      : getCommandKeymapContext(commandItems.length > 0)
+    const matchedBinding = findKeymapBinding(
+      keymapResource,
+      context,
+      event.nativeEvent,
+      currentInputMode
+    )
+    if (
+      matchedBinding?.target.type === 'command' &&
+      (!event.repeat || matchedBinding.repeat === 'allow')
+    ) {
       event.preventDefault()
-      if (state.mode === 'command') cancelCommandLayer()
-      else controller.close()
+      event.stopPropagation()
+      void controller.submitCommand(matchedBinding.target.command)
       return
     }
-    if (event.key === 'Enter') {
+    if (
+      matchedBinding?.target.type === 'ui_action' &&
+      (!event.repeat || matchedBinding.repeat === 'allow') &&
+      runCommandAction(matchedBinding.target.action)
+    ) {
       event.preventDefault()
-      void activateSelection()
-      return
-    }
-    if (event.key === 'Tab' && state.mode === 'command' && selectedItem) {
-      event.preventDefault()
-      acceptCommandCompletion()
-      return
-    }
-    if (event.key === 'ArrowDown' || (event.ctrlKey && event.key.toLowerCase() === 'n')) {
-      if (visibleItems.length > 0) {
-        event.preventDefault()
-        navigate(1)
-      } else if (state.mode === 'command') {
-        navigateHistoryNext()
-      }
-      return
-    }
-    if (event.key === 'ArrowUp' || (event.ctrlKey && event.key.toLowerCase() === 'p')) {
-      if (visibleItems.length > 0) {
-        event.preventDefault()
-        navigate(-1)
-      } else if (state.mode === 'command') {
-        navigateHistoryPrevious()
-      }
-      return
-    }
-    if (event.key === 'Backspace' && state.mode === 'command' && state.query.length === 0) {
-      event.preventDefault()
-      if (state.returnBrowse) dispatch({ type: 'return_to_browse' })
-      else controller.close()
+      event.stopPropagation()
     }
   }
 

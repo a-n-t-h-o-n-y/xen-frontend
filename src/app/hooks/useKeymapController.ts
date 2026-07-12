@@ -2,13 +2,15 @@ import { useCallback, useRef, useState } from 'react'
 import { BridgePayloadError } from '../bridge/BridgeClient'
 import {
   keymapFromDto,
-  keymapOverridesToDocument,
+  keymapDocumentToDto,
 } from '../domain/mappers'
 import { ingestKeymapResource } from '../domain/resources'
 import { getErrorMessage } from '../utils/errors'
-import { triggersEqual } from '../domain/keymap'
+import { triggersConflict, triggersEqual } from '../domain/keymap'
 import type { BridgeMethodMap, RequestOptions } from '../bridge/BridgeClient'
 import type {
+  KeymapBinding,
+  KeymapDocument,
   KeymapResource,
   KeymapTarget,
   KeymapTrigger,
@@ -47,18 +49,18 @@ export function useKeymapController({ request }: UseKeymapControllerArgs) {
     ingestKeymap(keymapFromDto(await request('keymap.read', {})))
   }, [ingestKeymap, request])
 
-  const persistOverrides = useCallback(async (
-    createOverrides: (current: KeymapResource) => KeymapResource['overrides']
+  const persistDocument = useCallback(async (
+    createDocument: (current: KeymapResource) => KeymapDocument
   ): Promise<void> => {
     const current = keymapRef.current
     if (!current) throw new Error('Keymap is not loaded')
     setBusy(true)
     setError(null)
     try {
-      const overrides = createOverrides(current)
+      const document = createDocument(current)
       const response = await request('keymap.write', {
         expected_revision: current.revision,
-        document: keymapOverridesToDocument(current.document, overrides),
+        document: keymapDocumentToDto(document),
       })
       ingestKeymap(keymapFromDto(response))
     } catch (caught) {
@@ -78,45 +80,38 @@ export function useKeymapController({ request }: UseKeymapControllerArgs) {
     }
   }, [ingestKeymap, refresh, request])
 
-  const setOverride = useCallback(async (
+  const setBinding = useCallback(async (
     context: string,
     trigger: KeymapTrigger,
     target: KeymapTarget,
-    originalTrigger?: KeymapTrigger
+    originalTrigger?: KeymapTrigger,
+    repeat: KeymapBinding['repeat'] = 'ignore'
   ): Promise<void> => {
-    await persistOverrides((current) => {
-      const overrides = current.overrides.filter((override) =>
-        override.context !== context ||
-        (!triggersEqual(override.trigger, trigger) &&
-          (!originalTrigger || !triggersEqual(override.trigger, originalTrigger)))
+    await persistDocument((current) => {
+      const bindings = current.bindings[context] ?? []
+      const nextBindings = bindings.filter((binding) =>
+        !triggersConflict(binding.trigger, trigger) &&
+        (!originalTrigger || !triggersEqual(binding.trigger, originalTrigger))
       )
-      overrides.push({ context, trigger, target })
-      if (originalTrigger && !triggersEqual(originalTrigger, trigger)) {
-        const originalWasOverride = current.overrides.some((override) =>
-          override.context === context && triggersEqual(override.trigger, originalTrigger)
-        )
-        if (!originalWasOverride) {
-          overrides.push({ context, trigger: originalTrigger, target: null })
-        }
+      nextBindings.push({ trigger, target, repeat })
+      return {
+        schemaVersion: 2,
+        bindings: { ...current.bindings, [context]: nextBindings },
       }
-      return overrides
     })
-  }, [persistOverrides])
+  }, [persistDocument])
 
-  const disable = useCallback((context: string, trigger: KeymapTrigger): Promise<void> =>
-    persistOverrides((current) => [
-      ...current.overrides.filter((override) =>
-        override.context !== context || !triggersEqual(override.trigger, trigger)
-      ),
-      { context, trigger, target: null },
-    ]),
-  [persistOverrides])
-
-  const restore = useCallback((context: string, trigger: KeymapTrigger): Promise<void> =>
-    persistOverrides((current) => current.overrides.filter((override) =>
-      override.context !== context || !triggersEqual(override.trigger, trigger)
-    )),
-  [persistOverrides])
+  const deleteBinding = useCallback((context: string, trigger: KeymapTrigger): Promise<void> =>
+    persistDocument((current) => {
+      const nextContext = (current.bindings[context] ?? []).filter((binding) =>
+        !triggersEqual(binding.trigger, trigger)
+      )
+      const bindings = { ...current.bindings }
+      if (nextContext.length > 0) bindings[context] = nextContext
+      else delete bindings[context]
+      return { schemaVersion: 2, bindings }
+    }),
+  [persistDocument])
 
   const reset = useCallback(async (): Promise<void> => {
     const current = keymapRef.current
@@ -149,9 +144,8 @@ export function useKeymapController({ request }: UseKeymapControllerArgs) {
     clearError,
     ingestKeymap,
     refresh,
-    setOverride,
-    disable,
-    restore,
+    setBinding,
+    deleteBinding,
     reset,
   }
 }

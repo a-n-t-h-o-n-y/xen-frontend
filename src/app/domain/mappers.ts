@@ -2,7 +2,6 @@ import type {
   CatalogDto,
   CommandExecuteResponseDto,
   KeymapDocumentDto,
-  KeymapOverrideDto,
   KeymapStorageResourceDto,
   KeymapTargetDto,
   KeymapTriggerDto,
@@ -23,10 +22,10 @@ import type {
   Scale,
   SessionReference,
 } from './models'
-import type { KeymapOverride, KeymapTarget, KeymapTrigger } from './keymap'
-import { defaultKeymapBindings } from './defaultKeymap'
-import { mergeKeymapOverrides } from './keymap'
-import { parseKeymapDocument } from './contracts'
+import type { KeymapBinding, KeymapDocument, KeymapTarget, KeymapTrigger } from './keymap'
+import { defaultKeymapDocument } from './defaultKeymap'
+import { keymapDocumentSchema } from './contracts'
+import { isUiActionAllowedInContext } from './uiActions'
 
 export const scaleFromDto = (definition: ScaleDefinitionDto): Scale => ({
   name: definition.name,
@@ -182,35 +181,78 @@ export const libraryFromDto = (snapshot: LibrarySnapshotDto): LibrarySnapshot =>
 })
 
 export const triggerFromDto = (trigger: KeymapTriggerDto): KeymapTrigger => ({
-  key: trigger.key,
+  match: trigger.match,
   modifiers: trigger.modifiers,
   ...(trigger.when ? { when: { inputMode: trigger.when.input_mode } } : {}),
 })
 
 export const triggerToDto = (trigger: KeymapTrigger): KeymapTriggerDto => ({
-  key: trigger.key,
+  match: trigger.match,
   modifiers: trigger.modifiers,
   when: trigger.when ? { input_mode: trigger.when.inputMode } : undefined,
 })
 
-export const targetFromDto = (target: KeymapTargetDto): KeymapTarget => target
-export const targetToDto = (target: KeymapTarget): KeymapTargetDto => target
+export const targetFromDto = (target: KeymapTargetDto): KeymapTarget => target as KeymapTarget
+export const targetToDto = (target: KeymapTarget): KeymapTargetDto => target as KeymapTargetDto
 
-const overrideFromDto = (override: KeymapOverrideDto): KeymapOverride => ({
-  context: override.context,
-  trigger: triggerFromDto(override.trigger),
-  target: override.target ? targetFromDto(override.target) : null,
+const bindingFromDto = (binding: KeymapDocumentDto['bindings'][string][number]): KeymapBinding => ({
+  trigger: triggerFromDto(binding.trigger),
+  target: targetFromDto(binding.target),
+  ...(binding.repeat ? { repeat: binding.repeat } : {}),
+})
+
+const documentFromDto = (document: KeymapDocumentDto): KeymapDocument => ({
+  schemaVersion: 2,
+  bindings: Object.fromEntries(Object.entries(document.bindings).map(([context, bindings]) => [
+    context,
+    bindings.map(bindingFromDto),
+  ])),
+})
+
+const cloneDocument = (document: KeymapDocument): KeymapDocument => ({
+  schemaVersion: 2,
+  bindings: Object.fromEntries(Object.entries(document.bindings).map(([context, bindings]) => [
+    context,
+    bindings.map((binding) => ({
+      ...binding,
+      trigger: {
+        ...binding.trigger,
+        match: { ...binding.trigger.match },
+        modifiers: { ...binding.trigger.modifiers },
+        ...(binding.trigger.when ? { when: { ...binding.trigger.when } } : {}),
+      },
+      target: structuredClone(binding.target),
+    })),
+  ])),
 })
 
 export const keymapFromDto = (resource: KeymapStorageResourceDto): KeymapResource => {
-  const document = resource.document === null ? null : parseKeymapDocument(resource.document)
-  const overrides = document?.overrides.map(overrideFromDto) ?? []
+  const parsed = resource.document === null
+    ? null
+    : keymapDocumentSchema.safeParse(resource.document)
+  const invalidAction = parsed?.success
+    ? Object.entries(parsed.data.bindings).flatMap(([context, bindings]) =>
+        bindings.filter((binding) =>
+          binding.target.type === 'ui_action' &&
+          !isUiActionAllowedInContext(binding.target.action, context)
+        ).map((binding) => `${binding.target.type === 'ui_action' ? binding.target.action : ''} in ${context}`)
+      )[0]
+    : undefined
+  const loadError = parsed && (!parsed.success || invalidAction)
+    ? `Stored shortcuts were ignored: ${parsed.success
+        ? `action ${invalidAction} is not allowed`
+        : parsed.error.issues[0]?.message ?? 'invalid document'}`
+    : null
+  const document = parsed?.success && !invalidAction
+    ? documentFromDto(parsed.data)
+    : cloneDocument(defaultKeymapDocument)
   return {
-  revision: resource.revision,
-  keySemantics: 'KeyboardEvent.key',
-  bindings: mergeKeymapOverrides(defaultKeymapBindings, overrides),
-  overrides,
-  document,
+    revision: resource.revision,
+    keySemantics: 'KeyboardEvent.key-or-code',
+    bindings: document.bindings,
+    document,
+    source: parsed?.success && !invalidAction ? 'stored' : 'default',
+    loadError,
   }
 }
 
@@ -264,15 +306,14 @@ export const commandContextToDto = (context: CommandContext) => ({
   },
 })
 
-export const keymapOverridesToDocument = (
-  currentDocument: Record<string, unknown> | null,
-  overrides: readonly KeymapOverride[]
-): KeymapDocumentDto => ({
-  ...(currentDocument ?? {}),
-  schema_version: 1,
-  overrides: overrides.map((override) => ({
-    context: override.context,
-    trigger: triggerToDto(override.trigger),
-    target: override.target ? targetToDto(override.target) : null,
-  })),
+export const keymapDocumentToDto = (document: KeymapDocument): KeymapDocumentDto => ({
+  schema_version: 2,
+  bindings: Object.fromEntries(Object.entries(document.bindings).map(([context, bindings]) => [
+    context,
+    bindings.map((binding) => ({
+      trigger: triggerToDto(binding.trigger),
+      target: targetToDto(binding.target),
+      ...(binding.repeat ? { repeat: binding.repeat } : {}),
+    })),
+  ])),
 })

@@ -320,6 +320,7 @@ function App() {
     activeMeasureTargetRef,
     keymapRef,
     installEditorState,
+    workspaceView,
     workspaceViewRef,
     compositionSelectionRef,
     installCompositionSelection,
@@ -539,9 +540,8 @@ function App() {
         busy={keymapController.busy}
         error={keymapController.error}
         onClose={settingsOverlay.closeOverlay}
-        onSetOverride={keymapController.setOverride}
-        onDisable={keymapController.disable}
-        onRestore={keymapController.restore}
+        onSetBinding={keymapController.setBinding}
+        onDelete={keymapController.deleteBinding}
         onReset={keymapController.reset}
       />
     </div>

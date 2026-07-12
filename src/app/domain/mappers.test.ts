@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   keymapFromDto,
-  keymapOverridesToDocument,
+  keymapDocumentToDto,
   libraryFromDto,
   projectFromDto,
 } from './mappers'
@@ -82,38 +82,48 @@ describe('DTO to domain mappers', () => {
     })
   })
 
-  it('merges persisted overrides into frontend-owned keymap defaults', () => {
+  it('loads complete schema-v2 keymap documents', () => {
     const keymap = keymapFromDto({
       revision: '18446744073709551615',
       document: {
-        schema_version: 1,
-        revision: 9,
-        future_setting: true,
-        overrides: [{
-          context: 'sequence',
+        schema_version: 2,
+        bindings: { sequencer: [{
           trigger: {
-            key: 'h',
-            modifiers: { shift: false, command: false, alt: false },
+            match: { kind: 'key', value: 'q' },
+            modifiers: {
+              shift: false,
+              alt: false,
+              primary: false,
+              control: false,
+              meta: false,
+            },
           },
-          target: null,
-        }],
+          target: {
+            type: 'ui_action',
+            action: 'input_mode.set',
+            arguments: { mode: 'pitch' },
+          },
+        }] },
       },
     })
 
     expect(keymap.revision).toBe('18446744073709551615')
-    expect(keymap.bindings.sequence?.some((binding) =>
-      binding.trigger.key === 'h' && !binding.trigger.modifiers.shift
-    )).toBe(false)
-    expect(keymap.bindings.sequence?.some((binding) => binding.trigger.key === 'l')).toBe(true)
-    expect(keymap.document).toMatchObject({ revision: 9, future_setting: true })
+    expect(keymap.bindings.sequencer?.[0]?.trigger.match.value).toBe('q')
+    expect(keymap.source).toBe('stored')
+    expect(keymap.loadError).toBeNull()
   })
 
-  it('uses defaults for a missing file and preserves unknown document fields on edits', () => {
+  it('uses defaults for missing or unsupported documents and serializes complete documents', () => {
     const keymap = keymapFromDto({ revision: '7', document: null })
     expect(keymap.bindings.composition).not.toHaveLength(0)
-    expect(keymap.overrides).toEqual([])
+    expect(keymap.source).toBe('default')
 
-    expect(keymapOverridesToDocument({ schema_version: 1, future_setting: true }, []))
-      .toEqual({ schema_version: 1, future_setting: true, overrides: [] })
+    const legacy = keymapFromDto({
+      revision: '8',
+      document: { schema_version: 1, overrides: [] },
+    })
+    expect(legacy.source).toBe('default')
+    expect(legacy.loadError).toContain('Stored shortcuts were ignored')
+    expect(keymapDocumentToDto(keymap.document).schema_version).toBe(2)
   })
 })

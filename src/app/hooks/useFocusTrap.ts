@@ -29,7 +29,7 @@ export function useFocusTrap(active: boolean, containerRef: RefObject<HTMLElemen
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Tab') return
+      if (event.key !== 'Tab' || event.defaultPrevented) return
 
       const currentFocusables = getFocusableElements(container)
       if (currentFocusables.length === 0) {

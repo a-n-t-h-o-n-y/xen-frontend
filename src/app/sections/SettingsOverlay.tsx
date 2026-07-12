@@ -4,12 +4,13 @@ import {
   formatKeymapTarget,
   formatKeymapTrigger,
   triggerFromKeyboardEvent,
-  triggersEqual,
 } from '../domain/keymap'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { CommandReferenceSection } from './settings/CommandReferenceSection'
 import {
   formatKeymapContext,
+  isUiActionAllowedInContext,
+  keymapContexts,
   uiActionRegistry,
   type FrontendUiActionId,
 } from '../domain/uiActions'
@@ -30,14 +31,14 @@ type SettingsOverlayProps = {
   busy: boolean
   error: string | null
   onClose: () => void
-  onSetOverride: (
+  onSetBinding: (
     context: string,
     trigger: KeymapTrigger,
     target: KeymapTarget,
-    originalTrigger?: KeymapTrigger
+    originalTrigger?: KeymapTrigger,
+    repeat?: KeymapBinding['repeat']
   ) => Promise<void>
-  onDisable: (context: string, trigger: KeymapTrigger) => Promise<void>
-  onRestore: (context: string, trigger: KeymapTrigger) => Promise<void>
+  onDelete: (context: string, trigger: KeymapTrigger) => Promise<void>
   onReset: () => Promise<void>
 }
 
@@ -53,6 +54,8 @@ type EditorState = {
   modulatorSlot: 1 | 2 | 3 | 4
   modTarget: ModTarget
   whenMode: InputMode | ''
+  matchKind: 'key' | 'code'
+  repeat: KeymapBinding['repeat']
 }
 
 const inputModes: InputMode[] = ['pitch', 'velocity', 'delay', 'gate', 'scale']
@@ -87,11 +90,13 @@ const editorFromBinding = (context: string, binding?: KeymapBinding): EditorStat
       ? target.arguments.target
       : 'pitch',
     whenMode: binding?.trigger.when?.inputMode ?? '',
+    matchKind: binding?.trigger.match.kind ?? 'key',
+    repeat: binding?.repeat ?? 'ignore',
   }
 }
 
 const withInputMode = (trigger: KeymapTrigger, inputMode: InputMode | ''): KeymapTrigger => {
-  const baseTrigger = { key: trigger.key, modifiers: trigger.modifiers }
+  const baseTrigger = { match: trigger.match, modifiers: trigger.modifiers }
   return inputMode ? { ...baseTrigger, when: { inputMode } } : baseTrigger
 }
 
@@ -153,9 +158,8 @@ export function SettingsOverlay({
   busy,
   error,
   onClose,
-  onSetOverride,
-  onDisable,
-  onRestore,
+  onSetBinding,
+  onDelete,
   onReset,
 }: SettingsOverlayProps) {
   const [editor, setEditor] = useState<EditorState | null>(null)
@@ -169,11 +173,12 @@ export function SettingsOverlay({
 
   const contexts = useMemo(() => {
     if (!resource) return []
-    return Array.from(new Set([
-      ...Object.keys(resource.bindings),
-      ...resource.overrides.map((override) => override.context),
-    ])).sort()
+    return Object.keys(resource.bindings).sort()
   }, [resource])
+  const availableUiActionOptions = useMemo(() => editor
+    ? uiActionOptions.filter((action) => isUiActionAllowedInContext(action.id, editor.context))
+    : uiActionOptions,
+  [editor])
 
   const closeEditor = useCallback((restoreFocus = true): void => {
     setEditor(null)
@@ -238,7 +243,13 @@ export function SettingsOverlay({
       return
     }
     try {
-      await onSetOverride(context, trigger, targetFromEditor(editor), editor.originalTrigger)
+      await onSetBinding(
+        context,
+        trigger,
+        targetFromEditor(editor),
+        editor.originalTrigger,
+        editor.repeat
+      )
       closeEditor()
     } catch {
       // Mutation errors are rendered by the parent settings surface.
@@ -275,7 +286,7 @@ export function SettingsOverlay({
               onClick={() => setActiveSection('shortcuts')}
             >
               <span>Shortcuts</span>
-              <small>{resource?.overrides.length ?? 0} custom</small>
+              <small>{resource?.source === 'stored' ? 'Stored' : 'Defaults'}</small>
             </button>
             <button
               type="button"
@@ -293,7 +304,7 @@ export function SettingsOverlay({
                 <div className="settingsSectionIntro">
                   <div>
                     <h3>Keyboard shortcuts</h3>
-                    <p>Bindings are matched by character, modifiers, context, and optional input mode.</p>
+                    <p>Bindings are matched by logical or physical key, modifiers, context, and optional input mode.</p>
                   </div>
                   <div className="settingsSectionActions">
                     <button
@@ -301,7 +312,7 @@ export function SettingsOverlay({
                       className="settingsButton"
                       disabled={!resource || busy}
                       onClick={(event) => openEditor(
-                        editorFromBinding(contexts[0] ?? 'sequence'),
+                        editorFromBinding(contexts[0] ?? 'sequencer'),
                         event.currentTarget
                       )}
                     >
@@ -310,7 +321,7 @@ export function SettingsOverlay({
                     <button
                       type="button"
                       className="settingsButton settingsButton-danger"
-                      disabled={!resource || resource.overrides.length === 0 || busy}
+                      disabled={!resource || (resource.source === 'default' && !resource.loadError) || busy}
                       onClick={() => void onReset().catch(() => undefined)}
                     >
                       Reset all
@@ -318,13 +329,13 @@ export function SettingsOverlay({
                   </div>
                 </div>
                 {error ? <p className="settingsError" role="alert">{error}</p> : null}
+                {resource?.loadError ? (
+                  <p className="settingsError" role="alert">{resource.loadError} Reset or save a shortcut to replace it.</p>
+                ) : null}
                 {!resource ? (
                   <p className="settingsEmpty">Waiting for keymap data…</p>
                 ) : contexts.map((context) => {
                   const bindings = resource.bindings[context] ?? []
-                  const disabled = resource.overrides.filter((override) =>
-                    override.context === context && override.target === null
-                  )
                   return (
                     <section className="shortcutGroup" key={context}>
                       <div className="shortcutGroupHeader">
@@ -333,10 +344,6 @@ export function SettingsOverlay({
                       </div>
                       <div className="shortcutTable" role="table" aria-label={`${context} shortcuts`}>
                         {bindings.map((binding) => {
-                          const override = resource.overrides.find((candidate) =>
-                            candidate.context === context &&
-                            triggersEqual(candidate.trigger, binding.trigger)
-                          )
                           return (
                             <div className="shortcutRow" role="row" key={formatKeymapTrigger(binding.trigger)}>
                               <button
@@ -349,37 +356,18 @@ export function SettingsOverlay({
                               >
                                 <span className="shortcutTrigger mono">{formatKeymapTrigger(binding.trigger)}</span>
                                 <span className="shortcutTarget mono">{formatKeymapTarget(binding.target)}</span>
-                                <span className={`shortcutOrigin${override ? ' shortcutOrigin-custom' : ''}`}>
-                                  {override ? 'Custom' : 'Inherited'}
+                                <span className="shortcutOrigin">
+                                  {binding.repeat === 'allow' ? 'Repeats' : 'Single press'}
                                 </span>
                               </button>
                               <div className="shortcutActions">
-                                {override ? (
-                                  <button type="button" disabled={busy} onClick={() => void onRestore(context, binding.trigger).catch(() => undefined)}>
-                                    Restore
-                                  </button>
-                                ) : null}
-                                <button type="button" disabled={busy} onClick={() => void onDisable(context, binding.trigger).catch(() => undefined)}>
-                                  Disable
+                                <button type="button" disabled={busy} onClick={() => void onDelete(context, binding.trigger).catch(() => undefined)}>
+                                  Delete
                                 </button>
                               </div>
                             </div>
                           )
                         })}
-                        {disabled.map((override) => (
-                          <div className="shortcutRow shortcutRow-disabled" role="row" key={`disabled-${formatKeymapTrigger(override.trigger)}`}>
-                            <div className="shortcutMain">
-                              <span className="shortcutTrigger mono">{formatKeymapTrigger(override.trigger)}</span>
-                              <span className="shortcutTarget">Disabled</span>
-                              <span className="shortcutOrigin">Explicitly disabled</span>
-                            </div>
-                            <div className="shortcutActions">
-                              <button type="button" disabled={busy} onClick={() => void onRestore(context, override.trigger).catch(() => undefined)}>
-                                Restore
-                              </button>
-                            </div>
-                          </div>
-                        ))}
                       </div>
                     </section>
                   )
@@ -411,11 +399,26 @@ export function SettingsOverlay({
             </div>
             <label className="settingsField">
               <span>Context</span>
-              <input
+              <select
                 value={editor.context}
                 onChange={(event) => setEditor({ ...editor, context: event.target.value })}
                 disabled={editor.originalTrigger !== undefined}
-              />
+              >
+                {keymapContexts.map((context) => (
+                  <option value={context} key={context}>{formatKeymapContext(context)}</option>
+                ))}
+              </select>
+            </label>
+            <label className="settingsField">
+              <span>Key matching</span>
+              <select value={editor.matchKind} onChange={(event) => setEditor({
+                ...editor,
+                matchKind: event.target.value as EditorState['matchKind'],
+                trigger: null,
+              })}>
+                <option value="key">Logical key</option>
+                <option value="code">Physical key</option>
+              </select>
             </label>
             <label className="settingsField">
               <span>Trigger</span>
@@ -428,11 +431,7 @@ export function SettingsOverlay({
                   if (!capturing) return
                   event.preventDefault()
                   event.stopPropagation()
-                  if (event.key === 'Escape') {
-                    setCapturing(false)
-                    return
-                  }
-                  const trigger = triggerFromKeyboardEvent(event.nativeEvent)
+                  const trigger = triggerFromKeyboardEvent(event.nativeEvent, editor.matchKind)
                   setEditor({ ...editor, trigger })
                   setCapturing(false)
                   setConflict(null)
@@ -455,6 +454,17 @@ export function SettingsOverlay({
                 {inputModes.map((mode) => <option value={mode} key={mode}>{mode}</option>)}
               </select>
             </label>
+            <label className="settingsField settingsCheckboxField">
+              <input
+                type="checkbox"
+                checked={editor.repeat === 'allow'}
+                onChange={(event) => setEditor({
+                  ...editor,
+                  repeat: event.target.checked ? 'allow' : 'ignore',
+                })}
+              />
+              <span>Repeat while held</span>
+            </label>
             <label className="settingsField">
               <span>Action</span>
               <select value={editor.targetType} onChange={(event) => setEditor({
@@ -462,7 +472,7 @@ export function SettingsOverlay({
                 targetType: event.target.value as EditorState['targetType'],
               })}>
                 <option value="command">Backend command</option>
-                {uiActionOptions.map((action) => (
+                {availableUiActionOptions.map((action) => (
                   <option value={action.id} key={action.id}>{action.label}</option>
                 ))}
               </select>
@@ -555,6 +565,8 @@ export function SettingsOverlay({
                   busy ||
                   !editor.context.trim() ||
                   !editor.trigger ||
+                  (editor.targetType !== 'command' &&
+                    !isUiActionAllowedInContext(editor.targetType, editor.context)) ||
                   ((editor.targetType === 'selection.move' ||
                     editor.targetType === 'composition.selection.move') && editor.amount < 1) ||
                   (editor.targetType === 'command' && !editor.command.trim())

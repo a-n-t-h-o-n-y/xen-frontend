@@ -1,6 +1,7 @@
 import type {
   InputMode,
   KeymapBinding,
+  KeymapDocument,
   KeymapTarget,
   KeymapTrigger,
 } from './keymap'
@@ -14,8 +15,15 @@ const trigger = (
   alt = false,
   inputMode?: InputMode
 ): KeymapTrigger => inputMode
-  ? { key, modifiers: { shift, command, alt }, when: { inputMode } }
-  : { key, modifiers: { shift, command, alt } }
+  ? {
+      match: { kind: 'key', value: key },
+      modifiers: { shift, alt, primary: command, control: false, meta: false },
+      when: { inputMode },
+    }
+  : {
+      match: { kind: 'key', value: key },
+      modifiers: { shift, alt, primary: command, control: false, meta: false },
+    }
 
 const command = (value: string): KeymapTarget => ({ type: 'command', command: value })
 const action = (value: Extract<KeymapTarget, { type: 'ui_action' }>): KeymapTarget => value
@@ -23,7 +31,7 @@ const emptyAction = (
   name: Extract<KeymapTarget, { type: 'ui_action' }>['action']
 ): KeymapTarget => ({ type: 'ui_action', action: name, arguments: {} } as KeymapTarget)
 
-const add = (bindingTrigger: KeymapTrigger, target: KeymapTarget, context = 'sequence'): void => {
+const add = (bindingTrigger: KeymapTrigger, target: KeymapTarget, context = 'sequencer'): void => {
   const contextBindings = bindings[context] ?? []
   contextBindings.push({ trigger: bindingTrigger, target })
   bindings[context] = contextBindings
@@ -52,9 +60,9 @@ add(trigger('d'), inputMode('delay'))
 add(trigger('g'), inputMode('gate'))
 add(trigger('c'), inputMode('scale'))
 
-add(trigger('c', false, true), command('copy'))
-add(trigger('x', false, true), command('cut'))
-add(trigger('v', false, true), command('paste'))
+add(trigger('c', false, true), emptyAction('edit.copy'))
+add(trigger('x', false, true), emptyAction('edit.cut'))
+add(trigger('v', false, true), emptyAction('edit.paste'))
 add(trigger('d', false, true), command('duplicate'))
 add(trigger('z', false, true), command('undo'))
 add(trigger('y', false, true), command('redo'))
@@ -113,7 +121,7 @@ add(trigger('s'), command('split :N=2:'))
 add(trigger('n'), command('note :N=0:'))
 add(trigger('r'), command('rest'))
 add(trigger('k', false, true), emptyAction('command.open'))
-add(trigger(':'), emptyAction('command.open'))
+add(trigger(':', true), emptyAction('command.open'))
 add(trigger('Tab'), emptyAction('workspace.view.composition'))
 
 for (const [key, direction] of [
@@ -122,9 +130,9 @@ for (const [key, direction] of [
 ] as const) add(trigger(key), compositionMove(direction), 'composition')
 
 for (const [key, name, shift, commandModifier] of [
-  ['c', 'composition.cell.copy', false, true],
-  ['x', 'composition.cell.cut', false, true],
-  ['v', 'composition.cell.paste', false, true],
+  ['c', 'edit.copy', false, true],
+  ['x', 'edit.cut', false, true],
+  ['v', 'edit.paste', false, true],
   ['d', 'composition.cell.duplicate_right', false, true],
   ['Enter', 'composition.cell.edit_measure', false, false],
   ['n', 'composition.cell.rename_or_create_measure', false, false],
@@ -144,16 +152,16 @@ for (const [key, name, shift, commandModifier] of [
 add(trigger('Tab'), emptyAction('workspace.view.sequencer'), 'composition')
 
 for (const [context, entries] of [
-  ['command.input', [
+  ['quick_access.command', [
     ['Escape', 'command.cancel'],
     ['Enter', 'command.submit'],
     ['ArrowUp', 'command.history.previous'],
     ['ArrowDown', 'command.history.next'],
     ['Tab', 'command.completion.accept'],
   ]],
-  ['command.completions', [
+  ['quick_access.completions', [
     ['Escape', 'command.completion.dismiss'],
-    ['Enter', 'command.completion.accept'],
+    ['Enter', 'command.submit'],
     ['Tab', 'command.completion.accept'],
     ['ArrowUp', 'command.completion.previous'],
     ['ArrowDown', 'command.completion.next'],
@@ -162,4 +170,49 @@ for (const [context, entries] of [
   for (const [key, name] of entries) add(trigger(key), emptyAction(name), context)
 }
 
-export const defaultKeymapBindings: Readonly<Record<string, readonly KeymapBinding[]>> = bindings
+add(trigger('Backspace'), emptyAction('command.close_if_empty'), 'quick_access.command')
+for (const [context, previous, next] of [
+  ['quick_access.command', 'command.history.previous', 'command.history.next'],
+  ['quick_access.completions', 'command.completion.previous', 'command.completion.next'],
+] as const) {
+  const previousTrigger = trigger('p')
+  previousTrigger.modifiers.control = true
+  add(previousTrigger, emptyAction(previous), context)
+  const nextTrigger = trigger('n')
+  nextTrigger.modifiers.control = true
+  add(nextTrigger, emptyAction(next), context)
+}
+
+for (const [key, name, control] of [
+  ['Escape', 'command.cancel', false],
+  ['Enter', 'command.submit', false],
+  ['ArrowDown', 'command.completion.next', false],
+  ['ArrowUp', 'command.completion.previous', false],
+  ['n', 'command.completion.next', true],
+  ['p', 'command.completion.previous', true],
+] as const) {
+  const bindingTrigger = trigger(key)
+  if (control) bindingTrigger.modifiers.control = true
+  add(bindingTrigger, emptyAction(name), 'quick_access.browse')
+}
+
+const repeatableActions = new Set([
+  'selection.move',
+  'composition.selection.move',
+  'command.history.previous',
+  'command.history.next',
+  'command.completion.previous',
+  'command.completion.next',
+])
+for (const contextBindings of Object.values(bindings)) {
+  for (const binding of contextBindings) {
+    binding.repeat = binding.target.type === 'command'
+      ? binding.target.command.startsWith('shift ') ? 'allow' : 'ignore'
+      : repeatableActions.has(binding.target.action) ? 'allow' : 'ignore'
+  }
+}
+
+export const defaultKeymapDocument: KeymapDocument = {
+  schemaVersion: 2,
+  bindings,
+}

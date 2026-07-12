@@ -4,7 +4,7 @@ export const BRIDGE_PROTOCOL = 'xen.bridge.v3'
 export const PROJECT_SCHEMA_VERSION = 4
 export const LIBRARY_SCHEMA_VERSION = 1
 export const CATALOG_SCHEMA_VERSION = 3
-export const KEYMAP_SCHEMA_VERSION = 1
+export const KEYMAP_SCHEMA_VERSION = 2
 
 const finiteNumber = z.number().finite()
 const nonNegativeInteger = z.number().int().nonnegative()
@@ -261,15 +261,20 @@ export const catalogSchema = z.object({
 export const inputModeSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'scale'])
 
 export const keymapTriggerSchema = z.object({
-  key: z.string().min(1).max(64).refine(
-    (key) => !/^[A-Z]$/.test(key),
-    'Single ASCII letter keymap triggers must be lowercase'
-  ),
+  match: z.object({
+    kind: z.enum(['key', 'code']),
+    value: z.string().min(1).max(64).refine(
+      (value) => !/^[A-Z]$/.test(value),
+      'Single ASCII letter keymap triggers must be lowercase'
+    ),
+  }).strict(),
   modifiers: z.object({
     shift: z.boolean(),
-    command: z.boolean(),
     alt: z.boolean(),
-  }),
+    primary: z.boolean(),
+    control: z.boolean(),
+    meta: z.boolean(),
+  }).strict(),
   when: z.object({
     input_mode: inputModeSchema,
   }).optional(),
@@ -307,9 +312,6 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
       'workspace.view.composition',
       'workspace.view.sequencer',
       'composition.cell.edit_measure',
-      'composition.cell.copy',
-      'composition.cell.cut',
-      'composition.cell.paste',
       'composition.cell.duplicate_right',
       'composition.cell.rename_or_create_measure',
       'composition.cell.clear',
@@ -324,6 +326,9 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
       'composition.column.length',
       'composition.loop.set_start',
       'composition.loop.set_end',
+      'edit.copy',
+      'edit.cut',
+      'edit.paste',
     ]),
     arguments: z.object({}).strict(),
   }),
@@ -380,30 +385,44 @@ export const keymapTargetSchema = z.discriminatedUnion('type', [
 export const keymapBindingSchema = z.object({
   trigger: keymapTriggerSchema,
   target: keymapTargetSchema,
-})
+  repeat: z.enum(['allow', 'ignore']).optional(),
+}).strict()
 
-export const keymapOverrideSchema = z.object({
-  context: z.string().min(1).max(64).regex(/^[a-z0-9_.-]+$/),
-  trigger: keymapTriggerSchema,
-  target: keymapTargetSchema.nullable(),
-})
+const keymapContexts = [
+  'sequencer',
+  'composition',
+  'quick_access.browse',
+  'quick_access.command',
+  'quick_access.completions',
+] as const
 
 export const keymapDocumentSchema = z.object({
   schema_version: z.literal(KEYMAP_SCHEMA_VERSION),
-  revision: nonNegativeInteger.optional(),
-  overrides: z.array(keymapOverrideSchema),
-}).passthrough().superRefine((document, context) => {
-  const identities = new Set<string>()
-  document.overrides.forEach((override, index) => {
-    const identity = JSON.stringify([override.context, override.trigger])
-    if (identities.has(identity)) {
+  bindings: z.record(
+    z.string().min(1).max(64).regex(/^[a-z0-9_.-]+$/),
+    z.array(keymapBindingSchema)
+  ),
+}).strict().superRefine((document, context) => {
+  Object.entries(document.bindings).forEach(([keymapContext, bindings]) => {
+    if (!keymapContexts.includes(keymapContext as typeof keymapContexts[number])) {
       context.addIssue({
         code: 'custom',
-        path: ['overrides', index],
-        message: 'Duplicate keymap override',
+        path: ['bindings', keymapContext],
+        message: 'Unknown keymap context',
       })
     }
-    identities.add(identity)
+    const identities = new Set<string>()
+    bindings.forEach((binding, index) => {
+      const identity = JSON.stringify(binding.trigger)
+      if (identities.has(identity)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['bindings', keymapContext, index],
+          message: 'Duplicate keymap binding',
+        })
+      }
+      identities.add(identity)
+    })
   })
 })
 
@@ -486,7 +505,6 @@ export type InputModeDto = z.infer<typeof inputModeSchema>
 export type KeymapTriggerDto = z.infer<typeof keymapTriggerSchema>
 export type KeymapTargetDto = z.infer<typeof keymapTargetSchema>
 export type KeymapBindingDto = z.infer<typeof keymapBindingSchema>
-export type KeymapOverrideDto = z.infer<typeof keymapOverrideSchema>
 export type KeymapDocumentDto = z.infer<typeof keymapDocumentSchema>
 export type KeymapStorageResourceDto = z.infer<typeof keymapStorageResourceSchema>
 

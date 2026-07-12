@@ -5,15 +5,21 @@ import { SettingsOverlay } from './SettingsOverlay'
 import type { KeymapResource } from '../domain/models'
 
 const trigger = {
-  key: 'h',
-  modifiers: { shift: true, command: false, alt: false },
+  match: { kind: 'key', value: 'h' },
+  modifiers: {
+    shift: true,
+    alt: false,
+    primary: false,
+    control: false,
+    meta: false,
+  },
 } as const
 
 const resource: KeymapResource = {
   revision: '1',
-  keySemantics: 'KeyboardEvent.key',
+  keySemantics: 'KeyboardEvent.key-or-code',
   bindings: {
-    sequence: [{
+    sequencer: [{
       trigger,
       target: {
         type: 'ui_action',
@@ -22,8 +28,9 @@ const resource: KeymapResource = {
       },
     }],
   },
-  overrides: [],
-  document: null,
+  document: { schemaVersion: 2, bindings: {} },
+  source: 'stored',
+  loadError: null,
 }
 
 const renderOverlay = (overrides: Partial<Parameters<typeof SettingsOverlay>[0]> = {}) => {
@@ -34,9 +41,8 @@ const renderOverlay = (overrides: Partial<Parameters<typeof SettingsOverlay>[0]>
     busy: false,
     error: null,
     onClose: vi.fn(),
-    onSetOverride: vi.fn().mockResolvedValue(undefined),
-    onDisable: vi.fn().mockResolvedValue(undefined),
-    onRestore: vi.fn().mockResolvedValue(undefined),
+    onSetBinding: vi.fn().mockResolvedValue(undefined),
+    onDelete: vi.fn().mockResolvedValue(undefined),
     onReset: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
@@ -67,15 +73,16 @@ describe('SettingsOverlay', () => {
     await user.type(amount, '3')
     await user.click(screen.getByRole('button', { name: 'Save shortcut' }))
 
-    expect(props.onSetOverride).toHaveBeenCalledWith(
-      'sequence',
+    expect(props.onSetBinding).toHaveBeenCalledWith(
+      'sequencer',
       trigger,
       {
         type: 'ui_action',
         action: 'selection.move',
         arguments: { direction: 'left', amount: 3 },
       },
-      trigger
+      trigger,
+      'ignore'
     )
   })
 
