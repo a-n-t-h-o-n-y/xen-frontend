@@ -56,13 +56,16 @@
   outline: 0;
   background: transparent;
   color: var(--text-primary);
-  font-size: var(--font-lg);
+  font: inherit;
 }
 
 .quickAccessComposer {
   position: relative;
   min-width: 0;
   overflow: hidden;
+  font-family: inherit;
+  font-size: var(--font-lg);
+  line-height: normal;
 }
 
 .quickAccessGhost {
