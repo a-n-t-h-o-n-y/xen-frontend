@@ -1,6 +1,6 @@
-import type { ActiveMeasureTarget, CommandContext, ProjectSnapshot, Selection } from './models'
+import type { ActiveSequenceTarget, CommandContext, ProjectSnapshot, Selection } from './models'
 import type { TranslateDirection } from './models'
-import { isActiveMeasureTargetValid } from './composition'
+import { isActiveSequenceTargetValid } from './composition'
 import { projectRootCell, reconcileSelection } from './selection'
 
 const quoteCommandArgument = (value: string): string => JSON.stringify(value)
@@ -9,17 +9,17 @@ const quoteCommandArgument = (value: string): string => JSON.stringify(value)
    Composition command builders
    ========================================================= */
 
-export const compositionCellClear = (
+export const compositionCellUnassign = (
   rowIndex: number,
   columnIndex: number
-): string => `composition cell clear ${rowIndex} ${columnIndex}`
+): string => `composition cell unassign ${rowIndex} ${columnIndex}`
 
 export const compositionCellAssign = (
   rowIndex: number,
   columnIndex: number,
-  measureName: string
+  sequenceName: string
 ): string =>
-  `composition cell assign ${rowIndex} ${columnIndex} ${quoteCommandArgument(measureName)}`
+  `composition cell assign ${rowIndex} ${columnIndex} ${quoteCommandArgument(sequenceName)}`
 
 export const compositionRowRename = (rowIndex: number, name: string): string =>
   `composition row rename ${rowIndex} ${quoteCommandArgument(name)}`
@@ -73,16 +73,16 @@ export const scaleDuration = (mode: 'half' | 'double'): string =>
 export const buildCommandContext = (
   project: ProjectSnapshot,
   selection: Selection,
-  activeMeasureTarget: ActiveMeasureTarget | null = null
+  activeSequenceTarget: ActiveSequenceTarget | null = null
 ): CommandContext => {
-  const validTarget = isActiveMeasureTargetValid(project.composition, activeMeasureTarget)
-    ? activeMeasureTarget
+  const validTarget = isActiveSequenceTargetValid(project.composition, activeSequenceTarget)
+    ? activeSequenceTarget
     : null
 
   return {
     expectedProjectRevision: project.revision,
     selection: reconcileSelection(projectRootCell(project, validTarget), selection),
-    activeMeasureTarget: validTarget,
+    activeSequenceTarget: validTarget,
   }
 }
 

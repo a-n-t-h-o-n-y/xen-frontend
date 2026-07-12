@@ -1,9 +1,9 @@
 import type {
-  ActiveMeasureTarget,
+  ActiveSequenceTarget,
   Composition,
   CompositionSelection,
-  Measure,
-  MeasureBank,
+  Sequence,
+  SequenceBank,
 } from './models'
 
 export const clampCompositionSelection = (
@@ -62,64 +62,64 @@ export const isColumnInLoopRegion = (
   return columnIndex >= loopRegion.startColumn || columnIndex <= loopRegion.endColumn
 }
 
-export const getMeasureById = (
-  measureBank: MeasureBank | null,
-  measureId: number
-): MeasureBank['measures'][number] | null =>
-  measureBank?.measures.find((entry) => entry.id === measureId) ?? null
+export const getSequenceById = (
+  sequenceBank: SequenceBank | null,
+  sequenceId: number
+): SequenceBank['sequences'][number] | null =>
+  sequenceBank?.sequences.find((entry) => entry.id === sequenceId) ?? null
 
-export const getActiveMeasureTarget = (
+export const getActiveSequenceTarget = (
   composition: Composition | null,
   selection: CompositionSelection
-): ActiveMeasureTarget | null => {
+): ActiveSequenceTarget | null => {
   if (!composition) return null
   const safeSelection = clampCompositionSelection(composition, selection)
-  const measureId = composition.rows[safeSelection.rowIndex]?.cells[safeSelection.columnIndex]
-  if (measureId === null || measureId === undefined) return null
-  return { ...safeSelection, measureId }
+  const sequenceId = composition.rows[safeSelection.rowIndex]?.cells[safeSelection.columnIndex]
+  if (sequenceId === null || sequenceId === undefined) return null
+  return { ...safeSelection, sequenceId }
 }
 
-export const isActiveMeasureTargetValid = (
+export const isActiveSequenceTargetValid = (
   composition: Composition | null,
-  target: ActiveMeasureTarget | null
-): target is ActiveMeasureTarget =>
+  target: ActiveSequenceTarget | null
+): target is ActiveSequenceTarget =>
   Boolean(
     composition &&
     target &&
-    composition.rows[target.rowIndex]?.cells[target.columnIndex] === target.measureId
+    composition.rows[target.rowIndex]?.cells[target.columnIndex] === target.sequenceId
   )
 
-export const reconcileActiveMeasureTarget = (
+export const reconcileActiveSequenceTarget = (
   composition: Composition | null,
-  target: ActiveMeasureTarget | null,
+  target: ActiveSequenceTarget | null,
   selection: CompositionSelection
-): ActiveMeasureTarget | null =>
-  isActiveMeasureTargetValid(composition, target)
+): ActiveSequenceTarget | null =>
+  isActiveSequenceTargetValid(composition, target)
     ? target
-    : getActiveMeasureTarget(composition, selection)
+    : getActiveSequenceTarget(composition, selection)
 
-export const measureFromTarget = (
-  fallbackMeasure: Measure,
-  measureBank: MeasureBank | null,
+export const sequenceFromTarget = (
+  fallbackSequence: Sequence,
+  sequenceBank: SequenceBank | null,
   composition: Composition | null,
-  target: ActiveMeasureTarget | null
-): Measure => {
+  target: ActiveSequenceTarget | null
+): Sequence => {
   if (!target || !composition) {
-    return fallbackMeasure
+    return fallbackSequence
   }
 
-  if (composition.rows[target.rowIndex]?.cells[target.columnIndex] !== target.measureId) {
-    return fallbackMeasure
+  if (composition.rows[target.rowIndex]?.cells[target.columnIndex] !== target.sequenceId) {
+    return fallbackSequence
   }
 
-  const entry = getMeasureById(measureBank, target.measureId)
+  const entry = getSequenceById(sequenceBank, target.sequenceId)
   const columnLength = composition.columns[target.columnIndex]?.length
   if (!entry || !columnLength) {
-    return fallbackMeasure
+    return fallbackSequence
   }
 
   return {
-    cell: entry.measure.cell,
+    cell: entry.sequence.cell,
     timeSignature: {
       numerator: columnLength.numerator,
       denominator: columnLength.denominator,

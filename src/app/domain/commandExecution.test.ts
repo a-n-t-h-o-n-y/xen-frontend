@@ -10,7 +10,7 @@ describe('command execution primitives', () => {
     })).toEqual({
       expectedProjectRevision: 12,
       selection: { path: [] },
-      activeMeasureTarget: null,
+      activeSequenceTarget: null,
     })
     expect(commandContextToDto(buildCommandContext(projectFromDto(projectFixture(12)), {
       path: [{ kind: 'element', index: 99 }],

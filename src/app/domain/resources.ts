@@ -1,5 +1,5 @@
 import type {
-  ActiveMeasureTarget,
+  ActiveSequenceTarget,
   KeymapResource,
   LibrarySnapshot,
   ProjectSnapshot,
@@ -17,7 +17,7 @@ export const ingestProjectSnapshot = (
   current: ProjectSnapshot | null,
   incoming: ProjectSnapshot,
   selection: Selection,
-  activeMeasureTarget: ActiveMeasureTarget | null = null
+  activeSequenceTarget: ActiveSequenceTarget | null = null
 ): ProjectIngestion => {
   if (
     current &&
@@ -28,7 +28,7 @@ export const ingestProjectSnapshot = (
   }
   return {
     snapshot: incoming,
-    selection: reconcileSelection(projectRootCell(incoming, activeMeasureTarget), selection),
+    selection: reconcileSelection(projectRootCell(incoming, activeSequenceTarget), selection),
     installed: true,
   }
 }

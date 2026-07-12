@@ -50,7 +50,7 @@ const renderController = (
     executeBackendCommand,
     projectRef: options.projectRef ?? { current: null },
     editorStateRef: { current: editorState },
-    activeMeasureTargetRef: { current: null },
+    activeSequenceTargetRef: { current: null },
     keymapRef: { current: keymap },
     installEditorState: vi.fn(),
     workspaceView,
@@ -183,8 +183,8 @@ describe('useKeyboardController', () => {
 
   it('keeps only the latest pending composition name and clears it after ingestion', async () => {
     const fixture = arrangedProjectFixture()
-    const firstMeasure = fixture.project.sequence_bank.sequences[0]
-    if (firstMeasure) firstMeasure.name = 'Restored'
+    const firstSequence = fixture.project.sequence_bank.sequences[0]
+    if (firstSequence) firstSequence.name = 'Restored'
     fixture.project.composition.rows[0]!.cells[1] = 1
     const projectRef = { current: projectFromDto(fixture) as ProjectSnapshot | null }
     const selectionRef = { current: { rowIndex: 0, columnIndex: 1 } }

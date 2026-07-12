@@ -22,10 +22,10 @@ export type FrontendUiActionId =
   | 'workspace.view.composition'
   | 'workspace.view.sequencer'
   | 'composition.selection.move'
-  | 'composition.cell.edit_measure'
+  | 'composition.cell.edit_sequence'
   | 'composition.cell.duplicate_right'
-  | 'composition.cell.rename_or_create_measure'
-  | 'composition.cell.clear'
+  | 'composition.cell.rename_or_create_sequence'
+  | 'composition.cell.unassign'
   | 'composition.row.insert_before'
   | 'composition.row.insert_after'
   | 'composition.row.delete'
@@ -94,9 +94,9 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     section: 'Composition',
     argumentKind: 'selectionDirection',
   },
-  'composition.cell.edit_measure': {
-    id: 'composition.cell.edit_measure',
-    label: 'Edit composition cell measure',
+  'composition.cell.edit_sequence': {
+    id: 'composition.cell.edit_sequence',
+    label: 'Edit composition cell sequence',
     section: 'Composition',
     argumentKind: 'none',
   },
@@ -106,15 +106,15 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     section: 'Composition',
     argumentKind: 'none',
   },
-  'composition.cell.rename_or_create_measure': {
-    id: 'composition.cell.rename_or_create_measure',
+  'composition.cell.rename_or_create_sequence': {
+    id: 'composition.cell.rename_or_create_sequence',
     label: 'Rename or assign composition cell',
     section: 'Composition',
     argumentKind: 'none',
   },
-  'composition.cell.clear': {
-    id: 'composition.cell.clear',
-    label: 'Clear composition cell',
+  'composition.cell.unassign': {
+    id: 'composition.cell.unassign',
+    label: 'Unassign composition cell',
     section: 'Composition',
     argumentKind: 'none',
   },

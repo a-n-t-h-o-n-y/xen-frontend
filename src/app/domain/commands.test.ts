@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   compositionCellAssign,
-  compositionCellClear,
+  compositionCellUnassign,
   compositionColumnDelete,
   compositionColumnInsert,
   compositionLoopBoundary,
@@ -18,8 +18,8 @@ import {
 } from './commands'
 
 describe('composition command builders', () => {
-  it('builds cell clear commands', () => {
-    expect(compositionCellClear(2, 3)).toBe('composition cell clear 2 3')
+  it('builds cell unassign commands', () => {
+    expect(compositionCellUnassign(2, 3)).toBe('composition cell unassign 2 3')
   })
 
   it('builds cell assign commands with JSON-quoted names', () => {

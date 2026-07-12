@@ -1,4 +1,4 @@
-import type { Cell, Measure, Selection, SelectionPath } from './music'
+import type { Cell, Sequence, Selection, SelectionPath } from './music'
 import type { InputMode, KeymapBinding, KeymapDocument, KeymapTarget, KeymapTrigger } from './keymap'
 
 export type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
@@ -75,17 +75,17 @@ export type PitchState = {
   baseFrequency: number
 }
 
-export type MeasureBankEntry = {
+export type SequenceBankEntry = {
   id: number
   name: string
-  measure: {
+  sequence: {
     cell: Cell
   }
 }
 
-export type MeasureBank = {
+export type SequenceBank = {
   nextId: number
-  measures: MeasureBankEntry[]
+  sequences: SequenceBankEntry[]
 }
 
 export type CompositionLength = {
@@ -120,16 +120,16 @@ export type CompositionSelection = {
   columnIndex: number
 }
 
-export type ActiveMeasureTarget = CompositionSelection & {
-  measureId: number
+export type ActiveSequenceTarget = CompositionSelection & {
+  sequenceId: number
 }
 
 export type ProjectSnapshot = {
   revision: number
   historyEntryId: number
   previewActive: boolean
-  measure: Measure
-  measureBank: MeasureBank | null
+  sequence: Sequence
+  sequenceBank: SequenceBank | null
   composition: Composition | null
   pitch: PitchState
 }
@@ -223,7 +223,7 @@ export type KeymapResource = {
 export type CommandContext = {
   expectedProjectRevision: number
   selection: Selection
-  activeMeasureTarget: ActiveMeasureTarget | null
+  activeSequenceTarget: ActiveSequenceTarget | null
 }
 
 export type {
@@ -233,7 +233,7 @@ export type {
   KeymapDocument,
   KeymapTarget,
   KeymapTrigger,
-  Measure,
+  Sequence,
   Selection,
   SelectionPath,
 }

@@ -201,10 +201,11 @@ type LibrarySnapshot = {
   library_revision: number
   paths: {
     library: string
-    sequences: string
+    content: string
     tunings: string
   }
-  measures: LibraryCommandEntry[]
+  cells: LibraryCommandEntry[]
+  compositions: LibraryCommandEntry[]
   tunings: Array<LibraryCommandEntry & {
     description: string
     intervals: number[]
@@ -245,10 +246,11 @@ type LibraryCommandEntry = {
 Project and library revisions are independent. Active tuning and scale live in the
 project snapshot, not the library snapshot.
 
-The frontend aggregates measures, tunings, and scales into Quick Access. Measures
-currently appear in its Files scope; chords remain cached as command-argument data
-and are not standalone Quick Access actions. This is presentation behavior and does
-not add a bridge endpoint.
+The frontend presents cell documents as reusable sequences and aggregates them with
+composition documents, tunings, and scales in Quick Access. Sequence and composition
+documents currently appear in its Files scope; chords remain cached as command-argument
+data and are not standalone Quick Access actions. This is presentation behavior and
+does not add a bridge endpoint.
 
 ## Keymap
 

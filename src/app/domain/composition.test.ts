@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getActiveMeasureTarget,
+  getActiveSequenceTarget,
   isColumnInLoopRegion,
-  measureFromTarget,
+  sequenceFromTarget,
   moveCompositionSelection,
-  reconcileActiveMeasureTarget,
+  reconcileActiveSequenceTarget,
 } from './composition'
 import { projectFromDto } from './mappers'
 import { arrangedProjectFixture } from './testFixtures'
@@ -34,25 +34,25 @@ describe('composition helpers', () => {
     )).toEqual([false, true, false])
   })
 
-  it('derives active measure targets and measure views from composition cells', () => {
-    const target = getActiveMeasureTarget(composition, { rowIndex: 1, columnIndex: 1 })
-    expect(target).toEqual({ rowIndex: 1, columnIndex: 1, measureId: 1 })
-    expect(measureFromTarget(project.measure, project.measureBank, composition, target).timeSignature)
+  it('derives active sequence targets and sequence views from composition cells', () => {
+    const target = getActiveSequenceTarget(composition, { rowIndex: 1, columnIndex: 1 })
+    expect(target).toEqual({ rowIndex: 1, columnIndex: 1, sequenceId: 1 })
+    expect(sequenceFromTarget(project.sequence, project.sequenceBank, composition, target).timeSignature)
       .toEqual({ numerator: 4, denominator: 4 })
-    expect(getActiveMeasureTarget(composition, { rowIndex: 1, columnIndex: 2 })).toBeNull()
+    expect(getActiveSequenceTarget(composition, { rowIndex: 1, columnIndex: 2 })).toBeNull()
   })
 
   it('initializes an absent active target from the selected composition cell', () => {
-    expect(reconcileActiveMeasureTarget(
+    expect(reconcileActiveSequenceTarget(
       composition,
       null,
       { rowIndex: 1, columnIndex: 1 }
-    )).toEqual({ rowIndex: 1, columnIndex: 1, measureId: 1 })
+    )).toEqual({ rowIndex: 1, columnIndex: 1, sequenceId: 1 })
   })
 
   it('preserves an active target while it still resolves', () => {
-    const target = { rowIndex: 0, columnIndex: 0, measureId: 1 }
-    expect(reconcileActiveMeasureTarget(
+    const target = { rowIndex: 0, columnIndex: 0, sequenceId: 1 }
+    expect(reconcileActiveSequenceTarget(
       composition,
       target,
       { rowIndex: 1, columnIndex: 1 }

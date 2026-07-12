@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react'
 import { getErrorMessage } from '../utils/errors'
-import { clampCompositionSelection, getActiveMeasureTarget } from '../domain/composition'
+import { clampCompositionSelection, getActiveSequenceTarget } from '../domain/composition'
 import {
   compositionCellAssign,
-  compositionCellClear,
+  compositionCellUnassign,
   compositionColumnDelete,
   compositionColumnInsert,
   compositionLoopBoundary,
@@ -15,7 +15,7 @@ import {
 import { formatTimeSignature, parseTimeSignatureInput } from '../presentation/viewModels'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
-  ActiveMeasureTarget,
+  ActiveSequenceTarget,
   Composition,
   CompositionSelection,
   EditorState,
@@ -34,7 +34,7 @@ type UseCompositionCommandsArgs = {
   executeBackendCommand: (command: string) => Promise<void>
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
-  installActiveMeasureTarget: (target: ActiveMeasureTarget | null) => void
+  installActiveSequenceTarget: (target: ActiveSequenceTarget | null) => void
   installEditorState: (state: EditorState) => void
   installWorkspaceView: (
     view: 'composition' | 'sequencer'
@@ -51,7 +51,7 @@ export function useCompositionCommands({
   executeBackendCommand,
   setStatusMessage,
   setStatusLevel,
-  installActiveMeasureTarget,
+  installActiveSequenceTarget,
   installEditorState,
   installWorkspaceView,
 }: UseCompositionCommandsArgs) {
@@ -67,20 +67,20 @@ export function useCompositionCommands({
       return
     }
 
-    const target = getActiveMeasureTarget(composition, compositionSelectionRef.current)
+    const target = getActiveSequenceTarget(composition, compositionSelectionRef.current)
     if (!target) {
-      setStatusMessage('Empty composition cell. Assign a measure before opening it.')
+      setStatusMessage('Empty composition cell. Assign a sequence before opening it.')
       setStatusLevel('warning')
       return
     }
 
-    installActiveMeasureTarget(target)
+    installActiveSequenceTarget(target)
     installEditorState({ ...editorStateRef.current, selection: { path: [] } })
     installWorkspaceView('sequencer')
   }, [
     compositionSelectionRef,
     editorStateRef,
-    installActiveMeasureTarget,
+    installActiveSequenceTarget,
     installEditorState,
     installWorkspaceView,
     projectRef,
@@ -142,7 +142,7 @@ export function useCompositionCommands({
     const trimmed = name.trim()
     setCompositionEditTarget(null)
     if (!trimmed) {
-      runCompositionCommand(compositionCellClear(rowIndex, columnIndex))
+      runCompositionCommand(compositionCellUnassign(rowIndex, columnIndex))
       return
     }
     runCompositionCommand(compositionCellAssign(rowIndex, columnIndex, trimmed))
@@ -209,17 +209,17 @@ export function useCompositionCommands({
     runCompositionCommand(compositionColumnDelete(columnIndex))
   }, [projectRef, runCompositionCommand])
 
-  const clearCompositionCell = useCallback((rowIndex: number, columnIndex: number): void => {
-    runCompositionCommand(compositionCellClear(rowIndex, columnIndex))
+  const unassignCompositionCell = useCallback((rowIndex: number, columnIndex: number): void => {
+    runCompositionCommand(compositionCellUnassign(rowIndex, columnIndex))
   }, [runCompositionCommand])
 
   const runSelectedCompositionAction = useCallback((action: string): boolean => {
     let handled = true
     withCompositionSelection((composition, selection) => {
-      if (action === 'composition.cell.rename_or_create_measure') {
+      if (action === 'composition.cell.rename_or_create_sequence') {
         setCompositionEditTarget({ kind: 'cell', ...selection })
-      } else if (action === 'composition.cell.clear') {
-        clearCompositionCell(selection.rowIndex, selection.columnIndex)
+      } else if (action === 'composition.cell.unassign') {
+        unassignCompositionCell(selection.rowIndex, selection.columnIndex)
       } else if (action === 'composition.row.insert_before') {
         insertCompositionRow('before', selection.rowIndex)
       } else if (action === 'composition.row.insert_after') {
@@ -244,7 +244,7 @@ export function useCompositionCommands({
     })
     return handled
   }, [
-    clearCompositionCell,
+    unassignCompositionCell,
     deleteCompositionColumn,
     deleteCompositionRow,
     insertCompositionColumn,
@@ -268,6 +268,6 @@ export function useCompositionCommands({
     deleteCompositionRow,
     insertCompositionColumn,
     deleteCompositionColumn,
-    clearCompositionCell,
+    unassignCompositionCell,
   }
 }

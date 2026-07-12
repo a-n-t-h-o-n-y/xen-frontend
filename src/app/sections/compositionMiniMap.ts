@@ -1,5 +1,5 @@
-import { clampNumber, flattenMeasureToNoteIR, normalizePitch } from '../domain/music'
-import type { MeasureBank } from '../domain/models'
+import { clampNumber, flattenSequenceToNoteIR, normalizePitch } from '../domain/music'
+import type { SequenceBank } from '../domain/models'
 import type { NoteSpanIR } from '../domain/music'
 
 export const maxMiniMapNotes = 128
@@ -58,17 +58,17 @@ export const selectMiniMapNotePreview = (notes: NoteSpanIR[]): NoteSpanIR[] => {
 }
 
 export const getMiniMapNotes = (
-  measureEntry: MeasureBank['measures'][number] | null,
+  sequenceEntry: SequenceBank['sequences'][number] | null,
   length: { numerator: number; denominator: number },
   tuningLength: number
 ): MiniMapNote[] => {
-  if (!measureEntry || tuningLength <= 0) {
+  if (!sequenceEntry || tuningLength <= 0) {
     return []
   }
 
-  return selectMiniMapNotePreview(flattenMeasureToNoteIR(
+  return selectMiniMapNotePreview(flattenSequenceToNoteIR(
     {
-      cell: measureEntry.measure.cell,
+      cell: sequenceEntry.sequence.cell,
       timeSignature: length,
     },
     0

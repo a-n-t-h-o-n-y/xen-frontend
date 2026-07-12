@@ -67,7 +67,7 @@ describe('quick access palette domain', () => {
     expect(items.filter((item) => item.kind === 'command')).toHaveLength(2)
     expect(items.find((item) => item.kind === 'file')).toMatchObject({
       fileKind: 'cell',
-      label: 'measure',
+      label: 'sequence',
     })
     expect(items.find((item) => item.kind === 'tuning')).toMatchObject({
       label: '19edo',

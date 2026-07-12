@@ -1,35 +1,35 @@
 # Composition UI Design
 
 This document describes the intended composition workspace: a matrix for arranging
-named measures across time and output rows, paired with the existing sequencer for
-editing the selected measure. It expands the current arrangement handoff into a
+named sequences across time and output rows, paired with the existing sequencer for
+editing the selected sequence. It expands the current arrangement handoff into a
 usable UI model and calls out likely frontend/backend contract changes.
 
 ## Core Model
 
 The app has two primary musical workspaces:
 
-- `sequencer`: edits the contents of one measure.
-- `composition`: arranges measure references across rows and columns.
+- `sequencer`: edits the contents of one sequence.
+- `composition`: arranges sequence references across rows and columns.
 
-Only one is active at a time. The composition matrix decides which measure the
-sequencer edits. The sequencer does not show the measure bank as a separate panel;
-the bank is inferred from the measure names used in the matrix.
+Only one is active at a time. The composition matrix decides which sequence the
+sequencer edits. The sequencer does not show the sequence bank as a separate panel;
+the bank is inferred from the sequence names used in the matrix.
 
 The matrix starts with:
 
 - one row,
 - one column,
-- one cell containing a default measure reference,
+- one cell containing a default sequence reference,
 - one output assignment for the row.
 
-Columns represent musical time. Rows represent routed lanes. Cells contain measure
+Columns represent musical time. Rows represent routed lanes. Cells contain sequence
 references or rests.
 
 ## Workspace Switching
 
 `Enter` on a populated or editable composition cell should switch to the sequencer
-and make that cell's measure the active sequencer target. A dedicated key action
+and make that cell's sequence the active sequencer target. A dedicated key action
 returns to the composition matrix.
 
 Initial bindings can be conservative:
@@ -52,9 +52,9 @@ type CompositionUiAction =
   | 'workspace.view.composition'
   | 'workspace.view.sequencer'
   | 'composition.selection.move'
-  | 'composition.cell.edit_measure'
-  | 'composition.cell.rename_or_create_measure'
-  | 'composition.cell.clear'
+  | 'composition.cell.edit_sequence'
+  | 'composition.cell.rename_or_create_sequence'
+  | 'composition.cell.unassign'
   | 'composition.row.insert_before'
   | 'composition.row.insert_after'
   | 'composition.row.delete'
@@ -117,32 +117,32 @@ layout.
 
 ## Cell Display
 
-Each arrangement cell displays the measure name. If the backend only has numeric
-measure IDs, the frontend can temporarily show a generated label like `M1`, but the
-intended design needs stable measure names.
+Each arrangement cell displays the sequence name. If the backend only has numeric
+sequence IDs, the frontend can temporarily show a generated label like `S1`, but the
+intended design needs stable sequence names.
 
 Suggested cell states:
 
-- named measure reference: show the measure name.
+- named sequence reference: show the sequence name.
 - empty rest: show a muted placeholder or blank cell.
 - unresolved reference: show the requested name in an error state.
-- shared reference: optional small indicator if the same measure appears elsewhere.
+- shared reference: optional small indicator if the same sequence appears elsewhere.
 
-The measure bank remains implicit:
+The sequence bank remains implicit:
 
-- Typing a new measure name into an empty cell creates a measure bank entry and
+- Typing a new sequence name into an empty cell creates a sequence bank entry and
   assigns it to the cell.
-- Typing the name of an existing measure assigns that existing measure.
-- Renaming a measure should update every cell that references it.
-- Duplicating a measure should create a new measure with copied content and a new
+- Typing the name of an existing sequence assigns that existing sequence.
+- Renaming a sequence should update every cell that references it.
+- Duplicating a sequence should create a new sequence with copied content and a new
   name, then assign that duplicate where requested.
 
-This implies the matrix editor needs to distinguish "rename this measure" from
-"assign a different measure by name". A practical first pass:
+This implies the matrix editor needs to distinguish "rename this sequence" from
+"assign a different sequence by name". A practical first pass:
 
 - inline editing an empty cell creates or assigns by name,
 - inline editing a populated cell changes that cell assignment by name,
-- a command handles global measure rename.
+- a command handles global sequence rename.
 
 ## Row Behavior
 
@@ -174,7 +174,7 @@ Row operations:
 - assign output,
 - rename row.
 
-Deleting a row removes only arrangement references. It must not delete measures from
+Deleting a row removes only arrangement references. It must not delete sequences from
 the bank unless a later explicit cleanup command is added.
 
 ## Column Behavior
@@ -197,75 +197,55 @@ gets a new empty cell at the inserted index. A default length of `4/4` is reason
 or copy the selected column's length for faster composition.
 
 Deleting a column removes arrangement references in that time span. It should not
-delete the referenced measures from the bank.
+delete the referenced sequences from the bank.
 
 ## Sequencer Targeting
 
-The sequencer needs an explicit active measure target:
+The sequencer needs an explicit active sequence target:
 
 ```ts
-type ActiveMeasureTarget = {
+type ActiveSequenceTarget = {
   rowIndex: number
   columnIndex: number
-  measureId: number
+  sequenceId: number
 }
 ```
 
 If a matrix cell is empty and the user presses `Enter`, there are two good options:
 
-- create a new measure with a generated name and switch to the sequencer,
+- create a new sequence with a generated name and switch to the sequencer,
 - open inline cell naming first, then switch after the name is committed.
 
 Recommended behavior: inline naming first. It preserves the design rule that the
-measure bank is created through matrix names and avoids hidden unnamed measures.
+sequence bank is created through matrix names and avoids hidden unnamed sequences.
 
 The sequencer header's time signature display should reflect the active composition
-column length, not a property of the measure. The time signature edit input in
+column length, not a property of the sequence. The time signature edit input in
 sequencer should be removed.
 
 ## Backend Contract Needs
 
-The current schema `2` has the right structural separation:
+The current schema `4` has the right structural separation:
 
 ```ts
-type MeasureBank = {
+type SequenceBank = {
   next_id: number
-  measures: Array<{
+  sequences: Array<{
     id: number
-    measure: { cell: Cell }
+    name?: string
+    cell: Cell
   }>
 }
 
 type Composition = {
   columns: Array<{
-    length: { numerator: number; denominator: number }
+    duration: { numerator: number; denominator: number }
   }>
   rows: Array<{
-    output_id: string
+    name?: string
+    channel_id: string
     cells: Array<number | null>
   }>
-}
-```
-
-Likely additions:
-
-```ts
-type MeasureBankEntry = {
-  id: number
-  name: string
-  measure: { cell: Cell }
-}
-
-type CompositionColumn = {
-  id?: string
-  length: { numerator: number; denominator: number }
-}
-
-type CompositionRow = {
-  id?: string
-  name?: string
-  output_id: string
-  cells: Array<number | null>
 }
 ```
 
@@ -284,33 +264,30 @@ Required command coverage:
 - `composition column delete`
 - `composition column move left|right`
 - `composition column length <signature>`
-- `composition cell assign <measure_name>`
-- `composition cell clear`
-- `measure create <name>`
-- `measure rename <name>`
-- `measure duplicate <name>`
+- `composition cell assign <sequence_name>`
+- `composition cell unassign`
+- `sequence create <name>`
+- `sequence rename <name>`
+- `sequence duplicate <name>`
 
 The command names are placeholders. The important part is that the frontend can send
 all mutations through `command.execute` and receive a fresh snapshot.
 
 ## Frontend Implementation Notes
 
-Current frontend mapping still reduces arrangement snapshots to one active measure
-for the sequencer. Composition UI needs richer domain models:
+The frontend exposes the complete sequence bank and derives the sequence currently
+shown in the sequencer from the active composition target:
 
 ```ts
 type ProjectSnapshot = {
   revision: number
   historyEntryId: number
-  measureBank: MeasureBank
+  sequenceBank: SequenceBank
   composition: Composition
-  activeMeasure: Measure
+  sequence: Sequence
   pitch: PitchState
 }
 ```
-
-The compatibility path can keep `activeMeasure` for the existing sequencer while
-adding full `measureBank` and `composition` fields for the matrix.
 
 Suggested frontend state:
 
@@ -320,7 +297,7 @@ type WorkspaceView = 'composition' | 'sequencer' | 'library'
 type CompositionEditorState = {
   selection: CompositionSelection
   editingCell: CompositionSelection | null
-  activeMeasureTarget: ActiveMeasureTarget | null
+  activeSequenceTarget: ActiveSequenceTarget | null
 }
 ```
 
@@ -329,8 +306,8 @@ The composition matrix should be a new section component, likely
 
 ## Open Decisions
 
-- Should measure names be globally unique? Recommended: yes.
-- Is editing a populated cell an assignment change, a measure rename, or both through
+- Should sequence names be globally unique? Recommended: yes.
+- Is editing a populated cell an assignment change, a sequence rename, or both through
   different commands? Recommended: assignment by inline edit, global rename by
   command.
 - Should deleting the last row or column be allowed? Recommended: no; keep at least
@@ -347,10 +324,10 @@ The composition matrix should be a new section component, likely
 1. Extend frontend project models and mappers to expose schema `2` composition data.
 2. Add `composition` as a workspace view beside `sequencer` (the former Library
    workspace was later replaced by Quick Access).
-3. Render a read-only matrix with proportional columns, row output labels, measure
+3. Render a read-only matrix with proportional columns, row output labels, sequence
    labels, and selection highlight.
 4. Add keymapped matrix selection movement for arrows and `hjkl`.
-5. Add `Enter` to switch from a matrix cell to the sequencer active measure.
+5. Add `Enter` to switch from a matrix cell to the sequencer active sequence.
 6. Add backend commands for assigning cells, inserting/deleting rows, and
    inserting/deleting columns.
-7. Add inline cell naming once measure names exist in the backend schema.
+7. Add inline cell naming once sequence names exist in the backend schema.

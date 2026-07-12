@@ -15,7 +15,7 @@ const note = (
 })
 
 describe('composition minimap note preview', () => {
-  it('keeps every note when the measure is at or below the minimap cap', () => {
+  it('keeps every note when the sequence is at or below the minimap cap', () => {
     const notes = Array.from({ length: maxMiniMapNotes }, (_, index) =>
       note(index / maxMiniMapNotes, { pitch: index })
     )
@@ -23,7 +23,7 @@ describe('composition minimap note preview', () => {
     expect(selectMiniMapNotePreview(notes)).toEqual(notes)
   })
 
-  it('limits dense measures to the minimap cap', () => {
+  it('limits dense sequences to the minimap cap', () => {
     const notes = Array.from({ length: maxMiniMapNotes * 2 }, (_, index) =>
       note(index / (maxMiniMapNotes * 2), { pitch: index })
     )
@@ -31,7 +31,7 @@ describe('composition minimap note preview', () => {
     expect(selectMiniMapNotePreview(notes)).toHaveLength(maxMiniMapNotes)
   })
 
-  it('preserves notes across the full measure instead of only early notes', () => {
+  it('preserves notes across the full sequence instead of only early notes', () => {
     const notes = Array.from({ length: maxMiniMapNotes * 2 }, (_, index) =>
       note(index / (maxMiniMapNotes * 2), { pitch: index })
     )

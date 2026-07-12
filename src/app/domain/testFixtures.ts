@@ -146,11 +146,11 @@ export const libraryFixture = (revision = 4): LibrarySnapshotDto => ({
   paths: { library: '/library', content: '/library/content', tunings: '/library/tunings' },
   cells: [
     {
-      name: 'measure.xen',
-      relative_path: 'measure.xen',
-      stem: 'measure',
-      path: '/library/sequences/measure.xen',
-      command: 'load cell "measure.xen"',
+      name: 'sequence.xen',
+      relative_path: 'sequence.xen',
+      stem: 'sequence',
+      path: '/library/sequences/sequence.xen',
+      command: 'load cell "sequence.xen"',
     },
   ],
   compositions: [],

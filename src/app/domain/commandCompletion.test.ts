@@ -61,11 +61,11 @@ describe('command completion', () => {
         arguments: [],
       },
       {
-        path: ['load', 'measure'],
+        path: ['load', 'sequence'],
         keywords: ['open', 'file'],
         accepts_pattern_prefix: false,
         target_requirement: 'none',
-        description: 'Load measure',
+        description: 'Load sequence',
         arguments: [],
       },
       {
@@ -111,7 +111,7 @@ describe('command completion', () => {
     expect(rankCommandCompletions(commands, 'set')[0]?.matchKind).toBe('exactPrefix')
     expect(rankCommandCompletions(commands, 'vel')[0]?.matchKind).toBe('tokenPrefix')
     expect(rankCommandCompletions(commands, 'ts')[0]?.matchKind).toBe('acronym')
-    expect(rankCommandCompletions(commands, 'measure load')[0]?.matchKind).toBe('orderInsensitive')
+    expect(rankCommandCompletions(commands, 'sequence load')[0]?.matchKind).toBe('orderInsensitive')
     expect(rankCommandCompletions(commands, 'velocitty')[0]?.matchKind).toBe('typo')
     expect(rankCommandCompletions(commands, 'gain')[0]?.matchKind).toBe('keyword')
   })

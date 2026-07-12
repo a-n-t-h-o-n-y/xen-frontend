@@ -15,7 +15,7 @@ import type {
   ProjectSnapshotDto,
 } from '../domain/contracts'
 import type {
-  ActiveMeasureTarget,
+  ActiveSequenceTarget,
   EditorState,
   LibrarySnapshot,
   MessageLevel,
@@ -30,7 +30,7 @@ type UseBridgeSessionArgs = {
   ) => Promise<BridgeMethodMap[K]['response']>
   projectRef: MutableRefObject<ProjectSnapshot | null>
   editorStateRef: MutableRefObject<EditorState>
-  activeMeasureTargetRef: MutableRefObject<ActiveMeasureTarget | null>
+  activeSequenceTargetRef: MutableRefObject<ActiveSequenceTarget | null>
   libraryRevisionRef: MutableRefObject<number>
   setProject: Dispatch<SetStateAction<ProjectSnapshot | null>>
   setEditorState: Dispatch<SetStateAction<EditorState>>
@@ -43,7 +43,7 @@ export function useBridgeSession({
   request,
   projectRef,
   editorStateRef,
-  activeMeasureTargetRef,
+  activeSequenceTargetRef,
   libraryRevisionRef,
   setProject,
   setEditorState,
@@ -66,7 +66,7 @@ export function useBridgeSession({
       projectRef.current,
       domainSnapshot,
       editorStateRef.current.selection,
-      activeMeasureTargetRef.current
+      activeSequenceTargetRef.current
     )
     if (!result.installed) {
       return result.snapshot
@@ -78,7 +78,7 @@ export function useBridgeSession({
       installEditorState({ ...editorStateRef.current, selection: result.selection })
     }
     return result.snapshot
-  }, [activeMeasureTargetRef, editorStateRef, installEditorState, projectRef, setProject])
+  }, [activeSequenceTargetRef, editorStateRef, installEditorState, projectRef, setProject])
 
   const ingestLibrary = useCallback((snapshot: LibrarySnapshot | LibrarySnapshotDto): LibrarySnapshot | null => {
     const domainSnapshot = 'revision' in snapshot ? snapshot : libraryFromDto(snapshot)
@@ -101,7 +101,7 @@ export function useBridgeSession({
       const context = buildCommandContext(
         project,
         editorStateRef.current.selection,
-        activeMeasureTargetRef.current
+        activeSequenceTargetRef.current
       )
       const selection = context.selection
       if (selection !== editorStateRef.current.selection) {
@@ -119,7 +119,7 @@ export function useBridgeSession({
       if (
         commandResponse.suggestedSelection &&
         resolveSelection(
-          projectRootCell(installedProject, activeMeasureTargetRef.current),
+          projectRootCell(installedProject, activeSequenceTargetRef.current),
           commandResponse.suggestedSelection
         )
       ) {
@@ -140,7 +140,7 @@ export function useBridgeSession({
     },
     [
       editorStateRef,
-      activeMeasureTargetRef,
+      activeSequenceTargetRef,
       ingestProject,
       installEditorState,
       projectRef,

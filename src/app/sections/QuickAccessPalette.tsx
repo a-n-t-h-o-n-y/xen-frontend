@@ -49,7 +49,7 @@ const scopes: Array<{ id: PaletteScope; label: string }> = [
 
 const itemBadge = (item: PaletteItem): string => {
   if (item.kind === 'command' || item.kind === 'commandInvocation') return 'Command'
-  if (item.kind === 'file') return 'Measure'
+  if (item.kind === 'file') return 'Sequence'
   if (item.kind === 'tuning') return 'Tuning'
   return 'Scale'
 }

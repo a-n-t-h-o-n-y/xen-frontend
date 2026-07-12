@@ -14,23 +14,23 @@ describe('DTO to domain mappers', () => {
     expect(project.revision).toBe(9)
     expect(project.historyEntryId).toBe(2)
     expect(project.previewActive).toBe(false)
-    expect(project.measure.timeSignature).toEqual({ numerator: 4, denominator: 4 })
+    expect(project.sequence.timeSignature).toEqual({ numerator: 4, denominator: 4 })
     expect(project.pitch.scale?.sourceId).toBe('scale:major')
     expect(project.pitch.scale?.definition.tuningLength).toBe(12)
     expect(project.pitch.translationDirection).toBe('up')
     expect(project.pitch.baseFrequency).toBe(440)
   })
 
-  it('maps arranged project snapshots to the first row first-column measure', () => {
+  it('maps arranged project snapshots to the first row first-column sequence', () => {
     const project = projectFromDto(arrangedProjectFixture(10))
 
     expect(project.revision).toBe(10)
-    expect(project.measure.timeSignature).toEqual({ numerator: 7, denominator: 8 })
-    expect(project.measure.cell).toEqual({
+    expect(project.sequence.timeSignature).toEqual({ numerator: 7, denominator: 8 })
+    expect(project.sequence.cell).toEqual({
       weight: 1,
       elements: [{ type: 'Note', pitch: 99, velocity: 1, delay: 0, gate: 1 }],
     })
-    expect(project.measureBank?.measures.map((entry) => entry.name)).toEqual(['M1', 'M2'])
+    expect(project.sequenceBank?.sequences.map((entry) => entry.name)).toEqual(['S1', 'S2'])
     expect(project.composition?.columns).toHaveLength(3)
     expect(project.composition?.rows[1]).toMatchObject({
       name: 'channel-1',
@@ -41,7 +41,7 @@ describe('DTO to domain mappers', () => {
     expect(project.pitch.scale?.definition.name).toBe('major')
   })
 
-  it('uses backend measure and row names when arranged snapshots provide them', () => {
+  it('uses backend sequence and row names when arranged snapshots provide them', () => {
     const fixture = arrangedProjectFixture(12)
     if (fixture.schema_version === 4) {
       fixture.project.sequence_bank.sequences[0]!.name = 'Intro'
@@ -52,7 +52,7 @@ describe('DTO to domain mappers', () => {
 
     const project = projectFromDto(fixture)
 
-    expect(project.measureBank?.measures.map((entry) => entry.name)).toEqual(['Intro', 'Pulse'])
+    expect(project.sequenceBank?.sequences.map((entry) => entry.name)).toEqual(['Intro', 'Pulse'])
     expect(project.composition?.rows.map((row) => row.name)).toEqual(['Lead', 'Layer'])
   })
 
@@ -70,7 +70,7 @@ describe('DTO to domain mappers', () => {
     const library = libraryFromDto(libraryFixture(7))
 
     expect(library.revision).toBe(7)
-    expect(library.cells[0]?.relativePath).toBe('measure.xen')
+    expect(library.cells[0]?.relativePath).toBe('sequence.xen')
     expect(library.tunings).toEqual([])
     expect(library.scales[1]).toMatchObject({
       id: 'scale:major',

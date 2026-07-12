@@ -85,7 +85,7 @@ describe('QuickAccessPalette', () => {
     await user.click(screen.getByRole('button', { name: 'Open all' }))
     const input = screen.getByRole('combobox')
     expect(input).toHaveFocus()
-    expect(screen.getByRole('option', { name: /Measure: measure/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Sequence: sequence/i })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: /major \[4, 3\]/i })).not.toBeInTheDocument()
 
     await user.type(input, 'scale: major')
@@ -174,7 +174,7 @@ describe('QuickAccessPalette', () => {
     render(<PaletteHarness execute={execute} />)
 
     await user.click(screen.getByRole('button', { name: 'Open all' }))
-    await user.click(screen.getByRole('option', { name: /Measure: measure/i }))
+    await user.click(screen.getByRole('option', { name: /Sequence: sequence/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('native rejected it')
     expect(screen.getByRole('dialog', { name: 'Quick access' })).toBeInTheDocument()

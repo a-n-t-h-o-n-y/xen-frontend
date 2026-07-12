@@ -9,7 +9,7 @@ import {
   mapPitchToScale,
   normalizePitch,
 } from '../domain/music'
-import { measureFromTarget } from '../domain/composition'
+import { sequenceFromTarget } from '../domain/composition'
 import { resolveSelection } from '../domain/selection'
 import {
   collectLeafCells,
@@ -17,15 +17,15 @@ import {
   getStatusCellMeta,
   isPathPrefix,
 } from '../presentation/viewModels'
-import type { ActiveMeasureTarget, ProjectSnapshot, Selection } from '../domain/models'
+import type { ActiveSequenceTarget, ProjectSnapshot, Selection } from '../domain/models'
 
 export type ProjectViewModel = {
   tuningLength: number
   patternScopeCellCount: number
   leafPatternScopeIndices: number[]
-  rootCell: ProjectSnapshot['measure']['cell']
-  measureNumerator: number
-  measureDenominator: number
+  rootCell: ProjectSnapshot['sequence']['cell']
+  sequenceNumerator: number
+  sequenceDenominator: number
   timeSignature: string
   scaleName: string
   scaleSourceId: string
@@ -49,7 +49,7 @@ export type ProjectViewModel = {
 export function useProjectViewModel(
   projectSnapshot: ProjectSnapshot | null,
   selection: Selection,
-  activeMeasureTarget: ActiveMeasureTarget | null
+  activeSequenceTarget: ActiveSequenceTarget | null
 ): ProjectViewModel | null {
   return useMemo(() => {
     if (!projectSnapshot) {
@@ -57,16 +57,16 @@ export function useProjectViewModel(
     }
 
     const pitchState = projectSnapshot.composition?.columns[
-      activeMeasureTarget?.columnIndex ?? 0
+      activeSequenceTarget?.columnIndex ?? 0
     ]?.pitch ?? projectSnapshot.pitch
     const activeScale = pitchState.scale
     const rawTuningLength = pitchState.tuning.definition.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
-    const measure = measureFromTarget(
-      projectSnapshot.measure,
-      projectSnapshot.measureBank,
+    const sequence = sequenceFromTarget(
+      projectSnapshot.sequence,
+      projectSnapshot.sequenceBank,
       projectSnapshot.composition,
-      activeMeasureTarget
+      activeSequenceTarget
     )
     const scaleValidPitches = activeScale
       ? generateValidPitches(activeScale.definition, derivedTuningLength)
@@ -76,7 +76,7 @@ export function useProjectViewModel(
     const mapPitch = (pitch: number): number =>
       mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
 
-    const rootCell = measure.cell
+    const rootCell = sequence.cell
 
     const tuningRatios = getTuningRatios(pitchState.tuning.definition.intervals)
     const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
@@ -101,9 +101,9 @@ export function useProjectViewModel(
       }
     }
 
-    const signature = `${measure.timeSignature.numerator}/${measure.timeSignature.denominator}`
-    const selectedNumerator = measure.timeSignature.numerator
-    const selectedDenominator = measure.timeSignature.denominator
+    const signature = `${sequence.timeSignature.numerator}/${sequence.timeSignature.denominator}`
+    const selectedNumerator = sequence.timeSignature.numerator
+    const selectedDenominator = sequence.timeSignature.denominator
     const directLeafCells = collectLeafCells(rootCell)
     const resolvedSelection = resolveSelection(rootCell, selection)
     const selectedCellPath = resolvedSelection?.cellPath ?? []
@@ -141,8 +141,8 @@ export function useProjectViewModel(
       patternScopeCellCount: patternScopeCells.length,
       leafPatternScopeIndices: scopeIndices,
       rootCell,
-      measureNumerator: selectedNumerator,
-      measureDenominator: selectedDenominator,
+      sequenceNumerator: selectedNumerator,
+      sequenceDenominator: selectedDenominator,
       timeSignature: signature,
       scaleName: activeScale?.definition.name ?? 'chromatic',
       scaleSourceId: activeScale?.sourceId ?? 'chromatic',
@@ -162,5 +162,5 @@ export function useProjectViewModel(
       selectedElementIndex: resolvedSelection?.selectedElementIndex ?? null,
       selectedElementKind: resolvedSelection?.selectedElementKind ?? null,
     }
-  }, [activeMeasureTarget, projectSnapshot, selection])
+  }, [activeSequenceTarget, projectSnapshot, selection])
 }

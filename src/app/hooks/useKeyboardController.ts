@@ -4,15 +4,15 @@ import {
   findKeymapBinding,
 } from '../domain/keymap'
 import { isCommandUiActionId } from '../domain/uiActions'
-import { getMeasureById, moveCompositionSelection } from '../domain/composition'
-import { compositionCellAssign, compositionCellClear } from '../domain/commands'
+import { getSequenceById, moveCompositionSelection } from '../domain/composition'
+import { compositionCellAssign, compositionCellUnassign } from '../domain/commands'
 import { moveSelection, projectRootCell } from '../domain/selection'
 import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
 import { usesMetaForCommand } from '../platform'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
-  ActiveMeasureTarget,
+  ActiveSequenceTarget,
   CompositionSelection,
   EditorState,
   KeymapResource,
@@ -32,7 +32,7 @@ type UseKeyboardControllerArgs = {
   executeBackendCommand: (command: string) => Promise<void>
   projectRef: MutableRefObject<ProjectSnapshot | null>
   editorStateRef: MutableRefObject<EditorState>
-  activeMeasureTargetRef: MutableRefObject<ActiveMeasureTarget | null>
+  activeSequenceTargetRef: MutableRefObject<ActiveSequenceTarget | null>
   keymapRef: MutableRefObject<KeymapResource | null>
   installEditorState: (nextState: EditorState) => void
   workspaceView: WorkspaceView
@@ -61,7 +61,7 @@ export function useKeyboardController({
   executeBackendCommand,
   projectRef,
   editorStateRef,
-  activeMeasureTargetRef,
+  activeSequenceTargetRef,
   keymapRef,
   installEditorState,
   workspaceView,
@@ -94,7 +94,7 @@ export function useKeyboardController({
     }
   }, [])
 
-  const getSelectedCompositionMeasureName = useCallback((): string | null => {
+  const getSelectedCompositionSequenceName = useCallback((): string | null => {
     const project = projectRef.current
     const composition = project?.composition
     if (!project || !composition) {
@@ -109,35 +109,35 @@ export function useKeyboardController({
       return optimisticName
     }
 
-    const measureId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
-    if (measureId === null || measureId === undefined) {
+    const sequenceId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
+    if (sequenceId === null || sequenceId === undefined) {
       return null
     }
 
-    return getMeasureById(project.measureBank, measureId)?.name ?? null
+    return getSequenceById(project.sequenceBank, sequenceId)?.name ?? null
   }, [compositionSelectionRef, projectRef])
 
-  const assignCompositionMeasureName = useCallback((
+  const assignCompositionSequenceName = useCallback((
     selection: CompositionSelection,
-    measureName: string
+    sequenceName: string
   ): void => {
     const key = getCompositionCellKey(selection)
-    optimisticCompositionCellNamesRef.current.set(key, measureName)
+    optimisticCompositionCellNamesRef.current.set(key, sequenceName)
     void executeBackendCommand(
-      compositionCellAssign(selection.rowIndex, selection.columnIndex, measureName)
+      compositionCellAssign(selection.rowIndex, selection.columnIndex, sequenceName)
     ).then(() => {
-      clearOptimisticCompositionName(key, measureName)
+      clearOptimisticCompositionName(key, sequenceName)
     }).catch((error: unknown) => {
-      clearOptimisticCompositionName(key, measureName)
+      clearOptimisticCompositionName(key, sequenceName)
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')
     })
   }, [clearOptimisticCompositionName, executeBackendCommand, setStatusLevel, setStatusMessage])
 
-  const clearCompositionSelection = useCallback((selection: CompositionSelection): void => {
+  const unassignCompositionSelection = useCallback((selection: CompositionSelection): void => {
     optimisticCompositionCellNamesRef.current.delete(getCompositionCellKey(selection))
     void executeBackendCommand(
-      compositionCellClear(selection.rowIndex, selection.columnIndex)
+      compositionCellUnassign(selection.rowIndex, selection.columnIndex)
     ).catch((error: unknown) => {
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')
@@ -145,50 +145,50 @@ export function useKeyboardController({
   }, [executeBackendCommand, setStatusLevel, setStatusMessage])
 
   const handleCompositionCellCopy = useCallback((clipboardData?: DataTransfer | null): boolean => {
-    const measureName = getSelectedCompositionMeasureName()
-    if (!measureName) {
+    const sequenceName = getSelectedCompositionSequenceName()
+    if (!sequenceName) {
       setStatusMessage('Empty composition cell. Nothing to copy.')
       setStatusLevel('warning')
       return false
     }
 
-    compositionClipboardRef.current = measureName
+    compositionClipboardRef.current = sequenceName
     if (clipboardData) {
-      clipboardData.setData('text/plain', measureName)
+      clipboardData.setData('text/plain', sequenceName)
     } else if (navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(measureName).catch(() => undefined)
+      void navigator.clipboard.writeText(sequenceName).catch(() => undefined)
     }
-    setStatusMessage(`Copied composition measure ${measureName}.`)
+    setStatusMessage(`Copied composition sequence ${sequenceName}.`)
     setStatusLevel('info')
     return true
-  }, [getSelectedCompositionMeasureName, setStatusLevel, setStatusMessage])
+  }, [getSelectedCompositionSequenceName, setStatusLevel, setStatusMessage])
 
   const handleCompositionCellPaste = useCallback((clipboardText?: string): boolean => {
-    const measureName = (clipboardText ?? compositionClipboardRef.current ?? '').trim()
-    if (!measureName) {
-      setStatusMessage('No composition measure name to paste.')
+    const sequenceName = (clipboardText ?? compositionClipboardRef.current ?? '').trim()
+    if (!sequenceName) {
+      setStatusMessage('No composition sequence name to paste.')
       setStatusLevel('warning')
       return false
     }
 
-    assignCompositionMeasureName(compositionSelectionRef.current, measureName)
+    assignCompositionSequenceName(compositionSelectionRef.current, sequenceName)
     return true
-  }, [assignCompositionMeasureName, compositionSelectionRef, setStatusLevel, setStatusMessage])
+  }, [assignCompositionSequenceName, compositionSelectionRef, setStatusLevel, setStatusMessage])
 
   const handleCompositionCellCut = useCallback((clipboardData?: DataTransfer | null): boolean => {
     if (!handleCompositionCellCopy(clipboardData)) {
       return false
     }
 
-    clearCompositionSelection(compositionSelectionRef.current)
+    unassignCompositionSelection(compositionSelectionRef.current)
     return true
-  }, [clearCompositionSelection, compositionSelectionRef, handleCompositionCellCopy])
+  }, [unassignCompositionSelection, compositionSelectionRef, handleCompositionCellCopy])
 
   const handleCompositionCellDuplicateRight = useCallback((): boolean => {
     const project = projectRef.current
     const composition = project?.composition
-    const measureName = getSelectedCompositionMeasureName()
-    if (!composition || !measureName) {
+    const sequenceName = getSelectedCompositionSequenceName()
+    if (!composition || !sequenceName) {
       setStatusMessage('Empty composition cell. Nothing to duplicate.')
       setStatusLevel('warning')
       return false
@@ -202,16 +202,16 @@ export function useKeyboardController({
     }
 
     const targetSelection = { rowIndex: selection.rowIndex, columnIndex: selection.columnIndex + 1 }
-    assignCompositionMeasureName(
+    assignCompositionSequenceName(
       targetSelection,
-      measureName
+      sequenceName
     )
     installCompositionSelection(targetSelection)
     return true
   }, [
-    assignCompositionMeasureName,
+    assignCompositionSequenceName,
     compositionSelectionRef,
-    getSelectedCompositionMeasureName,
+    getSelectedCompositionSequenceName,
     installCompositionSelection,
     projectRef,
     setStatusLevel,
@@ -337,7 +337,7 @@ export function useKeyboardController({
               const project = projectRef.current
               if (!project) return
               const selection = moveSelection(
-                projectRootCell(project, activeMeasureTargetRef.current),
+                projectRootCell(project, activeSequenceTargetRef.current),
                 editorStateRef.current.selection,
                 matchedBinding.target.arguments.direction,
                 matchedBinding.target.arguments.amount
@@ -382,7 +382,7 @@ export function useKeyboardController({
               return
             }
 
-            if (matchedBinding.target.action === 'composition.cell.edit_measure') {
+            if (matchedBinding.target.action === 'composition.cell.edit_sequence') {
               editSelectedCompositionCell()
               return
             }
@@ -495,7 +495,7 @@ export function useKeyboardController({
   }, [
     bridgeUnavailableMessage,
     editorStateRef,
-    activeMeasureTargetRef,
+    activeSequenceTargetRef,
     executeBackendCommand,
     editSelectedCompositionCell,
     handleCompositionCellAction,

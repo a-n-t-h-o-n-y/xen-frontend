@@ -23,11 +23,11 @@ import {
   DEFAULT_TUNING_LENGTH,
   createTransportState,
 } from './app/constants'
-import { reconcileActiveMeasureTarget } from './app/domain/composition'
+import { reconcileActiveSequenceTarget } from './app/domain/composition'
 import { clampNumber } from './app/domain/music'
 import type {
   Cell,
-  ActiveMeasureTarget,
+  ActiveSequenceTarget,
   CompositionSelection,
   EditorState,
   TransportState,
@@ -47,8 +47,8 @@ function App() {
   const [compositionSelection, setCompositionSelection] = useState<CompositionSelection>(
     INITIAL_COMPOSITION_SELECTION
   )
-  const [activeMeasureTarget, setActiveMeasureTarget] = useState<ActiveMeasureTarget | null>(null)
-  const activeMeasureTargetRef = useRef<ActiveMeasureTarget | null>(activeMeasureTarget)
+  const [activeSequenceTarget, setActiveSequenceTarget] = useState<ActiveSequenceTarget | null>(null)
+  const activeSequenceTargetRef = useRef<ActiveSequenceTarget | null>(activeSequenceTarget)
   const compositionSelectionRef = useRef<CompositionSelection>(compositionSelection)
   const workspaceViewRef = useRef<WorkspaceView>(workspaceView)
   const [isModulatorMode, setIsModulatorMode] = useState(false)
@@ -93,7 +93,7 @@ function App() {
   } = useProjectSession({
     transportRef,
     editorStateRef,
-    activeMeasureTargetRef,
+    activeSequenceTargetRef,
     setEditorState,
     setSessionReference,
     setLibrarySnapshot,
@@ -144,34 +144,34 @@ function App() {
     })
   }, [])
 
-  const installActiveMeasureTarget = useCallback((nextTarget: ActiveMeasureTarget | null): void => {
-    activeMeasureTargetRef.current = nextTarget
-    setActiveMeasureTarget(nextTarget)
+  const installActiveSequenceTarget = useCallback((nextTarget: ActiveSequenceTarget | null): void => {
+    activeSequenceTargetRef.current = nextTarget
+    setActiveSequenceTarget(nextTarget)
   }, [])
 
   useEffect(() => {
     if (!projectSnapshot) return
 
-    const nextTarget = reconcileActiveMeasureTarget(
+    const nextTarget = reconcileActiveSequenceTarget(
       projectSnapshot.composition,
-      activeMeasureTargetRef.current,
+      activeSequenceTargetRef.current,
       compositionSelectionRef.current
     )
-    if (nextTarget !== activeMeasureTargetRef.current) {
-      installActiveMeasureTarget(nextTarget)
+    if (nextTarget !== activeSequenceTargetRef.current) {
+      installActiveSequenceTarget(nextTarget)
     }
-  }, [installActiveMeasureTarget, projectSnapshot])
+  }, [installActiveSequenceTarget, projectSnapshot])
 
   const projectViewModel = useProjectViewModel(
     projectSnapshot,
     editorState.selection,
-    activeMeasureTarget
+    activeSequenceTarget
   )
 
   const tuningLength = projectViewModel?.tuningLength ?? DEFAULT_TUNING_LENGTH
   const rootCell = projectViewModel?.rootCell ?? EMPTY_ROOT_CELL
-  const measureNumerator = projectViewModel?.measureNumerator ?? 0
-  const measureDenominator = projectViewModel?.measureDenominator ?? 0
+  const sequenceNumerator = projectViewModel?.sequenceNumerator ?? 0
+  const sequenceDenominator = projectViewModel?.sequenceDenominator ?? 0
   const timeSignature = projectViewModel?.timeSignature ?? '--'
   const scaleName = projectViewModel?.scaleName ?? '--'
   const scaleSourceId = projectViewModel?.scaleSourceId ?? null
@@ -202,7 +202,7 @@ function App() {
     deleteCompositionRow,
     insertCompositionColumn,
     deleteCompositionColumn,
-    clearCompositionCell,
+    unassignCompositionCell,
   } = useCompositionCommands({
     projectRef,
     compositionSelectionRef,
@@ -213,7 +213,7 @@ function App() {
     executeBackendCommand,
     setStatusMessage,
     setStatusLevel,
-    installActiveMeasureTarget,
+    installActiveSequenceTarget,
     installEditorState,
     installWorkspaceView,
   })
@@ -264,8 +264,8 @@ function App() {
   })
 
   useTransportPlayhead({
-    measureNumerator,
-    measureDenominator,
+    sequenceNumerator,
+    sequenceDenominator,
     transportRef,
     selectedTimeSignatureRef,
     setPlayheadPhase,
@@ -332,7 +332,7 @@ function App() {
     executeBackendCommand,
     projectRef,
     editorStateRef,
-    activeMeasureTargetRef,
+    activeSequenceTargetRef,
     keymapRef,
     installEditorState,
     workspaceView,
@@ -434,7 +434,7 @@ function App() {
               {projectSnapshot.composition ? (
                 <CompositionSection
                   composition={projectSnapshot.composition}
-                  measureBank={projectSnapshot.measureBank}
+                  sequenceBank={projectSnapshot.sequenceBank}
                   selection={displayedCompositionSelection}
                   tuningLength={tuningLength}
                   editTarget={compositionEditTarget}
@@ -452,7 +452,7 @@ function App() {
                   onDeleteRow={deleteCompositionRow}
                   onInsertColumn={insertCompositionColumn}
                   onDeleteColumn={deleteCompositionColumn}
-                  onClearCell={clearCompositionCell}
+                  onUnassignCell={unassignCompositionCell}
                 />
               ) : (
                 <div className="workspaceNotice" role="status" aria-live="polite">

@@ -3,16 +3,16 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { TransportState } from '../constants'
 
 type UseTransportPlayheadArgs = {
-  measureNumerator: number
-  measureDenominator: number
+  sequenceNumerator: number
+  sequenceDenominator: number
   transportRef: MutableRefObject<TransportState>
   selectedTimeSignatureRef: MutableRefObject<{ numerator: number; denominator: number }>
   setPlayheadPhase: Dispatch<SetStateAction<number | null>>
 }
 
 export function useTransportPlayhead({
-  measureNumerator,
-  measureDenominator,
+  sequenceNumerator,
+  sequenceDenominator,
   transportRef,
   selectedTimeSignatureRef,
   setPlayheadPhase,
@@ -22,8 +22,8 @@ export function useTransportPlayhead({
 
   useEffect(() => {
     selectedTimeSignatureRef.current = {
-      numerator: measureNumerator,
-      denominator: measureDenominator,
+      numerator: sequenceNumerator,
+      denominator: sequenceDenominator,
     }
 
     if (transportRef.current.active) {
@@ -33,8 +33,8 @@ export function useTransportPlayhead({
 
     setPlayheadPhase(null)
   }, [
-    measureDenominator,
-    measureNumerator,
+    sequenceDenominator,
+    sequenceNumerator,
     selectedTimeSignatureRef,
     setPlayheadPhase,
     transportRef,

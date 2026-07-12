@@ -17,7 +17,7 @@ import type {
   KeymapResource,
   LibraryScaleEntry,
   LibrarySnapshot,
-  Measure,
+  Sequence,
   ProjectSnapshot,
   Scale,
   SessionReference,
@@ -34,7 +34,7 @@ export const scaleFromDto = (definition: ScaleDefinitionDto): Scale => ({
   mode: definition.mode,
 })
 
-const emptyMeasureEntry = {
+const emptySequenceEntry = {
   id: 0,
   cell: {
     weight: 1,
@@ -42,7 +42,7 @@ const emptyMeasureEntry = {
   },
 }
 
-const measureName = (id: number): string => `M${id}`
+const sequenceName = (id: number): string => `S${id}`
 
 const compositionFromDto = (
   composition: ProjectSnapshotDto['project']['composition']
@@ -68,17 +68,17 @@ const compositionFromDto = (
   }
 }
 
-const arrangedMeasureFromDto = (snapshot: ProjectSnapshotDto): Measure => {
+const arrangedSequenceFromDto = (snapshot: ProjectSnapshotDto): Sequence => {
   const composition = snapshot.project.composition
   const firstRow = composition.rows[0]
-  const measureId = firstRow?.cells[0] ?? null
-  const measureEntry = measureId === null
+  const sequenceId = firstRow?.cells[0] ?? null
+  const sequenceEntry = sequenceId === null
     ? snapshot.project.sequence_bank.sequences[0]
-    : snapshot.project.sequence_bank.sequences.find((entry) => entry.id === measureId)
+    : snapshot.project.sequence_bank.sequences.find((entry) => entry.id === sequenceId)
   const columnLength = composition.columns[0]?.duration ?? { numerator: 4, denominator: 4 }
 
   return {
-    cell: (measureEntry ?? emptyMeasureEntry).cell,
+    cell: (sequenceEntry ?? emptySequenceEntry).cell,
     timeSignature: {
       numerator: columnLength.numerator,
       denominator: columnLength.denominator,
@@ -93,13 +93,13 @@ export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot =>
     revision: snapshot.project_revision,
     historyEntryId: snapshot.history_entry_id,
     previewActive: snapshot.preview_active,
-    measure: arrangedMeasureFromDto(snapshot),
-    measureBank: {
+    sequence: arrangedSequenceFromDto(snapshot),
+    sequenceBank: {
           nextId: snapshot.project.sequence_bank.next_id,
-          measures: snapshot.project.sequence_bank.sequences.map((entry) => ({
+          sequences: snapshot.project.sequence_bank.sequences.map((entry) => ({
             id: entry.id,
-            name: entry.name || measureName(entry.id),
-            measure: { cell: entry.cell },
+            name: entry.name || sequenceName(entry.id),
+            sequence: { cell: entry.cell },
           })),
         },
     composition: compositionFromDto(snapshot.project.composition),
@@ -301,9 +301,9 @@ export const commandContextToDto = (context: CommandContext) => ({
   expected_project_revision: context.expectedProjectRevision,
   selection: context.selection as SelectionDto,
   cursor: {
-    row_index: context.activeMeasureTarget?.rowIndex ?? 0,
-    column_index: context.activeMeasureTarget?.columnIndex ?? 0,
-    sequence_id: context.activeMeasureTarget?.measureId ?? null,
+    row_index: context.activeSequenceTarget?.rowIndex ?? 0,
+    column_index: context.activeSequenceTarget?.columnIndex ?? 0,
+    sequence_id: context.activeSequenceTarget?.sequenceId ?? null,
   },
 })
 

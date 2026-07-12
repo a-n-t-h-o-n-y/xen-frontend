@@ -31,7 +31,7 @@ export type Cell = {
   elements: MusicElement[]
 }
 
-export type Measure = {
+export type Sequence = {
   cell: Cell
   timeSignature: {
     numerator: number
@@ -62,13 +62,13 @@ export const normalizePhase = (value: number): number => ((value % 1) + 1) % 1
 export const roundByStep = (value: number, step: number): number =>
   step <= 0 ? value : Math.round(value / step) * step
 
-export const getMeasureLoopQuarterNotes = (measure: Measure | null): number => {
-  if (!measure) {
+export const getSequenceLoopQuarterNotes = (sequence: Sequence | null): number => {
+  if (!sequence) {
     return 0
   }
 
-  const numerator = measure.timeSignature.numerator
-  const denominator = measure.timeSignature.denominator
+  const numerator = sequence.timeSignature.numerator
+  const denominator = sequence.timeSignature.denominator
   if (numerator <= 0 || denominator <= 0) {
     return 0
   }
@@ -213,7 +213,7 @@ export type NoteSpanIR = {
   velocity: number
 }
 
-export const flattenMeasureToNoteIR = (measure: Measure, sequenceIndex: number): NoteSpanIR[] => {
+export const flattenSequenceToNoteIR = (sequence: Sequence, sequenceIndex: number): NoteSpanIR[] => {
   const noteSpans: NoteSpanIR[] = []
 
   const walkCell = (cell: Cell, segmentStart: number, segmentWidth: number): void => {
@@ -265,7 +265,7 @@ export const flattenMeasureToNoteIR = (measure: Measure, sequenceIndex: number):
     }
   }
 
-  walkCell(measure.cell, 0, 1)
+  walkCell(sequence.cell, 0, 1)
   return noteSpans
 }
 

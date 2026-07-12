@@ -19,7 +19,7 @@ import type {
   RequestOptions,
 } from '../bridge/BridgeClient'
 import type {
-  ActiveMeasureTarget,
+  ActiveSequenceTarget,
   EditorState,
   LibrarySnapshot,
   MessageLevel,
@@ -32,7 +32,7 @@ import type { ProjectSessionState } from '../types/session'
 type UseProjectSessionArgs = {
   transportRef: MutableRefObject<TransportState>
   editorStateRef: MutableRefObject<EditorState>
-  activeMeasureTargetRef: MutableRefObject<ActiveMeasureTarget | null>
+  activeSequenceTargetRef: MutableRefObject<ActiveSequenceTarget | null>
   setEditorState: Dispatch<SetStateAction<EditorState>>
   setSessionReference: Dispatch<SetStateAction<SessionReference>>
   setLibrarySnapshot: Dispatch<SetStateAction<LibrarySnapshot>>
@@ -42,7 +42,7 @@ type UseProjectSessionArgs = {
 export function useProjectSession({
   transportRef,
   editorStateRef,
-  activeMeasureTargetRef,
+  activeSequenceTargetRef,
   setEditorState,
   setSessionReference,
   setLibrarySnapshot,
@@ -86,7 +86,7 @@ export function useProjectSession({
     request,
     projectRef,
     editorStateRef,
-    activeMeasureTargetRef,
+    activeSequenceTargetRef,
     libraryRevisionRef,
     setProject: setProjectSnapshot,
     setEditorState,

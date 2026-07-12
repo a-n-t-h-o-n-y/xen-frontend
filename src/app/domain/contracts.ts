@@ -163,12 +163,12 @@ export const arrangementProjectSnapshotSchema = z.object({
 }).superRefine((snapshot, context) => {
   const sequenceIds = new Set(snapshot.project.sequence_bank.sequences.map((entry) => entry.id))
   snapshot.project.composition.rows.forEach((row, rowIndex) => {
-    row.cells.forEach((measureId, cellIndex) => {
-      if (measureId !== null && !sequenceIds.has(measureId)) {
+    row.cells.forEach((sequenceId, cellIndex) => {
+      if (sequenceId !== null && !sequenceIds.has(sequenceId)) {
         context.addIssue({
           code: 'custom',
           path: ['project', 'composition', 'rows', rowIndex, 'cells', cellIndex],
-          message: `Unknown measure reference ${measureId}`,
+          message: `Unknown sequence reference ${sequenceId}`,
         })
       }
     })
@@ -312,10 +312,10 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
     action: z.enum([
       'workspace.view.composition',
       'workspace.view.sequencer',
-      'composition.cell.edit_measure',
+      'composition.cell.edit_sequence',
       'composition.cell.duplicate_right',
-      'composition.cell.rename_or_create_measure',
-      'composition.cell.clear',
+      'composition.cell.rename_or_create_sequence',
+      'composition.cell.unassign',
       'composition.row.insert_before',
       'composition.row.insert_after',
       'composition.row.delete',

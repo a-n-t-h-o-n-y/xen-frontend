@@ -1,10 +1,10 @@
 import { formatTimeSignature } from '../presentation/viewModels'
-import { getMeasureById, isColumnInLoopRegion } from '../domain/composition'
+import { getSequenceById, isColumnInLoopRegion } from '../domain/composition'
 import { getMiniMapNotes } from './compositionMiniMap'
 import { getCompositionSelectionScrollDelta } from './compositionScroll'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
-import type { Composition, CompositionSelection, MeasureBank } from '../domain/models'
+import type { Composition, CompositionSelection, SequenceBank } from '../domain/models'
 
 export type CompositionEditTarget =
   | { kind: 'cell'; rowIndex: number; columnIndex: number }
@@ -14,7 +14,7 @@ export type CompositionEditTarget =
 
 type CompositionSectionProps = {
   composition: Composition
-  measureBank: MeasureBank | null
+  sequenceBank: SequenceBank | null
   selection: CompositionSelection
   tuningLength: number
   editTarget: CompositionEditTarget | null
@@ -29,7 +29,7 @@ type CompositionSectionProps = {
   onDeleteRow: (rowIndex: number) => void
   onInsertColumn: (placement: 'before' | 'after', columnIndex: number) => void
   onDeleteColumn: (columnIndex: number) => void
-  onClearCell: (rowIndex: number, columnIndex: number) => void
+  onUnassignCell: (rowIndex: number, columnIndex: number) => void
 }
 
 const minColumnWidth = 5.5
@@ -42,7 +42,7 @@ const getColumnWidth = (length: { numerator: number; denominator: number }): str
 
 export function CompositionSection({
   composition,
-  measureBank,
+  sequenceBank,
   selection,
   tuningLength,
   editTarget,
@@ -57,19 +57,19 @@ export function CompositionSection({
   onDeleteRow,
   onInsertColumn,
   onDeleteColumn,
-  onClearCell,
+  onUnassignCell,
 }: CompositionSectionProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
   const columnWidths = composition.columns.map((column) => getColumnWidth(column.length))
   const gridTemplateColumns = ['10rem', ...columnWidths].join(' ')
-  const selectedMeasureId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
-  const selectedMeasureInstanceCount = selectedMeasureId === null || selectedMeasureId === undefined
+  const selectedSequenceId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
+  const selectedSequenceInstanceCount = selectedSequenceId === null || selectedSequenceId === undefined
     ? 0
     : composition.rows.reduce((count, row) => (
-        count + row.cells.filter((measureId) => measureId === selectedMeasureId).length
+        count + row.cells.filter((sequenceId) => sequenceId === selectedSequenceId).length
       ), 0)
-  const shouldHighlightReferences = selectedMeasureInstanceCount > 1
+  const shouldHighlightReferences = selectedSequenceInstanceCount > 1
   const channelOptions = useMemo(() => Array.from(new Set(
     composition.rows.map((row) => row.channelId).filter(Boolean)
   )), [composition.rows])
@@ -86,11 +86,11 @@ export function CompositionSection({
     }
 
     if (editTarget.kind === 'cell') {
-      const measureId = composition.rows[editTarget.rowIndex]?.cells[editTarget.columnIndex]
-      const measureEntry = measureId === null || measureId === undefined
+      const sequenceId = composition.rows[editTarget.rowIndex]?.cells[editTarget.columnIndex]
+      const sequenceEntry = sequenceId === null || sequenceId === undefined
         ? null
-        : getMeasureById(measureBank, measureId)
-      return measureEntry?.name ?? ''
+        : getSequenceById(sequenceBank, sequenceId)
+      return sequenceEntry?.name ?? ''
     }
 
     if (editTarget.kind === 'rowName') {
@@ -103,7 +103,7 @@ export function CompositionSection({
 
     const length = composition.columns[editTarget.columnIndex]?.length
     return length ? formatTimeSignature(length) : '4/4'
-  }, [composition.columns, composition.rows, editTarget, measureBank])
+  }, [composition.columns, composition.rows, editTarget, sequenceBank])
 
   useLayoutEffect(() => {
     const scroller = scrollerRef.current
@@ -406,22 +406,22 @@ export function CompositionSection({
                   )}
                 </div>
                 {composition.columns.map((column, columnIndex) => {
-                  const measureId = row.cells[columnIndex]
-                  const measureEntry = measureId === null || measureId === undefined
+                  const sequenceId = row.cells[columnIndex]
+                  const sequenceEntry = sequenceId === null || sequenceId === undefined
                     ? null
-                    : getMeasureById(measureBank, measureId)
+                    : getSequenceById(sequenceBank, sequenceId)
                   const isSelectedCell =
                     rowIndex === selection.rowIndex && columnIndex === selection.columnIndex
                   const isSelectedColumn = columnIndex === selection.columnIndex
                   const isLoopStart = columnIndex === composition.loopRegion.startColumn
                   const isLoopEnd = columnIndex === composition.loopRegion.endColumn
                   const isInLoop = isColumnInLoopRegion(columnIndex, composition.loopRegion)
-                  const label = measureId === null || measureId === undefined
+                  const label = sequenceId === null || sequenceId === undefined
                     ? 'Rest'
-                    : measureEntry?.name ?? `M${measureId}`
+                    : sequenceEntry?.name ?? `S${sequenceId}`
                   const isReferenceMatch =
-                    shouldHighlightReferences && measureId === selectedMeasureId && !isSelectedCell
-                  const miniMapNotes = getMiniMapNotes(measureEntry, column.length, tuningLength)
+                    shouldHighlightReferences && sequenceId === selectedSequenceId && !isSelectedCell
+                  const miniMapNotes = getMiniMapNotes(sequenceEntry, column.length, tuningLength)
                   const isEditingCell = editTarget?.kind === 'cell' &&
                     editTarget.rowIndex === rowIndex &&
                     editTarget.columnIndex === columnIndex
@@ -438,7 +438,7 @@ export function CompositionSection({
                         isInLoop ? 'compositionCell-loop' : '',
                         isLoopStart ? 'compositionCell-loopStart' : '',
                         isLoopEnd ? 'compositionCell-loopEnd' : '',
-                        measureEntry ? '' : 'compositionCell-empty',
+                        sequenceEntry ? '' : 'compositionCell-empty',
                       ].filter(Boolean).join(' ')}
                       role="gridcell"
                       tabIndex={0}
@@ -480,7 +480,7 @@ export function CompositionSection({
                             autoCapitalize="off"
                             autoComplete="off"
                             autoCorrect="off"
-                            aria-label={`Assign measure at row ${rowIndex + 1}, column ${columnIndex + 1}`}
+                            aria-label={`Assign sequence at row ${rowIndex + 1}, column ${columnIndex + 1}`}
                           />
                         ) : (
                           <>
@@ -491,17 +491,17 @@ export function CompositionSection({
                                 event.stopPropagation()
                                 onBeginEdit({ kind: 'cell', rowIndex, columnIndex })
                               }}
-                              aria-label={`Assign measure at row ${rowIndex + 1}, column ${columnIndex + 1}`}
+                              aria-label={`Assign sequence at row ${rowIndex + 1}, column ${columnIndex + 1}`}
                             >
                               {label}
                             </button>
-                            {measureEntry ? (
+                            {sequenceEntry ? (
                               <button
                                 type="button"
-                                className="compositionCellClear mono"
+                                className="compositionCellUnassign mono"
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  onClearCell(rowIndex, columnIndex)
+                                  onUnassignCell(rowIndex, columnIndex)
                                 }}
                                 aria-label={`Clear row ${rowIndex + 1}, column ${columnIndex + 1}`}
                               >
