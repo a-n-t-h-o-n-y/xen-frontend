@@ -39,6 +39,7 @@ type UseProjectSessionArgs = {
   setEditorState: Dispatch<SetStateAction<EditorState>>
   setSessionReference: Dispatch<SetStateAction<SessionReference>>
   setLibrarySnapshot: Dispatch<SetStateAction<LibrarySnapshot>>
+  setIsTransportActive: Dispatch<SetStateAction<boolean>>
   setPlayheadPhase: Dispatch<SetStateAction<number | null>>
 }
 
@@ -51,6 +52,7 @@ export function useProjectSession({
   setEditorState,
   setSessionReference,
   setLibrarySnapshot,
+  setIsTransportActive,
   setPlayheadPhase,
 }: UseProjectSessionArgs) {
   const eventTokenRef = useRef<unknown>(null)
@@ -134,10 +136,12 @@ export function useProjectSession({
               const phase = normalizePhase(event.payload.phase)
               transportRef.current.phase = phase
               transportRef.current.active = true
+              setIsTransportActive(true)
               setPlayheadPhase(phase)
               return
             }
             transportRef.current.active = false
+            setIsTransportActive(false)
             setPlayheadPhase(null)
           } catch (error) {
             setStatusMessage(`Bridge event contract error: ${getErrorMessage(error)}`)
@@ -196,6 +200,7 @@ export function useProjectSession({
     ingestProject,
     request,
     setLibrarySnapshot,
+    setIsTransportActive,
     setPlayheadPhase,
     setSessionReference,
     transportRef,

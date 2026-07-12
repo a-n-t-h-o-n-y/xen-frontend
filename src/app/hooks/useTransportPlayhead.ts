@@ -7,6 +7,7 @@ type UseTransportPlayheadArgs = {
   sequenceDenominator: number
   transportRef: MutableRefObject<TransportState>
   selectedTimeSignatureRef: MutableRefObject<{ numerator: number; denominator: number }>
+  isTransportActive: boolean
   setPlayheadPhase: Dispatch<SetStateAction<number | null>>
 }
 
@@ -15,6 +16,7 @@ export function useTransportPlayhead({
   sequenceDenominator,
   transportRef,
   selectedTimeSignatureRef,
+  isTransportActive,
   setPlayheadPhase,
 }: UseTransportPlayheadArgs) {
   const animationFrameRef = useRef<number | null>(null)
@@ -26,7 +28,7 @@ export function useTransportPlayhead({
       denominator: sequenceDenominator,
     }
 
-    if (transportRef.current.active) {
+    if (isTransportActive) {
       setPlayheadPhase(transportRef.current.phase)
       return
     }
@@ -35,12 +37,15 @@ export function useTransportPlayhead({
   }, [
     sequenceDenominator,
     sequenceNumerator,
+    isTransportActive,
     selectedTimeSignatureRef,
     setPlayheadPhase,
     transportRef,
   ])
 
   useEffect(() => {
+    if (!isTransportActive) return
+
     const tick = (frameTimeMs: number): void => {
       if (lastAnimationFrameMsRef.current === null) {
         lastAnimationFrameMsRef.current = frameTimeMs
@@ -54,7 +59,6 @@ export function useTransportPlayhead({
 
       if (!transport.active || transport.bpm <= 0 || numerator <= 0 || denominator <= 0) {
         setPlayheadPhase((previous) => (previous === null ? previous : null))
-        animationFrameRef.current = requestAnimationFrame(tick)
         return
       }
 
@@ -62,7 +66,6 @@ export function useTransportPlayhead({
       const loopSec = (quartersPerLoop * 60) / transport.bpm
       if (loopSec <= 0) {
         setPlayheadPhase((previous) => (previous === null ? previous : null))
-        animationFrameRef.current = requestAnimationFrame(tick)
         return
       }
 
@@ -80,5 +83,5 @@ export function useTransportPlayhead({
       }
       lastAnimationFrameMsRef.current = null
     }
-  }, [selectedTimeSignatureRef, setPlayheadPhase, transportRef])
+  }, [isTransportActive, selectedTimeSignatureRef, setPlayheadPhase, transportRef])
 }

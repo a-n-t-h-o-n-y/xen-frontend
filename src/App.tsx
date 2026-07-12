@@ -62,6 +62,7 @@ function App() {
   const editorStateRef = useRef<EditorState>(editorState)
   const transportRef = useRef<TransportState>(createTransportState())
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
+  const [isTransportActive, setIsTransportActive] = useState(false)
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
   const [modulatorPreviewWidth, setModulatorPreviewWidth] = useState(0)
   const {
@@ -102,6 +103,7 @@ function App() {
     setEditorState,
     setSessionReference,
     setLibrarySnapshot,
+    setIsTransportActive,
     setPlayheadPhase,
   })
   const settingsOverlay = useSettingsOverlayState(keymapController.clearError)
@@ -270,6 +272,7 @@ function App() {
     sequenceDenominator,
     transportRef,
     selectedTimeSignatureRef,
+    isTransportActive,
     setPlayheadPhase,
   })
 
