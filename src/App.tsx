@@ -23,6 +23,7 @@ import {
   DEFAULT_TUNING_LENGTH,
   createTransportState,
 } from './app/constants'
+import { reconcileActiveMeasureTarget } from './app/domain/composition'
 import { clampNumber } from './app/domain/music'
 import type {
   Cell,
@@ -148,6 +149,19 @@ function App() {
     activeMeasureTargetRef.current = nextTarget
     setActiveMeasureTarget(nextTarget)
   }, [])
+
+  useEffect(() => {
+    if (!projectSnapshot) return
+
+    const nextTarget = reconcileActiveMeasureTarget(
+      projectSnapshot.composition,
+      activeMeasureTargetRef.current,
+      compositionSelectionRef.current
+    )
+    if (nextTarget !== activeMeasureTargetRef.current) {
+      installActiveMeasureTarget(nextTarget)
+    }
+  }, [installActiveMeasureTarget, projectSnapshot])
 
   const projectViewModel = useProjectViewModel(
     projectSnapshot,

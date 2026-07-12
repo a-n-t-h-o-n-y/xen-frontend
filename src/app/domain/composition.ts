@@ -89,6 +89,15 @@ export const isActiveMeasureTargetValid = (
     composition.rows[target.rowIndex]?.cells[target.columnIndex] === target.measureId
   )
 
+export const reconcileActiveMeasureTarget = (
+  composition: Composition | null,
+  target: ActiveMeasureTarget | null,
+  selection: CompositionSelection
+): ActiveMeasureTarget | null =>
+  isActiveMeasureTargetValid(composition, target)
+    ? target
+    : getActiveMeasureTarget(composition, selection)
+
 export const measureFromTarget = (
   fallbackMeasure: Measure,
   measureBank: MeasureBank | null,

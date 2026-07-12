@@ -4,6 +4,7 @@ import {
   isColumnInLoopRegion,
   measureFromTarget,
   moveCompositionSelection,
+  reconcileActiveMeasureTarget,
 } from './composition'
 import { projectFromDto } from './mappers'
 import { arrangedProjectFixture } from './testFixtures'
@@ -40,5 +41,21 @@ describe('composition helpers', () => {
       .toEqual({ numerator: 4, denominator: 4 })
     expect(getActiveMeasureTarget(composition, { rowIndex: 1, columnIndex: 2 })).toBeNull()
   })
-})
 
+  it('initializes an absent active target from the selected composition cell', () => {
+    expect(reconcileActiveMeasureTarget(
+      composition,
+      null,
+      { rowIndex: 1, columnIndex: 1 }
+    )).toEqual({ rowIndex: 1, columnIndex: 1, measureId: 1 })
+  })
+
+  it('preserves an active target while it still resolves', () => {
+    const target = { rowIndex: 0, columnIndex: 0, measureId: 1 }
+    expect(reconcileActiveMeasureTarget(
+      composition,
+      target,
+      { rowIndex: 1, columnIndex: 1 }
+    )).toBe(target)
+  })
+})
