@@ -55,7 +55,7 @@ const pitchFixture = () => ({
 })
 
 export const projectFixture = (revision = 3): ProjectSnapshotDto => ({
-  schema_version: 4,
+  schema_version: 5,
   history_entry_id: 2,
   project_revision: revision,
   preview_active: false,
@@ -65,7 +65,12 @@ export const projectFixture = (revision = 3): ProjectSnapshotDto => ({
       sequences: [{ id: 1, cell: nestedCell }],
     },
     composition: {
+      default_column: {
+        duration: { numerator: 4, denominator: 4 },
+        pitch: pitchFixture(),
+      },
       columns: [{
+        coordinate: 0,
         duration: { numerator: 4, denominator: 4 },
         pitch: {
       tuning: {
@@ -89,13 +94,15 @@ export const projectFixture = (revision = 3): ProjectSnapshotDto => ({
       base_frequency: 440,
         },
       }],
-      rows: [{ channel_id: 'channel-1', cells: [1] }],
+      rows: [{ coordinate: 0, channel_id: 'channel-1' }],
+      placements: [{ row: 0, column: 0, sequence_id: 1 }],
+      loop_region: { start_column: 0, end_column: 0 },
     },
   },
 })
 
 export const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
-  schema_version: 4,
+  schema_version: 5,
   history_entry_id: 2,
   project_revision: revision,
   preview_active: false,
@@ -117,24 +124,31 @@ export const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
       ],
     },
     composition: {
+      default_column: { duration: { numerator: 4, denominator: 4 }, pitch: pitchFixture() },
       columns: [
-        { duration: { numerator: 7, denominator: 8 }, pitch: pitchFixture() },
-        { duration: { numerator: 4, denominator: 4 }, pitch: pitchFixture() },
-        { duration: { numerator: 5, denominator: 16 }, pitch: pitchFixture() },
+        { coordinate: -4, duration: { numerator: 7, denominator: 8 }, pitch: pitchFixture() },
+        { coordinate: 0, duration: { numerator: 4, denominator: 4 }, pitch: pitchFixture() },
+        { coordinate: 9, duration: { numerator: 5, denominator: 16 }, pitch: pitchFixture() },
       ],
       rows: [
         {
+          coordinate: -2,
           channel_id: 'other',
-          cells: [1, null, 2],
         },
         {
+          coordinate: 3,
           channel_id: 'channel-1',
-          cells: [2, 1, null],
         },
       ],
+      placements: [
+        { row: -2, column: -4, sequence_id: 1 },
+        { row: -2, column: 9, sequence_id: 2 },
+        { row: 3, column: -4, sequence_id: 2 },
+        { row: 3, column: 0, sequence_id: 1 },
+      ],
       loop_region: {
-        start_column: 2,
-        end_column: 0,
+        start_column: -2,
+        end_column: 6,
       },
     },
   },

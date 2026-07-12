@@ -1,13 +1,16 @@
 import { z } from 'zod'
 
-export const BRIDGE_PROTOCOL = 'xen.bridge.v4'
-export const PROJECT_SCHEMA_VERSION = 4
+export const BRIDGE_PROTOCOL = 'xen.bridge.v5'
+export const PROJECT_SCHEMA_VERSION = 5
 export const LIBRARY_SCHEMA_VERSION = 1
 export const CATALOG_SCHEMA_VERSION = 3
 export const KEYMAP_SCHEMA_VERSION = 2
 
 const finiteNumber = z.number().finite()
 const nonNegativeInteger = z.number().int().nonnegative()
+export const compositionCoordinateSchema = z.number().int()
+  .min(-2_147_483_648)
+  .max(2_147_483_647)
 export const keymapRevisionSchema = z.string().regex(/^\d+$/, 'Expected a decimal revision string')
 const modTargetIdSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'weights'])
 
@@ -83,47 +86,89 @@ export const compositionLengthSchema = z.object({
 })
 
 export const compositionLoopRegionSchema = z.object({
-  start_column: nonNegativeInteger,
-  end_column: nonNegativeInteger,
+  start_column: compositionCoordinateSchema,
+  end_column: compositionCoordinateSchema,
+})
+
+const compositionColumnSchema = z.object({
+    duration: compositionLengthSchema,
+    pitch: z.lazy(() => pitchStateSchema),
 })
 
 export const compositionSchema = z.object({
-  columns: z.array(z.object({
-    duration: compositionLengthSchema,
-    pitch: z.lazy(() => pitchStateSchema),
+  default_column: compositionColumnSchema,
+  columns: z.array(compositionColumnSchema.extend({
+    coordinate: compositionCoordinateSchema,
   })),
   rows: z.array(z.object({
+    coordinate: compositionCoordinateSchema,
     name: z.string().optional(),
     channel_id: z.string(),
-    cells: z.array(nonNegativeInteger.nullable()),
   })),
-  loop_region: compositionLoopRegionSchema.optional(),
+  placements: z.array(z.object({
+    row: compositionCoordinateSchema,
+    column: compositionCoordinateSchema,
+    sequence_id: nonNegativeInteger,
+  })),
+  loop_region: compositionLoopRegionSchema,
 }).superRefine((composition, context) => {
+  const rowCoordinates = new Set<number>()
   composition.rows.forEach((row, rowIndex) => {
-    if (row.cells.length !== composition.columns.length) {
+    if (rowCoordinates.has(row.coordinate)) {
       context.addIssue({
         code: 'custom',
-        path: ['rows', rowIndex, 'cells'],
-        message: 'Expected row cells to match composition column count',
+        path: ['rows', rowIndex, 'coordinate'],
+        message: `Duplicate composition row coordinate ${row.coordinate}`,
+      })
+    }
+    rowCoordinates.add(row.coordinate)
+  })
+
+  const columnCoordinates = new Set<number>()
+  composition.columns.forEach((column, columnIndex) => {
+    if (columnCoordinates.has(column.coordinate)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['columns', columnIndex, 'coordinate'],
+        message: `Duplicate composition column coordinate ${column.coordinate}`,
+      })
+    }
+    columnCoordinates.add(column.coordinate)
+  })
+
+  const placementCoordinates = new Set<string>()
+  composition.placements.forEach((placement, placementIndex) => {
+    const key = `${placement.row},${placement.column}`
+    if (placementCoordinates.has(key)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['placements', placementIndex],
+        message: `Duplicate composition placement at ${key}`,
+      })
+    }
+    placementCoordinates.add(key)
+    if (!rowCoordinates.has(placement.row)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['placements', placementIndex, 'row'],
+        message: `Placement references missing row ${placement.row}`,
+      })
+    }
+    if (!columnCoordinates.has(placement.column)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['placements', placementIndex, 'column'],
+        message: `Placement references missing column ${placement.column}`,
       })
     }
   })
-  if (composition.loop_region) {
-    const lastColumnIndex = composition.columns.length - 1
-    if (composition.loop_region.start_column > lastColumnIndex) {
-      context.addIssue({
-        code: 'custom',
-        path: ['loop_region', 'start_column'],
-        message: 'Expected loop start column to reference an existing composition column',
-      })
-    }
-    if (composition.loop_region.end_column > lastColumnIndex) {
-      context.addIssue({
-        code: 'custom',
-        path: ['loop_region', 'end_column'],
-        message: 'Expected loop end column to reference an existing composition column',
-      })
-    }
+
+  if (composition.loop_region.start_column > composition.loop_region.end_column) {
+    context.addIssue({
+      code: 'custom',
+      path: ['loop_region'],
+      message: 'Expected loop start column to be less than or equal to loop end column',
+    })
   }
 })
 
@@ -162,16 +207,14 @@ export const arrangementProjectSnapshotSchema = z.object({
   }),
 }).superRefine((snapshot, context) => {
   const sequenceIds = new Set(snapshot.project.sequence_bank.sequences.map((entry) => entry.id))
-  snapshot.project.composition.rows.forEach((row, rowIndex) => {
-    row.cells.forEach((sequenceId, cellIndex) => {
-      if (sequenceId !== null && !sequenceIds.has(sequenceId)) {
-        context.addIssue({
-          code: 'custom',
-          path: ['project', 'composition', 'rows', rowIndex, 'cells', cellIndex],
-          message: `Unknown sequence reference ${sequenceId}`,
-        })
-      }
-    })
+  snapshot.project.composition.placements.forEach((placement, placementIndex) => {
+    if (!sequenceIds.has(placement.sequence_id)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['project', 'composition', 'placements', placementIndex, 'sequence_id'],
+        message: `Unknown sequence reference ${placement.sequence_id}`,
+      })
+    }
   })
 })
 
@@ -316,14 +359,8 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
       'composition.cell.duplicate_right',
       'composition.cell.rename_or_create_sequence',
       'composition.cell.unassign',
-      'composition.row.insert_before',
-      'composition.row.insert_after',
-      'composition.row.delete',
       'composition.row.rename',
       'composition.row.channel',
-      'composition.column.insert_before',
-      'composition.column.insert_after',
-      'composition.column.delete',
       'composition.column.length',
       'composition.loop.set_start',
       'composition.loop.set_end',

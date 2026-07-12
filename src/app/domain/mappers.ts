@@ -47,35 +47,53 @@ const sequenceName = (id: number): string => `S${id}`
 const compositionFromDto = (
   composition: ProjectSnapshotDto['project']['composition']
 ): Composition => {
-  const lastColumnIndex = Math.max(0, composition.columns.length - 1)
+  const defaultColumn = {
+    length: {
+      numerator: composition.default_column.duration.numerator,
+      denominator: composition.default_column.duration.denominator,
+    },
+    pitch: pitchFromDto(composition.default_column.pitch),
+  }
   return {
-    columns: composition.columns.map((column) => ({
+    defaultColumn,
+    columns: new Map(composition.columns.map((column) => [column.coordinate, {
+      coordinate: column.coordinate,
       length: {
         numerator: column.duration.numerator,
         denominator: column.duration.denominator,
       },
       pitch: pitchFromDto(column.pitch),
-    })),
-    rows: composition.rows.map((row, index) => ({
-      name: row.name || row.channel_id || `Row ${index + 1}`,
+    }])),
+    rows: new Map(composition.rows.map((row) => [row.coordinate, {
+      coordinate: row.coordinate,
+      name: row.name || row.channel_id || `Row ${row.coordinate}`,
       channelId: row.channel_id,
-      cells: row.cells,
-    })),
+    }])),
+    placements: new Map(composition.placements.map((placement) => [
+      `${placement.row},${placement.column}`,
+      {
+        rowCoordinate: placement.row,
+        columnCoordinate: placement.column,
+        sequenceId: placement.sequence_id,
+      },
+    ])),
     loopRegion: {
-      startColumn: composition.loop_region?.start_column ?? 0,
-      endColumn: composition.loop_region?.end_column ?? lastColumnIndex,
+      startColumn: composition.loop_region.start_column,
+      endColumn: composition.loop_region.end_column,
     },
   }
 }
 
 const arrangedSequenceFromDto = (snapshot: ProjectSnapshotDto): Sequence => {
   const composition = snapshot.project.composition
-  const firstRow = composition.rows[0]
-  const sequenceId = firstRow?.cells[0] ?? null
-  const sequenceEntry = sequenceId === null
+  const firstPlacement = composition.placements[0]
+  const sequenceEntry = firstPlacement === undefined
     ? snapshot.project.sequence_bank.sequences[0]
-    : snapshot.project.sequence_bank.sequences.find((entry) => entry.id === sequenceId)
-  const columnLength = composition.columns[0]?.duration ?? { numerator: 4, denominator: 4 }
+    : snapshot.project.sequence_bank.sequences.find((entry) => entry.id === firstPlacement.sequence_id)
+  const columnLength = firstPlacement === undefined
+    ? composition.default_column.duration
+    : composition.columns.find((column) => column.coordinate === firstPlacement.column)?.duration ??
+      composition.default_column.duration
 
   return {
     cell: (sequenceEntry ?? emptySequenceEntry).cell,
@@ -87,8 +105,7 @@ const arrangedSequenceFromDto = (snapshot: ProjectSnapshotDto): Sequence => {
 }
 
 export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot => {
-  const pitchState = snapshot.project.composition.columns[0]?.pitch
-  const fallbackPitch = { tuning: { name: '', definition: { intervals: [], octave: 1200 } }, scale: null, transposition: 0, translation_direction: 'up' as const, base_frequency: 440 }
+  const pitchState = snapshot.project.composition.default_column.pitch
   return {
     revision: snapshot.project_revision,
     historyEntryId: snapshot.history_entry_id,
@@ -103,7 +120,7 @@ export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot =>
           })),
         },
     composition: compositionFromDto(snapshot.project.composition),
-    pitch: pitchFromDto(pitchState ?? fallbackPitch),
+    pitch: pitchFromDto(pitchState),
   }
 }
 
@@ -301,9 +318,9 @@ export const commandContextToDto = (context: CommandContext) => ({
   expected_project_revision: context.expectedProjectRevision,
   selection: context.selection as SelectionDto,
   cursor: {
-    row_index: context.activeSequenceTarget?.rowIndex ?? 0,
-    column_index: context.activeSequenceTarget?.columnIndex ?? 0,
-    sequence_id: context.activeSequenceTarget?.sequenceId ?? null,
+    row_coordinate: context.cursor.rowCoordinate,
+    column_coordinate: context.cursor.columnCoordinate,
+    sequence_id: context.cursor.sequenceId,
   },
 })
 

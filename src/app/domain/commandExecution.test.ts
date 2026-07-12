@@ -10,14 +10,29 @@ describe('command execution primitives', () => {
     })).toEqual({
       expectedProjectRevision: 12,
       selection: { path: [] },
-      activeSequenceTarget: null,
+      cursor: { rowCoordinate: 0, columnCoordinate: 0, sequenceId: 1 },
     })
     expect(commandContextToDto(buildCommandContext(projectFromDto(projectFixture(12)), {
       path: [{ kind: 'element', index: 99 }],
     }))).toEqual({
       expected_project_revision: 12,
       selection: { path: [] },
-      cursor: { row_index: 0, column_index: 0, sequence_id: null },
+      cursor: { row_coordinate: 0, column_coordinate: 0, sequence_id: 1 },
+    })
+  })
+
+  it('serializes an empty virtual coordinate with a null sequence id', () => {
+    const project = projectFromDto(projectFixture(12))
+    const context = buildCommandContext(
+      project,
+      { path: [] },
+      null,
+      { rowCoordinate: -81, columnCoordinate: 144 }
+    )
+    expect(commandContextToDto(context).cursor).toEqual({
+      row_coordinate: -81,
+      column_coordinate: 144,
+      sequence_id: null,
     })
   })
 

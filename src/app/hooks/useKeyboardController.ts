@@ -4,8 +4,12 @@ import {
   findKeymapBinding,
 } from '../domain/keymap'
 import { isCommandUiActionId } from '../domain/uiActions'
-import { getSequenceById, moveCompositionSelection } from '../domain/composition'
-import { compositionCellAssign, compositionCellUnassign } from '../domain/commands'
+import {
+  getCompositionPlacement,
+  getSequenceById,
+  moveCompositionSelection,
+} from '../domain/composition'
+import { compositionCellAssign, compositionCellClear } from '../domain/commands'
 import { moveSelection, projectRootCell } from '../domain/selection'
 import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
@@ -86,7 +90,7 @@ export function useKeyboardController({
   const pendingNumberTimerRef = useRef<number | null>(null)
 
   const getCompositionCellKey = (selection: CompositionSelection): string =>
-    `${selection.rowIndex}:${selection.columnIndex}`
+    `${selection.rowCoordinate}:${selection.columnCoordinate}`
 
   const clearOptimisticCompositionName = useCallback((key: string, name: string): void => {
     if (optimisticCompositionCellNamesRef.current.get(key) === name) {
@@ -109,10 +113,12 @@ export function useKeyboardController({
       return optimisticName
     }
 
-    const sequenceId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
-    if (sequenceId === null || sequenceId === undefined) {
-      return null
-    }
+    const sequenceId = getCompositionPlacement(
+      composition,
+      selection.rowCoordinate,
+      selection.columnCoordinate
+    )?.sequenceId
+    if (sequenceId === undefined) return null
 
     return getSequenceById(project.sequenceBank, sequenceId)?.name ?? null
   }, [compositionSelectionRef, projectRef])
@@ -124,7 +130,11 @@ export function useKeyboardController({
     const key = getCompositionCellKey(selection)
     optimisticCompositionCellNamesRef.current.set(key, sequenceName)
     void executeBackendCommand(
-      compositionCellAssign(selection.rowIndex, selection.columnIndex, sequenceName)
+      compositionCellAssign(
+        selection.rowCoordinate,
+        selection.columnCoordinate,
+        sequenceName
+      )
     ).then(() => {
       clearOptimisticCompositionName(key, sequenceName)
     }).catch((error: unknown) => {
@@ -137,7 +147,7 @@ export function useKeyboardController({
   const unassignCompositionSelection = useCallback((selection: CompositionSelection): void => {
     optimisticCompositionCellNamesRef.current.delete(getCompositionCellKey(selection))
     void executeBackendCommand(
-      compositionCellUnassign(selection.rowIndex, selection.columnIndex)
+      compositionCellClear(selection.rowCoordinate, selection.columnCoordinate)
     ).catch((error: unknown) => {
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')
@@ -185,23 +195,20 @@ export function useKeyboardController({
   }, [unassignCompositionSelection, compositionSelectionRef, handleCompositionCellCopy])
 
   const handleCompositionCellDuplicateRight = useCallback((): boolean => {
-    const project = projectRef.current
-    const composition = project?.composition
     const sequenceName = getSelectedCompositionSequenceName()
-    if (!composition || !sequenceName) {
+    if (!sequenceName) {
       setStatusMessage('Empty composition cell. Nothing to duplicate.')
       setStatusLevel('warning')
       return false
     }
 
     const selection = compositionSelectionRef.current
-    if (selection.columnIndex >= composition.columns.length - 1) {
-      setStatusMessage('Cannot duplicate right from the last composition column.')
+    const targetSelection = moveCompositionSelection(selection, 'right')
+    if (targetSelection.columnCoordinate === selection.columnCoordinate) {
+      setStatusMessage('Cannot duplicate beyond the coordinate limit.')
       setStatusLevel('warning')
       return false
     }
-
-    const targetSelection = { rowIndex: selection.rowIndex, columnIndex: selection.columnIndex + 1 }
     assignCompositionSequenceName(
       targetSelection,
       sequenceName
@@ -213,7 +220,6 @@ export function useKeyboardController({
     compositionSelectionRef,
     getSelectedCompositionSequenceName,
     installCompositionSelection,
-    projectRef,
     setStatusLevel,
     setStatusMessage,
   ])
@@ -347,10 +353,7 @@ export function useKeyboardController({
             }
 
             if (matchedBinding.target.action === 'composition.selection.move') {
-              const composition = projectRef.current?.composition
-              if (!composition) return
               const selection = moveCompositionSelection(
-                composition,
                 compositionSelectionRef.current,
                 matchedBinding.target.arguments.direction,
                 matchedBinding.target.arguments.amount

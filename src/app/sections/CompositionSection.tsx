@@ -1,16 +1,21 @@
+import { useEffect, useMemo, useRef } from 'react'
 import { formatTimeSignature } from '../presentation/viewModels'
-import { getSequenceById, isColumnInLoopRegion } from '../domain/composition'
+import {
+  getCompositionColumnOrDefault,
+  getCompositionPlacement,
+  getSequenceById,
+  isColumnInLoopRegion,
+} from '../domain/composition'
 import { getMiniMapNotes } from './compositionMiniMap'
-import { getCompositionSelectionScrollDelta } from './compositionScroll'
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import type { CSSProperties, KeyboardEvent } from 'react'
+import { buildVirtualCoordinateRange } from './compositionViewport'
+import type { CSSProperties, DragEvent, KeyboardEvent } from 'react'
 import type { Composition, CompositionSelection, SequenceBank } from '../domain/models'
 
 export type CompositionEditTarget =
-  | { kind: 'cell'; rowIndex: number; columnIndex: number }
-  | { kind: 'rowName'; rowIndex: number }
-  | { kind: 'rowChannel'; rowIndex: number }
-  | { kind: 'columnLength'; columnIndex: number }
+  | { kind: 'cell'; rowCoordinate: number; columnCoordinate: number }
+  | { kind: 'rowName'; rowCoordinate: number }
+  | { kind: 'rowChannel'; rowCoordinate: number }
+  | { kind: 'columnLength'; columnCoordinate: number }
 
 type CompositionSectionProps = {
   composition: Composition
@@ -21,24 +26,26 @@ type CompositionSectionProps = {
   onSelectCell: (selection: CompositionSelection) => void
   onBeginEdit: (target: CompositionEditTarget) => void
   onCancelEdit: () => void
-  onCommitCellName: (rowIndex: number, columnIndex: number, name: string) => void
-  onCommitRowName: (rowIndex: number, name: string) => void
-  onCommitRowChannel: (rowIndex: number, channelId: string) => void
-  onCommitColumnLength: (columnIndex: number, length: string) => void
-  onInsertRow: (placement: 'before' | 'after', rowIndex: number) => void
-  onDeleteRow: (rowIndex: number) => void
-  onInsertColumn: (placement: 'before' | 'after', columnIndex: number) => void
-  onDeleteColumn: (columnIndex: number) => void
-  onUnassignCell: (rowIndex: number, columnIndex: number) => void
+  onCommitCellName: (rowCoordinate: number, columnCoordinate: number, name: string) => void
+  onCommitRowName: (rowCoordinate: number, name: string) => void
+  onCommitRowChannel: (rowCoordinate: number, channelId: string) => void
+  onCommitColumnLength: (columnCoordinate: number, length: string) => void
+  onClearCell: (rowCoordinate: number, columnCoordinate: number) => void
+  onMoveCell: (
+    fromRowCoordinate: number,
+    fromColumnCoordinate: number,
+    toRowCoordinate: number,
+    toColumnCoordinate: number
+  ) => void
 }
 
-const minColumnWidth = 5.5
-const beatWidth = 3.25
+const viewportColumnRadius = 4
+const viewportRowRadius = 3
+const cellWidthPixels = 140
+const cellHeightPixels = 84
 
-const getColumnWidth = (length: { numerator: number; denominator: number }): string => {
-  const beats = length.numerator * (4 / length.denominator)
-  return `${Math.max(minColumnWidth, beats * beatWidth)}rem`
-}
+const coordinateLabel = (coordinate: number): string =>
+  coordinate > 0 ? `+${coordinate}` : `${coordinate}`
 
 export function CompositionSection({
   composition,
@@ -53,128 +60,80 @@ export function CompositionSection({
   onCommitRowName,
   onCommitRowChannel,
   onCommitColumnLength,
-  onInsertRow,
-  onDeleteRow,
-  onInsertColumn,
-  onDeleteColumn,
-  onUnassignCell,
+  onClearCell,
+  onMoveCell,
 }: CompositionSectionProps) {
-  const scrollerRef = useRef<HTMLDivElement | null>(null)
+  const sectionRef = useRef<HTMLElement | null>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
-  const columnWidths = composition.columns.map((column) => getColumnWidth(column.length))
-  const gridTemplateColumns = ['10rem', ...columnWidths].join(' ')
-  const selectedSequenceId = composition.rows[selection.rowIndex]?.cells[selection.columnIndex]
-  const selectedSequenceInstanceCount = selectedSequenceId === null || selectedSequenceId === undefined
-    ? 0
-    : composition.rows.reduce((count, row) => (
-        count + row.cells.filter((sequenceId) => sequenceId === selectedSequenceId).length
-      ), 0)
-  const shouldHighlightReferences = selectedSequenceInstanceCount > 1
+  const rowCoordinates = buildVirtualCoordinateRange(selection.rowCoordinate, viewportRowRadius)
+  const columnCoordinates = buildVirtualCoordinateRange(
+    selection.columnCoordinate,
+    viewportColumnRadius
+  )
+  const selectedPlacement = getCompositionPlacement(
+    composition,
+    selection.rowCoordinate,
+    selection.columnCoordinate
+  )
+  const selectedInstanceCount = selectedPlacement
+    ? Array.from(composition.placements.values()).filter(
+        (placement) => placement.sequenceId === selectedPlacement.sequenceId
+      ).length
+    : 0
   const channelOptions = useMemo(() => Array.from(new Set(
-    composition.rows.map((row) => row.channelId).filter(Boolean)
+    Array.from(composition.rows.values()).map((row) => row.channelId).filter(Boolean)
   )), [composition.rows])
-  const editKey = editTarget
-    ? editTarget.kind === 'cell'
-      ? `cell-${editTarget.rowIndex}-${editTarget.columnIndex}`
-      : editTarget.kind === 'rowName' || editTarget.kind === 'rowChannel'
-        ? `${editTarget.kind}-${editTarget.rowIndex}`
-        : `${editTarget.kind}-${editTarget.columnIndex}`
-    : ''
+  const editKey = editTarget ? JSON.stringify(editTarget) : ''
   const editValue = useMemo(() => {
-    if (!editTarget) {
-      return ''
-    }
-
+    if (!editTarget) return ''
     if (editTarget.kind === 'cell') {
-      const sequenceId = composition.rows[editTarget.rowIndex]?.cells[editTarget.columnIndex]
-      const sequenceEntry = sequenceId === null || sequenceId === undefined
-        ? null
-        : getSequenceById(sequenceBank, sequenceId)
-      return sequenceEntry?.name ?? ''
+      const placement = getCompositionPlacement(
+        composition,
+        editTarget.rowCoordinate,
+        editTarget.columnCoordinate
+      )
+      return placement ? getSequenceById(sequenceBank, placement.sequenceId)?.name ?? '' : ''
     }
-
     if (editTarget.kind === 'rowName') {
-      return composition.rows[editTarget.rowIndex]?.name ?? ''
+      return composition.rows.get(editTarget.rowCoordinate)?.name ?? ''
     }
-
     if (editTarget.kind === 'rowChannel') {
-      return composition.rows[editTarget.rowIndex]?.channelId ?? 'channel-1'
+      return composition.rows.get(editTarget.rowCoordinate)?.channelId ?? ''
     }
-
-    const length = composition.columns[editTarget.columnIndex]?.length
-    return length ? formatTimeSignature(length) : '4/4'
-  }, [composition.columns, composition.rows, editTarget, sequenceBank])
-
-  useLayoutEffect(() => {
-    const scroller = scrollerRef.current
-    const selected = scroller?.querySelector('[data-composition-selected="true"]')
-    if (!scroller || !(selected instanceof HTMLElement)) {
-      return
-    }
-
-    const corner = scroller.querySelector('.compositionCorner')
-    const scrollerRect = scroller.getBoundingClientRect()
-    const selectedRect = selected.getBoundingClientRect()
-    const cornerRect = corner instanceof HTMLElement ? corner.getBoundingClientRect() : null
-    const { topDelta, leftDelta } = getCompositionSelectionScrollDelta(
-      scrollerRect,
-      selectedRect,
-      {
-        width: cornerRect?.width ?? 0,
-        height: cornerRect?.height ?? 0,
-      }
-    )
-
-    if (topDelta !== 0) {
-      scroller.scrollTop += topDelta
-    }
-    if (leftDelta !== 0) {
-      scroller.scrollLeft += leftDelta
-    }
-
-    const activeElement = document.activeElement
-    const shouldMoveFocus =
-      activeElement === document.body ||
-      activeElement === null ||
-      (activeElement instanceof HTMLElement && scroller.contains(activeElement))
-
-    if (shouldMoveFocus && document.activeElement !== selected) {
-      selected.focus({ preventScroll: true })
-    }
-  }, [selection.columnIndex, selection.rowIndex])
+    const column = composition.columns.get(editTarget.columnCoordinate)
+    return column ? formatTimeSignature(column.length) : ''
+  }, [composition, editTarget, sequenceBank])
 
   useEffect(() => {
-    if (!editTarget) {
-      return
+    const selected = sectionRef.current?.querySelector('[data-composition-selected="true"]')
+    const activeElement = document.activeElement
+    if (
+      selected instanceof HTMLElement &&
+      (activeElement === document.body || activeElement === null || sectionRef.current?.contains(activeElement))
+    ) {
+      selected.focus({ preventScroll: true })
     }
+  }, [selection.columnCoordinate, selection.rowCoordinate])
 
+  useEffect(() => {
+    if (!editTarget) return
     window.requestAnimationFrame(() => {
-      const editInput = editInputRef.current
-      if (!editInput) {
-        return
-      }
-
-      editInput.focus()
-      if (editInput instanceof HTMLInputElement) {
-        editInput.select()
-      }
+      editInputRef.current?.focus()
+      editInputRef.current?.select()
     })
   }, [editKey, editTarget])
 
   const commitEdit = (): void => {
-    if (!editTarget) {
-      return
-    }
+    if (!editTarget) return
     const value = editInputRef.current?.value ?? editValue
-
     if (editTarget.kind === 'cell') {
-      onCommitCellName(editTarget.rowIndex, editTarget.columnIndex, value)
+      onCommitCellName(editTarget.rowCoordinate, editTarget.columnCoordinate, value)
     } else if (editTarget.kind === 'rowName') {
-      onCommitRowName(editTarget.rowIndex, value)
+      onCommitRowName(editTarget.rowCoordinate, value)
     } else if (editTarget.kind === 'rowChannel') {
-      onCommitRowChannel(editTarget.rowIndex, value)
+      onCommitRowChannel(editTarget.rowCoordinate, value)
     } else {
-      onCommitColumnLength(editTarget.columnIndex, value)
+      onCommitColumnLength(editTarget.columnCoordinate, value)
     }
   }
 
@@ -183,341 +142,272 @@ export function CompositionSection({
     if (event.key === 'Enter') {
       event.preventDefault()
       commitEdit()
-      return
-    }
-    if (event.key === 'Escape') {
+    } else if (event.key === 'Escape') {
       event.preventDefault()
       onCancelEdit()
     }
   }
 
+  const handleDrop = (
+    event: DragEvent<HTMLDivElement>,
+    rowCoordinate: number,
+    columnCoordinate: number
+  ): void => {
+    event.preventDefault()
+    if (getCompositionPlacement(composition, rowCoordinate, columnCoordinate)) return
+    const raw = event.dataTransfer.getData('application/x-xen-composition-coordinate')
+    const [fromRow, fromColumn] = raw.split(',').map(Number)
+    if (!Number.isInteger(fromRow) || !Number.isInteger(fromColumn)) return
+    onMoveCell(fromRow!, fromColumn!, rowCoordinate, columnCoordinate)
+    onSelectCell({ rowCoordinate, columnCoordinate })
+  }
+
   return (
-    <section className="composition" aria-label="Composition matrix">
+    <section className="composition" aria-label="Composition coordinate grid" ref={sectionRef}>
       <datalist id="composition-channel-options">
-        {channelOptions.map((channelId) => (
-          <option value={channelId} key={channelId} />
-        ))}
+        {channelOptions.map((channelId) => <option value={channelId} key={channelId} />)}
       </datalist>
-      <div className="compositionScroller" ref={scrollerRef}>
+      <div className="compositionBackdrop" aria-hidden="true" />
+      <div className="compositionViewport">
         <div
-          className="compositionGrid"
-          style={{ gridTemplateColumns }}
+          className="compositionWorld"
           role="grid"
-          aria-rowcount={composition.rows.length + 1}
-          aria-colcount={composition.columns.length + 1}
+          aria-rowcount={rowCoordinates.length}
+          aria-colcount={columnCoordinates.length}
+          style={{
+            '--composition-column-count': columnCoordinates.length,
+            '--composition-row-count': rowCoordinates.length,
+          } as CSSProperties}
         >
-          <div className="compositionCorner compositionSticky" aria-hidden="true" />
-          {composition.columns.map((column, columnIndex) => {
-            const isSelectedColumn = columnIndex === selection.columnIndex
-            const isLoopStart = columnIndex === composition.loopRegion.startColumn
-            const isLoopEnd = columnIndex === composition.loopRegion.endColumn
-            const isInLoop = isColumnInLoopRegion(columnIndex, composition.loopRegion)
-
-            return (
-              <div
-                key={`composition-column-${columnIndex}`}
-                className={[
-                  'compositionHeaderCell',
-                  isSelectedColumn ? 'compositionHeaderCell-selected' : '',
-                  isInLoop ? 'compositionCell-loop' : '',
-                  isLoopStart ? 'compositionCell-loopStart' : '',
-                  isLoopEnd ? 'compositionCell-loopEnd' : '',
-                ].filter(Boolean).join(' ')}
-                role="columnheader"
-                aria-colindex={columnIndex + 2}
-                onClick={() => onSelectCell({ rowIndex: selection.rowIndex, columnIndex })}
-              >
-                <span className="compositionHeaderTopLine">
-                  <span className="compositionColumnIndex mono">{columnIndex + 1}</span>
-                  <span className="compositionHeaderActions">
-                    <button
-                      type="button"
-                      className="compositionHeaderAction mono"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onInsertColumn('before', columnIndex)
-                      }}
-                      aria-label={`Insert column before ${columnIndex + 1}`}
-                    >
-                      +L
-                    </button>
-                    <button
-                      type="button"
-                      className="compositionHeaderAction mono"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onInsertColumn('after', columnIndex)
-                      }}
-                      aria-label={`Insert column after ${columnIndex + 1}`}
-                    >
-                      +R
-                    </button>
-                    <button
-                      type="button"
-                      className="compositionHeaderAction mono"
-                      disabled={composition.columns.length <= 1}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onDeleteColumn(columnIndex)
-                      }}
-                      aria-label={`Delete column ${columnIndex + 1}`}
-                    >
-                      -
-                    </button>
-                  </span>
-                </span>
-                {editTarget?.kind === 'columnLength' && editTarget.columnIndex === columnIndex ? (
-                  <input
-                    key={editKey}
-                    ref={editInputRef}
-                    className="compositionInlineInput compositionInlineInput-compact mono"
-                    defaultValue={editValue}
-                    onKeyDown={handleEditKeyDown}
-                    onBlur={onCancelEdit}
-                    spellCheck={false}
-                    autoCapitalize="off"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    aria-label={`Edit column ${columnIndex + 1} length`}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="compositionColumnLength mono"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onBeginEdit({ kind: 'columnLength', columnIndex })
-                    }}
-                    aria-label={`Edit column ${columnIndex + 1} length`}
-                  >
-                    {formatTimeSignature(column.length)}
-                  </button>
-                )}
-              </div>
-            )
-          })}
-
-          {composition.rows.map((row, rowIndex) => {
-            const isSelectedRow = rowIndex === selection.rowIndex
-            return (
-              <Fragment key={`composition-row-${rowIndex}`}>
-                <div
-                  className={[
-                    'compositionRowHeader',
-                    'compositionSticky',
-                    isSelectedRow ? 'compositionRowHeader-selected' : '',
-                  ].filter(Boolean).join(' ')}
-                  role="rowheader"
-                  aria-rowindex={rowIndex + 2}
-                  onClick={() => onSelectCell({ rowIndex, columnIndex: selection.columnIndex })}
+          <div className="compositionColumnHeaders" role="row">
+            {columnCoordinates.map((columnCoordinate, index) => {
+              if (columnCoordinate === null) return <span key={`column-edge-${index}`} />
+              const column = composition.columns.get(columnCoordinate)
+              const isSelected = columnCoordinate === selection.columnCoordinate
+              return (
+                <button
+                  type="button"
+                  className={`compositionAxisHeader compositionColumnHeader${isSelected ? ' compositionAxisHeader-selected' : ''}`}
+                  onClick={() => onSelectCell({
+                    rowCoordinate: selection.rowCoordinate,
+                    columnCoordinate,
+                  })}
+                  key={`column-${columnCoordinate}`}
+                  aria-label={`Column ${coordinateLabel(columnCoordinate)}${column ? `, ${formatTimeSignature(column.length)}` : ', virtual'}`}
                 >
-                  <span className="compositionRowTopLine">
-                    {editTarget?.kind === 'rowName' && editTarget.rowIndex === rowIndex ? (
+                  <span className="compositionCoordinate mono">{coordinateLabel(columnCoordinate)}</span>
+                  {column ? (
+                    editTarget?.kind === 'columnLength' &&
+                    editTarget.columnCoordinate === columnCoordinate ? (
                       <input
                         key={editKey}
                         ref={editInputRef}
-                        className="compositionInlineInput"
+                        className="compositionInlineInput mono"
                         defaultValue={editValue}
+                        onClick={(event) => event.stopPropagation()}
                         onKeyDown={handleEditKeyDown}
                         onBlur={onCancelEdit}
-                        spellCheck={false}
-                        autoCapitalize="off"
-                        autoComplete="off"
-                        autoCorrect="off"
-                        aria-label={`Rename row ${rowIndex + 1}`}
+                        aria-label={`Edit column ${coordinateLabel(columnCoordinate)} duration`}
                       />
                     ) : (
-                      <button
-                        type="button"
-                        className="compositionRowName"
-                        onClick={(event) => {
+                      <span
+                        className="compositionAxisMetadata mono"
+                        onDoubleClick={(event) => {
                           event.stopPropagation()
-                          onBeginEdit({ kind: 'rowName', rowIndex })
+                          onBeginEdit({ kind: 'columnLength', columnCoordinate })
                         }}
-                        aria-label={`Rename row ${rowIndex + 1}`}
                       >
-                        {row.name}
-                      </button>
-                    )}
-                    <span className="compositionHeaderActions">
-                      <button
-                        type="button"
-                        className="compositionHeaderAction mono"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onInsertRow('before', rowIndex)
-                        }}
-                        aria-label={`Insert row before ${rowIndex + 1}`}
-                      >
-                        +U
-                      </button>
-                      <button
-                        type="button"
-                        className="compositionHeaderAction mono"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onInsertRow('after', rowIndex)
-                        }}
-                        aria-label={`Insert row after ${rowIndex + 1}`}
-                      >
-                        +D
-                      </button>
-                      <button
-                        type="button"
-                        className="compositionHeaderAction mono"
-                        disabled={composition.rows.length <= 1}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onDeleteRow(rowIndex)
-                        }}
-                        aria-label={`Delete row ${rowIndex + 1}`}
-                      >
-                        -
-                      </button>
-                    </span>
-                  </span>
-                  {editTarget?.kind === 'rowChannel' && editTarget.rowIndex === rowIndex ? (
-                    <input
-                      key={editKey}
-                      ref={editInputRef}
-                      className="compositionInlineInput compositionInlineInput-compact mono"
-                      defaultValue={editValue}
-                      onKeyDown={handleEditKeyDown}
-                      onBlur={onCancelEdit}
-                      list="composition-channel-options"
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      aria-label={`Edit row ${rowIndex + 1} channel`}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="compositionRowChannel mono"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onBeginEdit({ kind: 'rowChannel', rowIndex })
-                      }}
-                      aria-label={`Edit row ${rowIndex + 1} channel`}
-                    >
-                      {row.channelId || 'channel-1'}
-                    </button>
-                  )}
-                </div>
-                {composition.columns.map((column, columnIndex) => {
-                  const sequenceId = row.cells[columnIndex]
-                  const sequenceEntry = sequenceId === null || sequenceId === undefined
-                    ? null
-                    : getSequenceById(sequenceBank, sequenceId)
-                  const isSelectedCell =
-                    rowIndex === selection.rowIndex && columnIndex === selection.columnIndex
-                  const isSelectedColumn = columnIndex === selection.columnIndex
-                  const isLoopStart = columnIndex === composition.loopRegion.startColumn
-                  const isLoopEnd = columnIndex === composition.loopRegion.endColumn
-                  const isInLoop = isColumnInLoopRegion(columnIndex, composition.loopRegion)
-                  const label = sequenceId === null || sequenceId === undefined
-                    ? 'Rest'
-                    : sequenceEntry?.name ?? `S${sequenceId}`
-                  const isReferenceMatch =
-                    shouldHighlightReferences && sequenceId === selectedSequenceId && !isSelectedCell
-                  const miniMapNotes = getMiniMapNotes(sequenceEntry, column.length, tuningLength)
-                  const isEditingCell = editTarget?.kind === 'cell' &&
-                    editTarget.rowIndex === rowIndex &&
-                    editTarget.columnIndex === columnIndex
+                        {formatTimeSignature(column.length)}
+                      </span>
+                    )
+                  ) : <span className="compositionAxisMetadata">default</span>}
+                </button>
+              )
+            })}
+          </div>
 
-                  return (
-                    <div
-                      key={`composition-cell-${rowIndex}-${columnIndex}`}
-                      className={[
-                        'compositionCell',
-                        isSelectedRow ? 'compositionCell-selectedRow' : '',
-                        isSelectedColumn ? 'compositionCell-selectedColumn' : '',
-                        isReferenceMatch ? 'compositionCell-referenceMatch' : '',
-                        isSelectedCell ? 'compositionCell-selected' : '',
-                        isInLoop ? 'compositionCell-loop' : '',
-                        isLoopStart ? 'compositionCell-loopStart' : '',
-                        isLoopEnd ? 'compositionCell-loopEnd' : '',
-                        sequenceEntry ? '' : 'compositionCell-empty',
-                      ].filter(Boolean).join(' ')}
-                      role="gridcell"
-                      tabIndex={0}
-                      aria-rowindex={rowIndex + 2}
-                      aria-colindex={columnIndex + 2}
-                      aria-selected={isSelectedCell}
-                      data-composition-selected={isSelectedCell ? 'true' : undefined}
-                      onClick={() => onSelectCell({ rowIndex, columnIndex })}
-                      onDoubleClick={() => onBeginEdit({ kind: 'cell', rowIndex, columnIndex })}
-                    >
-                      {miniMapNotes.length > 0 ? (
-                        <span className="compositionMiniMap" aria-hidden="true">
-                          {miniMapNotes.map((note, noteIndex) => (
-                            <span
-                              key={`mini-note-${rowIndex}-${columnIndex}-${noteIndex}`}
-                              className="compositionMiniMapNote"
-                              style={
-                                {
-                                  left: `${note.x * 100}%`,
-                                  width: `${note.width * 100}%`,
-                                  bottom: `${note.pitchRatio * 100}%`,
-                                  opacity: 0.38 + note.velocity * 0.42,
-                                } as CSSProperties
-                              }
-                            />
-                          ))}
-                        </span>
-                      ) : null}
-                      <span className="compositionCellOverlay">
-                        {isEditingCell ? (
-                          <input
-                            key={editKey}
-                            ref={editInputRef}
-                            className="compositionInlineInput"
-                            defaultValue={editValue}
-                            onKeyDown={handleEditKeyDown}
-                            onBlur={onCancelEdit}
-                            spellCheck={false}
-                            autoCapitalize="off"
-                            autoComplete="off"
-                            autoCorrect="off"
-                            aria-label={`Assign sequence at row ${rowIndex + 1}, column ${columnIndex + 1}`}
+          <div className="compositionRowHeaders">
+            {rowCoordinates.map((rowCoordinate, index) => {
+              if (rowCoordinate === null) return <span key={`row-edge-${index}`} />
+              const row = composition.rows.get(rowCoordinate)
+              const isSelected = rowCoordinate === selection.rowCoordinate
+              return (
+                <button
+                  type="button"
+                  className={`compositionAxisHeader compositionRowHeader${isSelected ? ' compositionAxisHeader-selected' : ''}`}
+                  onClick={() => onSelectCell({
+                    rowCoordinate,
+                    columnCoordinate: selection.columnCoordinate,
+                  })}
+                  key={`row-${rowCoordinate}`}
+                  aria-label={`Row ${coordinateLabel(rowCoordinate)}${row ? `, ${row.name}, channel ${row.channelId}` : ', virtual'}`}
+                >
+                  <span className="compositionCoordinate mono">{coordinateLabel(rowCoordinate)}</span>
+                  {row ? (
+                    <span className="compositionRowMetadata">
+                      {editTarget?.kind === 'rowName' && editTarget.rowCoordinate === rowCoordinate ? (
+                        <input
+                          key={editKey}
+                          ref={editInputRef}
+                          className="compositionInlineInput"
+                          defaultValue={editValue}
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={handleEditKeyDown}
+                          onBlur={onCancelEdit}
+                          aria-label={`Rename row ${coordinateLabel(rowCoordinate)}`}
+                        />
+                      ) : (
+                        <span onDoubleClick={(event) => {
+                          event.stopPropagation()
+                          onBeginEdit({ kind: 'rowName', rowCoordinate })
+                        }}>{row.name}</span>
+                      )}
+                      {editTarget?.kind === 'rowChannel' && editTarget.rowCoordinate === rowCoordinate ? (
+                        <input
+                          key={editKey}
+                          ref={editInputRef}
+                          className="compositionInlineInput mono"
+                          defaultValue={editValue}
+                          list="composition-channel-options"
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={handleEditKeyDown}
+                          onBlur={onCancelEdit}
+                          aria-label={`Edit row ${coordinateLabel(rowCoordinate)} channel`}
+                        />
+                      ) : (
+                        <span className="compositionAxisMetadata mono" onDoubleClick={(event) => {
+                          event.stopPropagation()
+                          onBeginEdit({ kind: 'rowChannel', rowCoordinate })
+                        }}>{row.channelId}</span>
+                      )}
+                    </span>
+                  ) : <span className="compositionAxisMetadata">virtual</span>}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="compositionCells">
+            {rowCoordinates.flatMap((rowCoordinate, rowIndex) =>
+              columnCoordinates.map((columnCoordinate, columnIndex) => {
+                if (rowCoordinate === null || columnCoordinate === null) {
+                  return <span className="compositionCellBoundary" key={`edge-${rowIndex}-${columnIndex}`} />
+                }
+                const placement = getCompositionPlacement(composition, rowCoordinate, columnCoordinate)
+                const sequenceEntry = placement
+                  ? getSequenceById(sequenceBank, placement.sequenceId)
+                  : null
+                const column = getCompositionColumnOrDefault(composition, columnCoordinate)
+                const isSelected = rowCoordinate === selection.rowCoordinate &&
+                  columnCoordinate === selection.columnCoordinate
+                const isReferenceMatch = Boolean(
+                  placement &&
+                  selectedPlacement &&
+                  selectedInstanceCount > 1 &&
+                  placement.sequenceId === selectedPlacement.sequenceId &&
+                  !isSelected
+                )
+                const isInLoop = isColumnInLoopRegion(columnCoordinate, composition.loopRegion)
+                const miniMapNotes = getMiniMapNotes(sequenceEntry, column.length, tuningLength)
+                const distance = Math.hypot(
+                  (columnIndex - viewportColumnRadius) * cellWidthPixels,
+                  (rowIndex - viewportRowRadius) * cellHeightPixels
+                )
+                const wireOpacity = Math.max(0, 1 - distance / 430)
+                const isEditing = editTarget?.kind === 'cell' &&
+                  editTarget.rowCoordinate === rowCoordinate &&
+                  editTarget.columnCoordinate === columnCoordinate
+                const label = sequenceEntry?.name ?? (placement ? `S${placement.sequenceId}` : 'Empty')
+
+                return (
+                  <div
+                    className={[
+                      'compositionCell',
+                      placement ? 'compositionCell-materialized' : 'compositionCell-empty',
+                      isSelected ? 'compositionCell-selected' : '',
+                      isReferenceMatch ? 'compositionCell-referenceMatch' : '',
+                      isInLoop ? 'compositionCell-loop' : '',
+                    ].filter(Boolean).join(' ')}
+                    style={{ '--wire-opacity': wireOpacity } as CSSProperties}
+                    role="gridcell"
+                    aria-rowindex={rowIndex + 1}
+                    aria-colindex={columnIndex + 1}
+                    aria-selected={isSelected}
+                    aria-label={`Row ${coordinateLabel(rowCoordinate)}, column ${coordinateLabel(columnCoordinate)}: ${label}`}
+                    tabIndex={isSelected ? 0 : -1}
+                    data-composition-selected={isSelected ? 'true' : undefined}
+                    draggable={Boolean(placement)}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData(
+                        'application/x-xen-composition-coordinate',
+                        `${rowCoordinate},${columnCoordinate}`
+                      )
+                      event.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onDragOver={(event) => {
+                      if (!placement) event.preventDefault()
+                    }}
+                    onDrop={(event) => handleDrop(event, rowCoordinate, columnCoordinate)}
+                    onClick={() => onSelectCell({ rowCoordinate, columnCoordinate })}
+                    onDoubleClick={() => onBeginEdit({ kind: 'cell', rowCoordinate, columnCoordinate })}
+                    key={`${rowCoordinate},${columnCoordinate}`}
+                  >
+                    {miniMapNotes.length > 0 ? (
+                      <span className="compositionMiniMap" aria-hidden="true">
+                        {miniMapNotes.map((note, noteIndex) => (
+                          <span
+                            className="compositionMiniMapNote"
+                            key={`note-${noteIndex}`}
+                            style={{
+                              left: `${note.x * 100}%`,
+                              width: `${note.width * 100}%`,
+                              bottom: `${note.pitchRatio * 100}%`,
+                              opacity: 0.38 + note.velocity * 0.42,
+                            }}
                           />
-                        ) : (
-                          <>
+                        ))}
+                      </span>
+                    ) : null}
+                    <span className="compositionCellOverlay">
+                      {isEditing ? (
+                        <input
+                          key={editKey}
+                          ref={editInputRef}
+                          className="compositionInlineInput"
+                          defaultValue={editValue}
+                          onKeyDown={handleEditKeyDown}
+                          onBlur={onCancelEdit}
+                          aria-label={`Assign sequence at row ${coordinateLabel(rowCoordinate)}, column ${coordinateLabel(columnCoordinate)}`}
+                        />
+                      ) : (
+                        <>
+                          <span className="compositionCellCoordinates mono">
+                            {coordinateLabel(rowCoordinate)}, {coordinateLabel(columnCoordinate)}
+                          </span>
+                          <span className="compositionCellLabel">{label}</span>
+                          {placement ? (
                             <button
                               type="button"
-                              className="compositionCellLabel"
+                              className="compositionCellClear mono"
                               onClick={(event) => {
                                 event.stopPropagation()
-                                onBeginEdit({ kind: 'cell', rowIndex, columnIndex })
+                                onClearCell(rowCoordinate, columnCoordinate)
                               }}
-                              aria-label={`Assign sequence at row ${rowIndex + 1}, column ${columnIndex + 1}`}
-                            >
-                              {label}
-                            </button>
-                            {sequenceEntry ? (
-                              <button
-                                type="button"
-                                className="compositionCellUnassign mono"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  onUnassignCell(rowIndex, columnIndex)
-                                }}
-                                aria-label={`Clear row ${rowIndex + 1}, column ${columnIndex + 1}`}
-                              >
-                                x
-                              </button>
-                            ) : null}
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  )
-                })}
-              </Fragment>
-            )
-          })}
+                              aria-label={`Clear row ${coordinateLabel(rowCoordinate)}, column ${coordinateLabel(columnCoordinate)}`}
+                            >×</button>
+                          ) : null}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
+      </div>
+      <div className="compositionHint mono" aria-hidden="true">
+        arrows move · double-click assigns · drag moves
       </div>
     </section>
   )

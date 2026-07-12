@@ -40,8 +40,8 @@ export type CommandExecuteRequest = {
     preview_id?: string | undefined
     selection: SelectionDto
     cursor: {
-      row_index: number
-      column_index: number
+      row_coordinate: number
+      column_coordinate: number
       sequence_id: number | null
     }
   }
@@ -174,8 +174,8 @@ const requestSchemas = {
       preview_id: z.string().min(1).optional(),
       selection: selectionSchema,
       cursor: z.object({
-        row_index: z.number().int().nonnegative(),
-        column_index: z.number().int().nonnegative(),
+        row_coordinate: z.number().int().min(-2_147_483_648).max(2_147_483_647),
+        column_coordinate: z.number().int().min(-2_147_483_648).max(2_147_483_647),
         sequence_id: z.number().int().nonnegative().nullable(),
       }),
     }),

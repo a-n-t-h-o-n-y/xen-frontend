@@ -10,6 +10,7 @@ import {
   normalizePitch,
 } from '../domain/music'
 import { sequenceFromTarget } from '../domain/composition'
+import { getCompositionColumn } from '../domain/composition'
 import { resolveSelection } from '../domain/selection'
 import {
   collectLeafCells,
@@ -56,9 +57,12 @@ export function useProjectViewModel(
       return null
     }
 
-    const pitchState = projectSnapshot.composition?.columns[
-      activeSequenceTarget?.columnIndex ?? 0
-    ]?.pitch ?? projectSnapshot.pitch
+    const pitchState = projectSnapshot.composition && activeSequenceTarget
+      ? getCompositionColumn(
+          projectSnapshot.composition,
+          activeSequenceTarget.columnCoordinate
+        )?.pitch ?? projectSnapshot.pitch
+      : projectSnapshot.pitch
     const activeScale = pitchState.scale
     const rawTuningLength = pitchState.tuning.definition.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH

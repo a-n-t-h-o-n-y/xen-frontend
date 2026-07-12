@@ -1,66 +1,78 @@
 import type {
   ActiveSequenceTarget,
   Composition,
+  CompositionColumn,
+  CompositionPlacement,
   CompositionSelection,
   Sequence,
   SequenceBank,
 } from './models'
 
-export const clampCompositionSelection = (
+export const MIN_COMPOSITION_COORDINATE = -2_147_483_648
+export const MAX_COMPOSITION_COORDINATE = 2_147_483_647
+
+export const compositionPlacementKey = (
+  rowCoordinate: number,
+  columnCoordinate: number
+): string => `${rowCoordinate},${columnCoordinate}`
+
+export const getCompositionPlacement = (
   composition: Composition,
-  selection: CompositionSelection
-): CompositionSelection => ({
-  rowIndex: Math.min(Math.max(selection.rowIndex, 0), Math.max(0, composition.rows.length - 1)),
-  columnIndex: Math.min(
-    Math.max(selection.columnIndex, 0),
-    Math.max(0, composition.columns.length - 1)
-  ),
-})
+  rowCoordinate: number,
+  columnCoordinate: number
+): CompositionPlacement | null =>
+  composition.placements.get(compositionPlacementKey(rowCoordinate, columnCoordinate)) ?? null
+
+export const getCompositionColumn = (
+  composition: Composition,
+  columnCoordinate: number
+): CompositionColumn | null => composition.columns.get(columnCoordinate) ?? null
+
+export const getCompositionColumnOrDefault = (
+  composition: Composition,
+  columnCoordinate: number
+): Omit<CompositionColumn, 'coordinate'> =>
+  getCompositionColumn(composition, columnCoordinate) ?? composition.defaultColumn
+
+export const addCompositionCoordinate = (coordinate: number, delta: number): number => {
+  const next = coordinate + Math.trunc(delta)
+  return Number.isInteger(next) &&
+    next >= MIN_COMPOSITION_COORDINATE &&
+    next <= MAX_COMPOSITION_COORDINATE
+    ? next
+    : coordinate
+}
 
 export const moveCompositionSelection = (
-  composition: Composition,
   selection: CompositionSelection,
   direction: 'left' | 'right' | 'up' | 'down',
   amount = 1
 ): CompositionSelection => {
-  const current = clampCompositionSelection(composition, selection)
-  const rowCount = composition.rows.length
-  const columnCount = composition.columns.length
   const count = Math.max(0, Math.trunc(amount))
-
-  if (rowCount === 0 || columnCount === 0) {
-    return current
-  }
-
   if (direction === 'left' || direction === 'right') {
-    const delta = count % columnCount
     return {
-      ...current,
-      columnIndex: direction === 'right'
-        ? (current.columnIndex + delta) % columnCount
-        : (current.columnIndex - delta + columnCount) % columnCount,
+      ...selection,
+      columnCoordinate: addCompositionCoordinate(
+        selection.columnCoordinate,
+        direction === 'right' ? count : -count
+      ),
     }
   }
 
-  const delta = count % rowCount
   return {
-    ...current,
-    rowIndex: direction === 'down'
-      ? (current.rowIndex + delta) % rowCount
-      : (current.rowIndex - delta + rowCount) % rowCount,
+    ...selection,
+    rowCoordinate: addCompositionCoordinate(
+      selection.rowCoordinate,
+      direction === 'down' ? count : -count
+    ),
   }
 }
 
 export const isColumnInLoopRegion = (
-  columnIndex: number,
+  columnCoordinate: number,
   loopRegion: Composition['loopRegion']
-): boolean => {
-  if (loopRegion.startColumn <= loopRegion.endColumn) {
-    return columnIndex >= loopRegion.startColumn && columnIndex <= loopRegion.endColumn
-  }
-
-  return columnIndex >= loopRegion.startColumn || columnIndex <= loopRegion.endColumn
-}
+): boolean =>
+  columnCoordinate >= loopRegion.startColumn && columnCoordinate <= loopRegion.endColumn
 
 export const getSequenceById = (
   sequenceBank: SequenceBank | null,
@@ -73,10 +85,12 @@ export const getActiveSequenceTarget = (
   selection: CompositionSelection
 ): ActiveSequenceTarget | null => {
   if (!composition) return null
-  const safeSelection = clampCompositionSelection(composition, selection)
-  const sequenceId = composition.rows[safeSelection.rowIndex]?.cells[safeSelection.columnIndex]
-  if (sequenceId === null || sequenceId === undefined) return null
-  return { ...safeSelection, sequenceId }
+  const placement = getCompositionPlacement(
+    composition,
+    selection.rowCoordinate,
+    selection.columnCoordinate
+  )
+  return placement ? { ...selection, sequenceId: placement.sequenceId } : null
 }
 
 export const isActiveSequenceTargetValid = (
@@ -86,7 +100,11 @@ export const isActiveSequenceTargetValid = (
   Boolean(
     composition &&
     target &&
-    composition.rows[target.rowIndex]?.cells[target.columnIndex] === target.sequenceId
+    getCompositionPlacement(
+      composition,
+      target.rowCoordinate,
+      target.columnCoordinate
+    )?.sequenceId === target.sequenceId
   )
 
 export const reconcileActiveSequenceTarget = (
@@ -104,25 +122,18 @@ export const sequenceFromTarget = (
   composition: Composition | null,
   target: ActiveSequenceTarget | null
 ): Sequence => {
-  if (!target || !composition) {
-    return fallbackSequence
-  }
-
-  if (composition.rows[target.rowIndex]?.cells[target.columnIndex] !== target.sequenceId) {
+  if (!target || !composition || !isActiveSequenceTargetValid(composition, target)) {
     return fallbackSequence
   }
 
   const entry = getSequenceById(sequenceBank, target.sequenceId)
-  const columnLength = composition.columns[target.columnIndex]?.length
-  if (!entry || !columnLength) {
+  const column = getCompositionColumn(composition, target.columnCoordinate)
+  if (!entry || !column) {
     return fallbackSequence
   }
 
   return {
     cell: entry.sequence.cell,
-    timeSignature: {
-      numerator: columnLength.numerator,
-      denominator: columnLength.denominator,
-    },
+    timeSignature: column.length,
   }
 }

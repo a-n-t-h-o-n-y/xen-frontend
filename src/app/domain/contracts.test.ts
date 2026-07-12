@@ -39,11 +39,24 @@ describe('schema contract validation', () => {
       schema_version: 2,
       bindings: { sequencer: [binding, binding] },
     })).toThrow('Duplicate keymap binding')
+    expect(() => parseKeymapDocument({
+      schema_version: 2,
+      bindings: {
+        composition: [{
+          trigger,
+          target: {
+            type: 'ui_action',
+            action: 'composition.row.insert_before',
+            arguments: {},
+          },
+        }],
+      },
+    })).toThrow()
   })
 
   it('accepts envelopes and rejects invalid payloads', () => {
     expect(parseEnvelope({
-      protocol: 'xen.bridge.v4',
+      protocol: 'xen.bridge.v5',
       type: 'response',
       name: 'state.get',
       request_id: '1',
@@ -59,9 +72,9 @@ describe('schema contract validation', () => {
 
   it('validates hello catalog and opaque keymap storage', () => {
     const hello = parseSessionHello({
-      protocol: 'xen.bridge.v4',
+      protocol: 'xen.bridge.v5',
       plugin_version: '1.0.0',
-      project_schema_version: 4,
+      project_schema_version: 5,
       library_schema_version: 1,
       catalog: {
         schema_version: 3,
@@ -138,9 +151,13 @@ describe('schema contract validation', () => {
     expect(parseProjectSnapshot(projectFixture()).project.composition.columns[0]?.pitch.transposition)
       .toBe(2)
     const arrangedProject = parseProjectSnapshot(arrangedProjectFixture())
-    expect(arrangedProject.schema_version).toBe(4)
-    expect(arrangedProject.project.composition.rows[1]?.cells[0]).toBe(2)
-    expect(arrangedProject.project.composition.loop_region?.start_column).toBe(2)
+    expect(arrangedProject.schema_version).toBe(5)
+    expect(arrangedProject.project.composition.placements[2]).toEqual({
+      row: 3,
+      column: -4,
+      sequence_id: 2,
+    })
+    expect(arrangedProject.project.composition.loop_region.start_column).toBe(-2)
     expect(parseLibrarySnapshot(libraryFixture()).scales[0]?.id).toBe('chromatic')
     expect(parseCommandResponse({
       status: { level: 'info', message: 'ok' },
@@ -148,19 +165,27 @@ describe('schema contract validation', () => {
       snapshot: projectFixture(),
     }).status.message).toBe('ok')
     expect(parseBridgeEvent({
-      protocol: 'xen.bridge.v4',
+      protocol: 'xen.bridge.v5',
       type: 'event',
       name: 'library.changed',
       payload: libraryFixture(),
     }).name).toBe('library.changed')
-    expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 3 })).toThrow()
+    expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 4 })).toThrow()
+    const dense = structuredClone(projectFixture()) as unknown as Record<string, unknown>
+    const denseProject = dense.project as { composition: Record<string, unknown> }
+    denseProject.composition = {
+      columns: [],
+      rows: [{ channel_id: 'channel-1', cells: [1] }],
+      loop_region: { start_column: 0, end_column: 0 },
+    }
+    expect(() => parseProjectSnapshot(dense)).toThrow()
     expect(() => parseProjectSnapshot({
       ...arrangedProjectFixture(),
       project: {
         ...arrangedProjectFixture().project,
         composition: {
-          columns: arrangedProjectFixture().project.composition.columns.slice(0, 1),
-          rows: [{ channel_id: 'channel-1', cells: [404] }],
+          ...arrangedProjectFixture().project.composition,
+          placements: [{ row: -2, column: -4, sequence_id: 404 }],
         },
       },
     })).toThrow()
@@ -169,11 +194,16 @@ describe('schema contract validation', () => {
       project: {
         ...arrangedProjectFixture().project,
         composition: {
-          columns: arrangedProjectFixture().project.composition.columns.slice(0, 1),
-          rows: [{ channel_id: 'channel-1', cells: [1] }],
-          loop_region: { start_column: 1, end_column: 0 },
+          ...arrangedProjectFixture().project.composition,
+          placements: [{ row: 999, column: -4, sequence_id: 1 }],
         },
       },
     })).toThrow()
+    const outOfRange = arrangedProjectFixture()
+    outOfRange.project.composition.rows[0]!.coordinate = 2_147_483_648
+    expect(() => parseProjectSnapshot(outOfRange)).toThrow()
+    const reversedLoop = arrangedProjectFixture()
+    reversedLoop.project.composition.loop_region = { start_column: 3, end_column: -1 }
+    expect(() => parseProjectSnapshot(reversedLoop)).toThrow()
   })
 })

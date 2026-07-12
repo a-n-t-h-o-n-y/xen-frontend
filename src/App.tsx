@@ -36,7 +36,10 @@ import type {
 type WorkspaceView = 'composition' | 'sequencer'
 
 const EMPTY_ROOT_CELL: Cell = { weight: 1, elements: [] }
-const INITIAL_COMPOSITION_SELECTION: CompositionSelection = { rowIndex: 0, columnIndex: 0 }
+const INITIAL_COMPOSITION_SELECTION: CompositionSelection = {
+  rowCoordinate: 0,
+  columnCoordinate: 0,
+}
 
 function App() {
   const [editorState, setEditorState] = useState<EditorState>({
@@ -94,6 +97,8 @@ function App() {
     transportRef,
     editorStateRef,
     activeSequenceTargetRef,
+    compositionSelectionRef,
+    workspaceViewRef,
     setEditorState,
     setSessionReference,
     setLibrarySnapshot,
@@ -198,11 +203,8 @@ function App() {
     commitCompositionRowName,
     commitCompositionRowChannel,
     commitCompositionColumnLength,
-    insertCompositionRow,
-    deleteCompositionRow,
-    insertCompositionColumn,
-    deleteCompositionColumn,
-    unassignCompositionCell,
+    clearCompositionCell,
+    moveCompositionCell,
   } = useCompositionCommands({
     projectRef,
     compositionSelectionRef,
@@ -448,11 +450,8 @@ function App() {
                   onCommitRowName={commitCompositionRowName}
                   onCommitRowChannel={commitCompositionRowChannel}
                   onCommitColumnLength={commitCompositionColumnLength}
-                  onInsertRow={insertCompositionRow}
-                  onDeleteRow={deleteCompositionRow}
-                  onInsertColumn={insertCompositionColumn}
-                  onDeleteColumn={deleteCompositionColumn}
-                  onUnassignCell={unassignCompositionCell}
+                  onClearCell={clearCompositionCell}
+                  onMoveCell={moveCompositionCell}
                 />
               ) : (
                 <div className="workspaceNotice" role="status" aria-live="polite">

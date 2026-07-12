@@ -94,14 +94,21 @@ export type CompositionLength = {
 }
 
 export type CompositionColumn = {
+  coordinate: number
   length: CompositionLength
   pitch: PitchState
 }
 
 export type CompositionRow = {
+  coordinate: number
   name: string
   channelId: string
-  cells: Array<number | null>
+}
+
+export type CompositionPlacement = {
+  rowCoordinate: number
+  columnCoordinate: number
+  sequenceId: number
 }
 
 export type CompositionLoopRegion = {
@@ -110,14 +117,16 @@ export type CompositionLoopRegion = {
 }
 
 export type Composition = {
-  columns: CompositionColumn[]
-  rows: CompositionRow[]
+  defaultColumn: Omit<CompositionColumn, 'coordinate'>
+  columns: Map<number, CompositionColumn>
+  rows: Map<number, CompositionRow>
+  placements: Map<string, CompositionPlacement>
   loopRegion: CompositionLoopRegion
 }
 
 export type CompositionSelection = {
-  rowIndex: number
-  columnIndex: number
+  rowCoordinate: number
+  columnCoordinate: number
 }
 
 export type ActiveSequenceTarget = CompositionSelection & {
@@ -223,7 +232,9 @@ export type KeymapResource = {
 export type CommandContext = {
   expectedProjectRevision: number
   selection: Selection
-  activeSequenceTarget: ActiveSequenceTarget | null
+  cursor: CompositionSelection & {
+    sequenceId: number | null
+  }
 }
 
 export type {

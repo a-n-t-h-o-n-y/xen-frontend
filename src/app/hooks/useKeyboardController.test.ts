@@ -36,7 +36,9 @@ const renderController = (
   options: {
     workspaceView?: 'sequencer' | 'composition'
     projectRef?: { current: ProjectSnapshot | null }
-    compositionSelectionRef?: { current: { rowIndex: number; columnIndex: number } }
+    compositionSelectionRef?: {
+      current: { rowCoordinate: number; columnCoordinate: number }
+    }
   } = {}
 ) => {
   const editorState: EditorState = { selection: { path: [] }, inputMode: 'pitch' }
@@ -56,7 +58,7 @@ const renderController = (
     workspaceView,
     workspaceViewRef: { current: workspaceView },
     compositionSelectionRef: options.compositionSelectionRef ?? {
-      current: { rowIndex: 0, columnIndex: 0 },
+      current: { rowCoordinate: 0, columnCoordinate: 0 },
     },
     installCompositionSelection: vi.fn(),
     setWorkspaceView: vi.fn(),
@@ -185,9 +187,8 @@ describe('useKeyboardController', () => {
     const fixture = arrangedProjectFixture()
     const firstSequence = fixture.project.sequence_bank.sequences[0]
     if (firstSequence) firstSequence.name = 'Restored'
-    fixture.project.composition.rows[0]!.cells[1] = 1
     const projectRef = { current: projectFromDto(fixture) as ProjectSnapshot | null }
-    const selectionRef = { current: { rowIndex: 0, columnIndex: 1 } }
+    const selectionRef = { current: { rowCoordinate: 3, columnCoordinate: 0 } }
     const first = deferred()
     const second = deferred()
     const execute = vi.fn()

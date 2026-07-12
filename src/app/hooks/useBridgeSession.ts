@@ -16,6 +16,7 @@ import type {
 } from '../domain/contracts'
 import type {
   ActiveSequenceTarget,
+  CompositionSelection,
   EditorState,
   LibrarySnapshot,
   MessageLevel,
@@ -31,6 +32,8 @@ type UseBridgeSessionArgs = {
   projectRef: MutableRefObject<ProjectSnapshot | null>
   editorStateRef: MutableRefObject<EditorState>
   activeSequenceTargetRef: MutableRefObject<ActiveSequenceTarget | null>
+  compositionSelectionRef: MutableRefObject<CompositionSelection>
+  workspaceViewRef: MutableRefObject<'composition' | 'sequencer'>
   libraryRevisionRef: MutableRefObject<number>
   setProject: Dispatch<SetStateAction<ProjectSnapshot | null>>
   setEditorState: Dispatch<SetStateAction<EditorState>>
@@ -44,6 +47,8 @@ export function useBridgeSession({
   projectRef,
   editorStateRef,
   activeSequenceTargetRef,
+  compositionSelectionRef,
+  workspaceViewRef,
   libraryRevisionRef,
   setProject,
   setEditorState,
@@ -101,7 +106,8 @@ export function useBridgeSession({
       const context = buildCommandContext(
         project,
         editorStateRef.current.selection,
-        activeSequenceTargetRef.current
+        activeSequenceTargetRef.current,
+        workspaceViewRef.current === 'composition' ? compositionSelectionRef.current : null
       )
       const selection = context.selection
       if (selection !== editorStateRef.current.selection) {
@@ -141,12 +147,14 @@ export function useBridgeSession({
     [
       editorStateRef,
       activeSequenceTargetRef,
+      compositionSelectionRef,
       ingestProject,
       installEditorState,
       projectRef,
       request,
       setStatusLevel,
       setStatusMessage,
+      workspaceViewRef,
     ]
   )
 

@@ -20,6 +20,7 @@ import type {
 } from '../bridge/BridgeClient'
 import type {
   ActiveSequenceTarget,
+  CompositionSelection,
   EditorState,
   LibrarySnapshot,
   MessageLevel,
@@ -33,6 +34,8 @@ type UseProjectSessionArgs = {
   transportRef: MutableRefObject<TransportState>
   editorStateRef: MutableRefObject<EditorState>
   activeSequenceTargetRef: MutableRefObject<ActiveSequenceTarget | null>
+  compositionSelectionRef: MutableRefObject<CompositionSelection>
+  workspaceViewRef: MutableRefObject<'composition' | 'sequencer'>
   setEditorState: Dispatch<SetStateAction<EditorState>>
   setSessionReference: Dispatch<SetStateAction<SessionReference>>
   setLibrarySnapshot: Dispatch<SetStateAction<LibrarySnapshot>>
@@ -43,6 +46,8 @@ export function useProjectSession({
   transportRef,
   editorStateRef,
   activeSequenceTargetRef,
+  compositionSelectionRef,
+  workspaceViewRef,
   setEditorState,
   setSessionReference,
   setLibrarySnapshot,
@@ -87,6 +92,8 @@ export function useProjectSession({
     projectRef,
     editorStateRef,
     activeSequenceTargetRef,
+    compositionSelectionRef,
+    workspaceViewRef,
     libraryRevisionRef,
     setProject: setProjectSnapshot,
     setEditorState,

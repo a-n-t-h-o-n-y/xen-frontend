@@ -26,14 +26,8 @@ export type FrontendUiActionId =
   | 'composition.cell.duplicate_right'
   | 'composition.cell.rename_or_create_sequence'
   | 'composition.cell.unassign'
-  | 'composition.row.insert_before'
-  | 'composition.row.insert_after'
-  | 'composition.row.delete'
   | 'composition.row.rename'
   | 'composition.row.channel'
-  | 'composition.column.insert_before'
-  | 'composition.column.insert_after'
-  | 'composition.column.delete'
   | 'composition.column.length'
   | 'composition.loop.set_start'
   | 'composition.loop.set_end'
@@ -118,24 +112,6 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     section: 'Composition',
     argumentKind: 'none',
   },
-  'composition.row.insert_before': {
-    id: 'composition.row.insert_before',
-    label: 'Insert row before',
-    section: 'Composition',
-    argumentKind: 'none',
-  },
-  'composition.row.insert_after': {
-    id: 'composition.row.insert_after',
-    label: 'Insert row after',
-    section: 'Composition',
-    argumentKind: 'none',
-  },
-  'composition.row.delete': {
-    id: 'composition.row.delete',
-    label: 'Delete row',
-    section: 'Composition',
-    argumentKind: 'none',
-  },
   'composition.row.rename': {
     id: 'composition.row.rename',
     label: 'Rename row',
@@ -145,24 +121,6 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
   'composition.row.channel': {
     id: 'composition.row.channel',
     label: 'Edit row channel',
-    section: 'Composition',
-    argumentKind: 'none',
-  },
-  'composition.column.insert_before': {
-    id: 'composition.column.insert_before',
-    label: 'Insert column before',
-    section: 'Composition',
-    argumentKind: 'none',
-  },
-  'composition.column.insert_after': {
-    id: 'composition.column.insert_after',
-    label: 'Insert column after',
-    section: 'Composition',
-    argumentKind: 'none',
-  },
-  'composition.column.delete': {
-    id: 'composition.column.delete',
-    label: 'Delete column',
     section: 'Composition',
     argumentKind: 'none',
   },

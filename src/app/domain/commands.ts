@@ -1,6 +1,12 @@
-import type { ActiveSequenceTarget, CommandContext, ProjectSnapshot, Selection } from './models'
+import type {
+  ActiveSequenceTarget,
+  CommandContext,
+  CompositionSelection,
+  ProjectSnapshot,
+  Selection,
+} from './models'
 import type { TranslateDirection } from './models'
-import { isActiveSequenceTargetValid } from './composition'
+import { getActiveSequenceTarget, isActiveSequenceTargetValid } from './composition'
 import { projectRootCell, reconcileSelection } from './selection'
 
 const quoteCommandArgument = (value: string): string => JSON.stringify(value)
@@ -9,44 +15,35 @@ const quoteCommandArgument = (value: string): string => JSON.stringify(value)
    Composition command builders
    ========================================================= */
 
-export const compositionCellUnassign = (
-  rowIndex: number,
-  columnIndex: number
-): string => `composition cell unassign ${rowIndex} ${columnIndex}`
+export const compositionCellClear = (
+  rowCoordinate: number,
+  columnCoordinate: number
+): string => `composition cell clear ${rowCoordinate} ${columnCoordinate}`
 
 export const compositionCellAssign = (
-  rowIndex: number,
-  columnIndex: number,
+  rowCoordinate: number,
+  columnCoordinate: number,
   sequenceName: string
 ): string =>
-  `composition cell assign ${rowIndex} ${columnIndex} ${quoteCommandArgument(sequenceName)}`
+  `composition cell assign ${rowCoordinate} ${columnCoordinate} ${quoteCommandArgument(sequenceName)}`
 
-export const compositionRowRename = (rowIndex: number, name: string): string =>
-  `composition row rename ${rowIndex} ${quoteCommandArgument(name)}`
+export const compositionCellMove = (
+  fromRowCoordinate: number,
+  fromColumnCoordinate: number,
+  toRowCoordinate: number,
+  toColumnCoordinate: number
+): string => `composition cell move ${fromRowCoordinate} ${fromColumnCoordinate} ${toRowCoordinate} ${toColumnCoordinate}`
 
-export const compositionRowChannel = (rowIndex: number, channelId: string): string =>
-  `composition row channel ${rowIndex} ${quoteCommandArgument(channelId)}`
+export const compositionRowRename = (rowCoordinate: number, name: string): string =>
+  `composition row rename ${rowCoordinate} ${quoteCommandArgument(name)}`
 
-export const compositionRowInsert = (
-  placement: 'before' | 'after',
-  rowIndex: number
-): string => `composition row insert ${placement} ${rowIndex}`
-
-export const compositionRowDelete = (rowIndex: number): string =>
-  `composition row delete ${rowIndex}`
-
-export const compositionColumnInsert = (
-  placement: 'before' | 'after',
-  columnIndex: number
-): string => `composition column insert ${placement} ${columnIndex}`
-
-export const compositionColumnDelete = (columnIndex: number): string =>
-  `composition column delete ${columnIndex}`
+export const compositionRowChannel = (rowCoordinate: number, channelId: string): string =>
+  `composition row channel ${rowCoordinate} ${quoteCommandArgument(channelId)}`
 
 export const compositionLoopBoundary = (
   boundary: 'start' | 'end',
-  columnIndex: number
-): string => `composition loop ${boundary} ${columnIndex}`
+  columnCoordinate: number
+): string => `composition loop ${boundary} ${columnCoordinate}`
 
 /* =========================================================
    Set command builders
@@ -73,16 +70,27 @@ export const scaleDuration = (mode: 'half' | 'double'): string =>
 export const buildCommandContext = (
   project: ProjectSnapshot,
   selection: Selection,
-  activeSequenceTarget: ActiveSequenceTarget | null = null
+  activeSequenceTarget: ActiveSequenceTarget | null = null,
+  compositionSelection: CompositionSelection | null = null
 ): CommandContext => {
   const validTarget = isActiveSequenceTargetValid(project.composition, activeSequenceTarget)
     ? activeSequenceTarget
     : null
+  const selectedTarget = compositionSelection
+    ? getActiveSequenceTarget(project.composition, compositionSelection)
+    : null
+  const originTarget = getActiveSequenceTarget(
+    project.composition,
+    { rowCoordinate: 0, columnCoordinate: 0 }
+  )
+  const cursorTarget = compositionSelection
+    ? selectedTarget ?? { ...compositionSelection, sequenceId: null }
+    : validTarget ?? originTarget ?? { rowCoordinate: 0, columnCoordinate: 0, sequenceId: null }
 
   return {
     expectedProjectRevision: project.revision,
     selection: reconcileSelection(projectRootCell(project, validTarget), selection),
-    activeSequenceTarget: validTarget,
+    cursor: cursorTarget,
   }
 }
 

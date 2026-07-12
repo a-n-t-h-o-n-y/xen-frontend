@@ -7,50 +7,14 @@ import {
   BridgeProtocolError,
   BridgeTimeoutError,
 } from './BridgeClient'
-import type { ProjectSnapshotDto } from '../domain/contracts'
-
-const projectFixture = (): ProjectSnapshotDto => ({
-  schema_version: 4,
-  history_entry_id: 2,
-  project_revision: 3,
-  preview_active: false,
-  project: {
-    sequence_bank: {
-      next_id: 2,
-      sequences: [
-        {
-          id: 1,
-          cell: {
-              weight: 1,
-              elements: [{ type: 'Note', pitch: 0, velocity: 1, delay: 0, gate: 1 }],
-          },
-        },
-      ],
-    },
-    composition: {
-      columns: [{ duration: { numerator: 4, denominator: 4 }, pitch: {
-        tuning: { name: '12EDO', definition: { intervals: [], octave: 1200 } },
-        scale: null,
-        transposition: 0,
-        translation_direction: 'up',
-        base_frequency: 440,
-      } }],
-      rows: [
-        {
-          channel_id: 'channel-1',
-          cells: [1],
-        },
-      ],
-    },
-  },
-})
+import { projectFixture } from '../domain/testFixtures'
 
 const responseEnvelope = (
   name: string,
   requestId: string,
   payload: Record<string, unknown>
 ) => ({
-  protocol: 'xen.bridge.v4',
+  protocol: 'xen.bridge.v5',
   type: 'response',
   name,
   request_id: requestId,
@@ -81,7 +45,7 @@ describe('BridgeClient', () => {
 
     expect(payload.project_revision).toBe(3)
     expect(JSON.parse(rawRequest)).toEqual({
-      protocol: 'xen.bridge.v4',
+      protocol: 'xen.bridge.v5',
       type: 'request',
       name: 'state.get',
       request_id: 'req-test',
@@ -105,13 +69,13 @@ describe('BridgeClient', () => {
       context: {
         expected_project_revision: 3,
         selection: { path: [] },
-        cursor: { row_index: 0, column_index: 0, sequence_id: null },
+        cursor: { row_coordinate: -8, column_coordinate: 13, sequence_id: null },
       },
     })
 
     expect(JSON.parse(rawRequest).payload.context.cursor).toEqual({
-      row_index: 0,
-      column_index: 0,
+      row_coordinate: -8,
+      column_coordinate: 13,
       sequence_id: null,
     })
   })
@@ -148,7 +112,7 @@ describe('BridgeClient', () => {
         expected_project_revision: 3,
         preview_id: 'preview-1',
         selection: { path: [] },
-        cursor: { row_index: 0, column_index: 0, sequence_id: null },
+        cursor: { row_coordinate: 0, column_coordinate: 0, sequence_id: null },
       },
     })
     await client.request('preview.commit', {

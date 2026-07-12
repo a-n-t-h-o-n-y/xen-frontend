@@ -21,7 +21,7 @@ describe('DTO to domain mappers', () => {
     expect(project.pitch.baseFrequency).toBe(440)
   })
 
-  it('maps arranged project snapshots to the first row first-column sequence', () => {
+  it('maps arranged snapshots to sparse coordinate lookup maps', () => {
     const project = projectFromDto(arrangedProjectFixture(10))
 
     expect(project.revision).toBe(10)
@@ -31,39 +31,51 @@ describe('DTO to domain mappers', () => {
       elements: [{ type: 'Note', pitch: 99, velocity: 1, delay: 0, gate: 1 }],
     })
     expect(project.sequenceBank?.sequences.map((entry) => entry.name)).toEqual(['S1', 'S2'])
-    expect(project.composition?.columns).toHaveLength(3)
-    expect(project.composition?.rows[1]).toMatchObject({
+    expect(project.composition?.columns.size).toBe(3)
+    expect(project.composition?.rows.get(3)).toMatchObject({
+      coordinate: 3,
       name: 'channel-1',
       channelId: 'channel-1',
-      cells: [2, 1, null],
     })
-    expect(project.composition?.loopRegion).toEqual({ startColumn: 2, endColumn: 0 })
+    expect(project.composition?.placements.get('3,0')).toEqual({
+      rowCoordinate: 3,
+      columnCoordinate: 0,
+      sequenceId: 1,
+    })
+    expect(project.composition?.loopRegion).toEqual({ startColumn: -2, endColumn: 6 })
     expect(project.pitch.scale?.definition.name).toBe('major')
   })
 
   it('uses backend sequence and row names when arranged snapshots provide them', () => {
     const fixture = arrangedProjectFixture(12)
-    if (fixture.schema_version === 4) {
-      fixture.project.sequence_bank.sequences[0]!.name = 'Intro'
-      fixture.project.sequence_bank.sequences[1]!.name = 'Pulse'
-      fixture.project.composition.rows[0]!.name = 'Lead'
-      fixture.project.composition.rows[1]!.name = 'Layer'
-    }
+    fixture.project.sequence_bank.sequences[0]!.name = 'Intro'
+    fixture.project.sequence_bank.sequences[1]!.name = 'Pulse'
+    fixture.project.composition.rows[0]!.name = 'Lead'
+    fixture.project.composition.rows[1]!.name = 'Layer'
 
     const project = projectFromDto(fixture)
 
     expect(project.sequenceBank?.sequences.map((entry) => entry.name)).toEqual(['Intro', 'Pulse'])
-    expect(project.composition?.rows.map((row) => row.name)).toEqual(['Lead', 'Layer'])
+    expect(Array.from(project.composition?.rows.values() ?? []).map((row) => row.name))
+      .toEqual(['Lead', 'Layer'])
   })
 
-  it('defaults missing arranged loop regions to the full composition length', () => {
-    const fixture = arrangedProjectFixture(11)
-    delete fixture.project.composition.loop_region
+  it('does not retain axis metadata after the final placement is cleared', () => {
+    const fixture = arrangedProjectFixture()
+    fixture.project.composition.placements = fixture.project.composition.placements.filter(
+      (placement) => placement.row !== 3
+    )
+    fixture.project.composition.rows = fixture.project.composition.rows.filter(
+      (row) => row.coordinate !== 3
+    )
+    fixture.project.composition.columns = fixture.project.composition.columns.filter(
+      (column) => column.coordinate !== 0
+    )
 
-    expect(projectFromDto(fixture).composition?.loopRegion).toEqual({
-      startColumn: 0,
-      endColumn: 2,
-    })
+    const composition = projectFromDto(fixture).composition!
+    expect(composition.rows.has(3)).toBe(false)
+    expect(composition.columns.has(0)).toBe(false)
+    expect(composition.placements.has('3,0')).toBe(false)
   })
 
   it('maps library snapshots to camelCase resources and commands', () => {

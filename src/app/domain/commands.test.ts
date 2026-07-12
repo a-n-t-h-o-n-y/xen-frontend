@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   compositionCellAssign,
-  compositionCellUnassign,
-  compositionColumnDelete,
-  compositionColumnInsert,
+  compositionCellClear,
+  compositionCellMove,
   compositionLoopBoundary,
   compositionRowChannel,
-  compositionRowDelete,
-  compositionRowInsert,
   compositionRowRename,
   scaleDuration,
   setBaseFrequency,
@@ -18,8 +15,8 @@ import {
 } from './commands'
 
 describe('composition command builders', () => {
-  it('builds cell unassign commands', () => {
-    expect(compositionCellUnassign(2, 3)).toBe('composition cell unassign 2 3')
+  it('builds cell clear commands with signed coordinates', () => {
+    expect(compositionCellClear(-2, 3)).toBe('composition cell clear -2 3')
   })
 
   it('builds cell assign commands with JSON-quoted names', () => {
@@ -30,6 +27,11 @@ describe('composition command builders', () => {
     expect(compositionCellAssign(0, 0, 'a"b')).toBe('composition cell assign 0 0 "a\\"b"')
   })
 
+  it('builds sparse cell move commands', () => {
+    expect(compositionCellMove(-8, 3, 21, -34))
+      .toBe('composition cell move -8 3 21 -34')
+  })
+
   it('builds row rename commands', () => {
     expect(compositionRowRename(4, 'bass')).toBe('composition row rename 4 "bass"')
   })
@@ -38,26 +40,8 @@ describe('composition command builders', () => {
     expect(compositionRowChannel(0, 'ch1')).toBe('composition row channel 0 "ch1"')
   })
 
-  it('builds row insert commands for both placements', () => {
-    expect(compositionRowInsert('before', 1)).toBe('composition row insert before 1')
-    expect(compositionRowInsert('after', 1)).toBe('composition row insert after 1')
-  })
-
-  it('builds row delete commands', () => {
-    expect(compositionRowDelete(2)).toBe('composition row delete 2')
-  })
-
-  it('builds column insert commands for both placements', () => {
-    expect(compositionColumnInsert('before', 3)).toBe('composition column insert before 3')
-    expect(compositionColumnInsert('after', 3)).toBe('composition column insert after 3')
-  })
-
-  it('builds column delete commands', () => {
-    expect(compositionColumnDelete(1)).toBe('composition column delete 1')
-  })
-
   it('builds loop boundary commands for both boundaries', () => {
-    expect(compositionLoopBoundary('start', 0)).toBe('composition loop start 0')
+    expect(compositionLoopBoundary('start', -4)).toBe('composition loop start -4')
     expect(compositionLoopBoundary('end', 4)).toBe('composition loop end 4')
   })
 })
