@@ -554,6 +554,7 @@ function App() {
         librarySnapshot={librarySnapshot}
         activeTuningName={tuningName}
         activeScaleId={scaleSourceId}
+        sequenceBank={projectSnapshot?.sequenceBank ?? null}
         keymapResource={keymapController.resource}
         currentInputMode={editorState.inputMode}
       />

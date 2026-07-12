@@ -47,6 +47,8 @@
 }
 
 .quickAccessInput {
+  position: relative;
+  z-index: 1;
   width: 100%;
   min-width: 0;
   padding: 0;
@@ -55,6 +57,35 @@
   background: transparent;
   color: var(--text-primary);
   font-size: var(--font-lg);
+}
+
+.quickAccessComposer {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.quickAccessGhost {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: flex;
+  align-items: center;
+  width: max-content;
+  min-width: 100%;
+  pointer-events: none;
+  white-space: pre;
+}
+
+.quickAccessGhostPrefix {
+  color: transparent;
+}
+
+.quickAccessGhostActive {
+  color: rgb(245 196 90 / 72%);
+}
+
+.quickAccessGhostFuture {
+  color: rgb(255 255 255 / 32%);
 }
 
 .quickAccessInput::placeholder {
@@ -98,26 +129,6 @@
   border-color: rgb(245 196 90 / 58%);
   background: rgb(245 196 90 / 16%);
   color: rgb(252 245 223);
-}
-
-.quickAccessArgumentAssist {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 2rem;
-  padding: var(--space-1) var(--space-3);
-  overflow-x: auto;
-  border-bottom: 1px solid rgb(255 255 255 / 9%);
-  color: rgb(255 255 255 / 46%);
-  font-size: var(--font-xs);
-}
-
-.quickAccessArgument {
-  flex: 0 0 auto;
-}
-
-.quickAccessArgument strong {
-  color: rgb(255 255 255 / 72%);
 }
 
 .quickAccessError {
@@ -171,8 +182,59 @@
 }
 
 .quickAccessOption:hover,
-.quickAccessOption-selected {
+.quickAccessOption-selected,
+.quickAccessArgumentOption:hover {
   background: rgb(245 196 90 / 12%);
+}
+
+.quickAccessArgumentOption {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 2.35rem;
+  padding: var(--space-1) var(--space-3);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.quickAccessArgumentOption + .quickAccessArgumentOption {
+  border-top: 1px solid rgb(255 255 255 / 5%);
+}
+
+.quickAccessArgumentValue,
+.quickAccessArgumentDetail,
+.quickAccessArgumentMarkers {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quickAccessArgumentValue {
+  font-size: var(--font-md);
+  font-weight: 700;
+}
+
+.quickAccessArgumentDetail,
+.quickAccessArgumentMarkers {
+  color: rgb(255 255 255 / 46%);
+  font-size: var(--font-xs);
+}
+
+.quickAccessArgumentMarkers {
+  color: rgb(245 196 90 / 82%);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .quickAccessBadge {
@@ -258,6 +320,14 @@
 
   .quickAccessSignature,
   .quickAccessActiveLabel {
+    display: none;
+  }
+
+  .quickAccessArgumentOption {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .quickAccessArgumentDetail {
     display: none;
   }
 

@@ -34,6 +34,45 @@ const commands = buildSessionReference({
       }],
       description: 'Set note velocity',
     },
+    {
+      path: ['set', 'translateDirection'],
+      keywords: [],
+      accepts_pattern_prefix: false,
+      target_requirement: 'none',
+      arguments: [{
+        kind: 'translate_direction',
+        display_name: 'direction',
+        required: true,
+        default_value: null,
+        constraints: [{
+          kind: 'one_of',
+          minimum: null,
+          maximum: null,
+          values: ['up', 'down'],
+        }],
+      }],
+      description: 'Set scale translate direction',
+    },
+    {
+      path: ['chord'],
+      keywords: [],
+      accepts_pattern_prefix: false,
+      target_requirement: 'cell',
+      arguments: [{
+        kind: 'chord_name',
+        display_name: 'chord',
+        required: false,
+        default_value: '"cycle"',
+        constraints: [],
+      }, {
+        kind: 'chord_inversion',
+        display_name: 'inversion',
+        required: false,
+        default_value: '-1',
+        constraints: [],
+      }],
+      description: 'Apply a chord',
+    },
   ],
 }).commands
 
@@ -70,6 +109,7 @@ function PaletteHarness({
         librarySnapshot={library}
         activeTuningName="12EDO"
         activeScaleId="scale:major"
+        sequenceBank={null}
         keymapResource={keymap}
         currentInputMode="pitch"
       />
@@ -173,7 +213,7 @@ describe('QuickAccessPalette', () => {
     await user.keyboard('{Enter}')
 
     expect(input).toHaveValue('set velocity ')
-    expect(screen.getByLabelText('Command arguments')).toHaveTextContent('amount:decimal')
+    expect(screen.getByLabelText('Command arguments')).toHaveTextContent('amount: decimal')
     await user.type(input, '0.75')
     await user.keyboard('{Enter}')
 
@@ -212,5 +252,50 @@ describe('QuickAccessPalette', () => {
 
     expect(execute).not.toHaveBeenCalled()
     expect(screen.getByRole('dialog', { name: 'Quick access' })).toBeInTheDocument()
+  })
+
+  it('filters and accepts one_of values before executing on a separate Enter', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<PaletteHarness execute={execute} />)
+
+    await user.click(screen.getByRole('button', { name: 'Open commands' }))
+    const input = screen.getByRole('combobox')
+    await user.type(input, 'set trans')
+    await user.keyboard('{Enter}')
+
+    expect(input).toHaveValue('set translateDirection ')
+    expect(screen.queryByRole('button', { name: 'Scales' })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'up' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'down' })).toBeInTheDocument()
+
+    await user.type(input, 'd')
+    expect(screen.queryByRole('option', { name: 'up' })).not.toBeInTheDocument()
+    await user.keyboard('{Enter}')
+
+    expect(input).toHaveValue('set translateDirection down ')
+    expect(execute).not.toHaveBeenCalled()
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(execute).toHaveBeenCalledWith('set translateDirection down'))
+  })
+
+  it('completes a runtime chord with Tab and advances to its defaulted inversion', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<PaletteHarness execute={execute} />)
+
+    await user.click(screen.getByRole('button', { name: 'Open commands' }))
+    const input = screen.getByRole('combobox')
+    await user.type(input, 'cho')
+    await user.keyboard('{Enter}')
+    await user.type(input, 'maj')
+
+    expect(screen.getByRole('option', { name: /major.*4 · 3/i })).toBeInTheDocument()
+    await user.keyboard('{Tab}')
+    expect(input).toHaveValue('chord major ')
+    expect(screen.getByLabelText('Command arguments')).toHaveTextContent('inversion: chord_inversion = -1')
+
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(execute).toHaveBeenCalledWith('chord major'))
   })
 })

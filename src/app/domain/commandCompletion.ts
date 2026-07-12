@@ -1,5 +1,10 @@
 import { parsePatternPrefix } from '../presentation/viewModels'
-import type { CommandReferenceArgument, CommandReferenceEntry } from './models'
+import type {
+  CommandReferenceArgument,
+  CommandReferenceEntry,
+  LibrarySnapshot,
+  SequenceBank,
+} from './models'
 
 export type CompletionMode = 'none' | 'commandSearch' | 'argumentAssist'
 
@@ -27,6 +32,8 @@ export type CompletionAnalysis = {
   isExactCommandInput: boolean
   candidates: CommandCompletionCandidate[]
   argumentPlaceholders: ArgumentPlaceholder[]
+  activeArgument: ActiveArgument | null
+  allRequiredArgumentsPresent: boolean
 }
 
 export type ArgumentPlaceholder = {
@@ -36,6 +43,39 @@ export type ArgumentPlaceholder = {
   defaultValue: string | null
   required: boolean
   text: string
+}
+
+export type ActiveArgument = {
+  argumentIndex: number
+  argument: CommandReferenceArgument
+  replaceStart: number
+  replaceEnd: number
+  typedValue: string
+  rawValue: string
+  hasValue: boolean
+}
+
+export type ArgumentCompletionCandidate = {
+  id: string
+  label: string
+  insertionText: string
+  detail: string | null
+  isDefault: boolean
+  isActive: boolean
+}
+
+export type CompletionResources = {
+  library: LibrarySnapshot
+  sequenceBank: SequenceBank | null
+  activeTuningName: string
+  activeScaleId: string | null
+}
+
+type LexedArgument = {
+  start: number
+  end: number
+  value: string
+  raw: string
 }
 
 type MatchKind = 'empty' | 'exactPrefix' | 'tokenPrefix' | 'acronym' | 'orderInsensitive' | 'typo' | 'keyword'
@@ -114,20 +154,277 @@ const formatArgumentToken = (argument: CommandReferenceArgument): string => {
   return argument.required ? `<${label}>` : `[${label}]`
 }
 
+export const formatArgumentDefault = (value: string | null): string | null => {
+  if (value === null) return null
+  if (value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1).replace(/\\([\\"])/g, '$1')
+  }
+  return value
+}
+
 const formatPlaceholderText = (argument: CommandReferenceArgument): string => {
   const detail = getArgumentDetail(argument)
-  const defaultText = argument.defaultValue === null ? '' : ` = ${argument.defaultValue}`
+  const defaultValue = formatArgumentDefault(argument.defaultValue)
+  const defaultText = defaultValue === null ? '' : ` = ${defaultValue}`
   const label = `${argument.displayName}:${detail}${defaultText}`
 
   return argument.required ? `<${label}>` : `[${label}]`
 }
 
-const getArgumentDetail = (argument: CommandReferenceArgument): string => {
+export const getArgumentDetail = (argument: CommandReferenceArgument): string => {
   const enumConstraint = argument.constraints.find((constraint) =>
-    constraint.kind === 'enum' && constraint.values.length > 0
+    (constraint.kind === 'one_of' || constraint.kind === 'enum') && constraint.values.length > 0
   )
 
   return enumConstraint ? enumConstraint.values.join(' | ') : argument.kind
+}
+
+const decodeToken = (raw: string): string => {
+  let value = ''
+  let escaped = false
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index] ?? ''
+    if (escaped) {
+      value += character
+      escaped = false
+    } else if (character === '\\') {
+      escaped = true
+    } else if (character !== '"') {
+      value += character
+    }
+  }
+  if (escaped) value += '\\'
+  return value
+}
+
+const lexArguments = (input: string): LexedArgument[] => {
+  const tokens: LexedArgument[] = []
+  let index = 0
+
+  while (index < input.length) {
+    while (/\s/.test(input[index] ?? '')) index += 1
+    if (index >= input.length) break
+
+    const start = index
+    let quoted = false
+    let escaped = false
+    while (index < input.length) {
+      const character = input[index] ?? ''
+      if (escaped) {
+        escaped = false
+        index += 1
+      } else if (character === '\\') {
+        escaped = true
+        index += 1
+      } else if (character === '"') {
+        quoted = !quoted
+        index += 1
+      } else if (!quoted && /\s/.test(character)) {
+        break
+      } else {
+        index += 1
+      }
+    }
+    const raw = input.slice(start, index)
+    tokens.push({ start, end: index, raw, value: decodeToken(raw) })
+  }
+
+  return tokens
+}
+
+const argumentAtCaret = (
+  commandText: string,
+  command: CommandReferenceEntry,
+  argumentInputStart: number,
+  argumentInputEnd: number,
+  caretOffset: number
+): { active: ActiveArgument | null; tokens: LexedArgument[] } => {
+  const input = commandText.slice(argumentInputStart, argumentInputEnd)
+  const tokens = lexArguments(input)
+  const relativeCaret = Math.max(0, Math.min(caretOffset - argumentInputStart, input.length))
+  const tokenIndex = tokens.findIndex((token) =>
+    relativeCaret >= token.start && relativeCaret <= token.end
+  )
+  const argumentsBeforeCaret = tokens.filter((token) => token.end < relativeCaret).length
+  const argumentIndex = tokenIndex === -1 ? argumentsBeforeCaret : tokenIndex
+  const argument = command.arguments[argumentIndex]
+  if (!argument) return { active: null, tokens }
+
+  const token = tokenIndex === -1 ? null : tokens[tokenIndex] ?? null
+  const rawValue = token
+    ? input.slice(token.start, Math.max(token.start, Math.min(relativeCaret, token.end)))
+    : ''
+
+  return {
+    active: {
+      argumentIndex,
+      argument,
+      replaceStart: argumentInputStart + (token?.start ?? relativeCaret),
+      replaceEnd: argumentInputStart + (token?.end ?? relativeCaret),
+      typedValue: decodeToken(rawValue),
+      rawValue,
+      hasValue: token !== null && token.raw.length > 0,
+    },
+    tokens,
+  }
+}
+
+const unquoteCatalogValue = (value: string | null): string | null =>
+  value === null ? null : decodeToken(value)
+
+export const quoteCommandArgument = (value: string): string => {
+  if (value.length > 0 && !/[\s;"\\]/.test(value)) return value
+  return `"${value.replace(/([\\"])/g, '\\$1')}"`
+}
+
+const candidateId = (kind: string, value: string): string =>
+  `argument:${kind}:${encodeURIComponent(value)}`
+
+const matchesCandidate = (label: string, query: string): number | null => {
+  const normalizedLabel = label.toLowerCase()
+  const normalizedQuery = query.trim().toLowerCase()
+  if (!normalizedQuery) return 3
+  if (normalizedLabel === normalizedQuery) return 0
+  if (normalizedLabel.startsWith(normalizedQuery)) return 1
+  if (normalizedLabel.includes(normalizedQuery)) return 2
+  return null
+}
+
+type CandidateSeed = {
+  value: string
+  label?: string
+  detail?: string | null
+  active?: boolean
+}
+
+const dynamicCandidateSeeds = (
+  kind: string,
+  resources: CompletionResources
+): CandidateSeed[] => {
+  switch (kind) {
+    case 'chord_name':
+      return resources.library.chords.map((chord) => ({
+        value: chord.name,
+        detail: chord.intervals.join(' · '),
+      }))
+    case 'scale_id':
+      return resources.library.scales.map((scale) => ({
+        value: scale.id,
+        label: scale.definition?.name ?? ('name' in scale ? scale.name : scale.id),
+        detail: scale.definition
+          ? `${scale.definition.tuningLength}-tone · ${scale.definition.intervals.length} steps`
+          : 'Chromatic',
+        active: scale.id === resources.activeScaleId,
+      }))
+    case 'tuning_name':
+      return resources.library.tunings.map((tuning) => ({
+        value: tuning.stem,
+        label: tuning.stem,
+        detail: `${tuning.noteCount} notes`,
+        active: tuning.name === resources.activeTuningName || tuning.stem === resources.activeTuningName,
+      }))
+    case 'cell_name':
+      return resources.library.cells.map((cell) => ({
+        value: cell.stem,
+        label: cell.stem,
+        detail: cell.relativePath,
+      }))
+    case 'project_name':
+      return resources.library.compositions.map((composition) => ({
+        value: composition.stem,
+        label: composition.stem,
+        detail: composition.relativePath,
+      }))
+    case 'sequence_name':
+      return resources.sequenceBank?.sequences.map((sequence) => ({
+        value: sequence.name,
+        detail: `Sequence ${sequence.id}`,
+      })) ?? []
+    default:
+      return []
+  }
+}
+
+const dynamicArgumentKinds = new Set([
+  'chord_name',
+  'scale_id',
+  'tuning_name',
+  'cell_name',
+  'project_name',
+  'sequence_name',
+])
+
+export const getArgumentCompletionCandidates = (
+  activeArgument: ActiveArgument | null,
+  resources: CompletionResources
+): ArgumentCompletionCandidate[] => {
+  if (!activeArgument) return []
+  const { argument } = activeArgument
+  const finiteConstraint = argument.constraints.find((constraint) =>
+    (constraint.kind === 'one_of' || constraint.kind === 'enum') && constraint.values.length > 0
+  )
+  const defaultValue = unquoteCatalogValue(argument.defaultValue)
+  const seeds: CandidateSeed[] = finiteConstraint
+    ? finiteConstraint.values.map((value) => ({ value }))
+    : dynamicCandidateSeeds(argument.kind, resources)
+
+  if (
+    defaultValue !== null &&
+    (finiteConstraint !== undefined || dynamicArgumentKinds.has(argument.kind)) &&
+    !seeds.some((seed) => seed.value === defaultValue)
+  ) {
+    seeds.unshift({ value: defaultValue })
+  }
+
+  return seeds
+    .map((seed, index) => {
+      const qualities = [seed.label ?? seed.value, seed.value]
+        .map((value) => matchesCandidate(value, activeArgument.typedValue))
+        .filter((quality): quality is number => quality !== null)
+      return {
+        seed,
+        index,
+        quality: qualities.length > 0 ? Math.min(...qualities) : null,
+      }
+    })
+    .filter((entry): entry is typeof entry & { quality: number } => entry.quality !== null)
+    .sort((left, right) => {
+      if (!activeArgument.typedValue) {
+        const leftDefault = left.seed.value === defaultValue ? 0 : 1
+        const rightDefault = right.seed.value === defaultValue ? 0 : 1
+        if (leftDefault !== rightDefault) return leftDefault - rightDefault
+        const leftActive = left.seed.active ? 0 : 1
+        const rightActive = right.seed.active ? 0 : 1
+        if (leftActive !== rightActive) return leftActive - rightActive
+      }
+      return left.quality - right.quality || left.index - right.index
+    })
+    .slice(0, 8)
+    .map(({ seed }) => ({
+      id: candidateId(argument.kind, seed.value),
+      label: seed.label ?? seed.value,
+      insertionText: quoteCommandArgument(seed.value),
+      detail: seed.detail ?? null,
+      isDefault: seed.value === defaultValue,
+      isActive: seed.active ?? false,
+    }))
+}
+
+export const applyArgumentCompletion = (
+  commandText: string,
+  activeArgument: ActiveArgument,
+  insertionText: string
+): { text: string; caretOffset: number } => {
+  const before = commandText.slice(0, activeArgument.replaceStart)
+  const after = commandText.slice(activeArgument.replaceEnd)
+  const needsSeparator = after.length === 0 || !/^[\s;]/.test(after)
+  const separator = needsSeparator ? ' ' : ''
+  const existingSeparatorLength = /^\s/.test(after) ? 1 : 0
+  return {
+    text: `${before}${insertionText}${separator}${after}`,
+    caretOffset: before.length + insertionText.length +
+      (needsSeparator ? 1 : existingSeparatorLength),
+  }
 }
 
 const rankCommand = (
@@ -189,10 +486,31 @@ const rankCommand = (
   }
 }
 
-export const getActiveCompletionSegment = (commandText: string): CompletionSegment => {
-  const delimiterIndex = commandText.lastIndexOf(';')
-  const start = delimiterIndex === -1 ? 0 : delimiterIndex + 1
-  const raw = commandText.slice(start)
+export const getActiveCompletionSegment = (
+  commandText: string,
+  caretOffset: number = commandText.length
+): CompletionSegment => {
+  const caret = Math.max(0, Math.min(caretOffset, commandText.length))
+  const delimiters: number[] = []
+  let quoted = false
+  let escaped = false
+  for (let index = 0; index < commandText.length; index += 1) {
+    const character = commandText[index] ?? ''
+    if (escaped) {
+      escaped = false
+    } else if (character === '\\') {
+      escaped = true
+    } else if (character === '"') {
+      quoted = !quoted
+    } else if (character === ';' && !quoted) {
+      delimiters.push(index)
+    }
+  }
+  const previousDelimiter = delimiters.filter((index) => index < caret).at(-1) ?? -1
+  const nextDelimiter = delimiters.find((index) => index >= caret) ?? commandText.length
+  const start = previousDelimiter + 1
+  const end = nextDelimiter
+  const raw = commandText.slice(start, end)
   const leadingWhitespace = raw.match(/^\s*/)?.[0] ?? ''
   const afterWhitespace = raw.slice(leadingWhitespace.length)
   const patternTokens: string[] = []
@@ -228,11 +546,11 @@ export const getActiveCompletionSegment = (commandText: string): CompletionSegme
 
   return {
     start,
-    end: commandText.length,
+    end,
     raw,
     leadingWhitespace,
     patternPrefix,
-    commandText: commandText.slice(commandTextStart),
+    commandText: commandText.slice(commandTextStart, end),
     commandTextStart,
   }
 }
@@ -264,9 +582,7 @@ export const getArgumentPlaceholders = (
   command: CommandReferenceEntry,
   argumentInput: string
 ): ArgumentPlaceholder[] => {
-  const typedCount = argumentInput.trim().length === 0
-    ? 0
-    : argumentInput.trim().split(/\s+/).length
+  const typedCount = lexArguments(argumentInput).length
 
   return command.arguments.slice(typedCount).map((argument) => ({
     displayName: argument.displayName,
@@ -281,9 +597,10 @@ export const getArgumentPlaceholders = (
 export const analyzeCommandCompletion = (
   commandText: string,
   commands: CommandReferenceEntry[],
-  recentCommandIds: string[] = []
+  recentCommandIds: string[] = [],
+  caretOffset: number = commandText.length
 ): CompletionAnalysis => {
-  const segment = getActiveCompletionSegment(commandText)
+  const segment = getActiveCompletionSegment(commandText, caretOffset)
   const trimmedCommandText = segment.commandText.trimStart()
   const leadingCommandWhitespace = segment.commandText.length - trimmedCommandText.length
   const queryStartOffset = leadingCommandWhitespace
@@ -291,7 +608,7 @@ export const analyzeCommandCompletion = (
   const hasExplicitArgumentBoundary = /\s$/.test(trimmedCommandText)
   const exactCommand = commands.find((command) => normalize(command.id) === normalizedSegment) ?? null
   const isExactCommandInput = exactCommand !== null
-  const recognizedCommand = commands.find((command) => {
+  const recognizedCommand = [...commands].sort((left, right) => right.id.length - left.id.length).find((command) => {
     const id = normalize(command.id)
     return (
       (normalizedSegment === id && hasExplicitArgumentBoundary) ||
@@ -302,6 +619,18 @@ export const analyzeCommandCompletion = (
   if (recognizedCommand) {
     const argumentInput = trimmedCommandText.slice(recognizedCommand.id.length)
     const isArgumentInputVisible = /^\s/.test(argumentInput)
+    const commandBodyStart = segment.commandTextStart + leadingCommandWhitespace
+    const argumentInputStart = commandBodyStart + recognizedCommand.id.length
+    const argumentState = argumentAtCaret(
+      commandText,
+      recognizedCommand,
+      argumentInputStart,
+      segment.end,
+      caretOffset
+    )
+    const allRequiredArgumentsPresent = recognizedCommand.arguments.every((argument, index) =>
+      !argument.required || (argumentState.tokens[index]?.value.length ?? 0) > 0
+    )
 
     return {
       mode: 'argumentAssist',
@@ -312,6 +641,8 @@ export const analyzeCommandCompletion = (
       argumentPlaceholders: isArgumentInputVisible
         ? getArgumentPlaceholders(recognizedCommand, argumentInput)
         : [],
+      activeArgument: isArgumentInputVisible ? argumentState.active : null,
+      allRequiredArgumentsPresent,
     }
   }
 
@@ -330,6 +661,8 @@ export const analyzeCommandCompletion = (
     isExactCommandInput,
     candidates,
     argumentPlaceholders: [],
+    activeArgument: null,
+    allRequiredArgumentsPresent: exactCommand?.arguments.every((argument) => !argument.required) ?? false,
   }
 }
 

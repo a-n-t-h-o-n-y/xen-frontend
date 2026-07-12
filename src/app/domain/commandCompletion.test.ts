@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   analyzeCommandCompletion,
+  applyArgumentCompletion,
   applyCommandCompletion,
+  getArgumentCompletionCandidates,
   getVisibleCompletionMode,
   rankCommandCompletions,
 } from './commandCompletion'
+import { libraryFromDto, projectFromDto } from './mappers'
 import { buildSessionReference } from './reference'
+import { libraryFixture, projectFixture } from './testFixtures'
+import type { ActiveArgument } from './commandCompletion'
 
 describe('command completion', () => {
   const commands = buildSessionReference({
@@ -43,6 +48,45 @@ describe('command completion', () => {
             }],
           },
         ],
+      },
+      {
+        path: ['set', 'translateDirection'],
+        keywords: [],
+        accepts_pattern_prefix: false,
+        target_requirement: 'none',
+        description: 'Set scale translate direction',
+        arguments: [{
+          kind: 'translate_direction',
+          display_name: 'direction',
+          required: true,
+          default_value: null,
+          constraints: [{
+            kind: 'one_of',
+            minimum: null,
+            maximum: null,
+            values: ['up', 'down'],
+          }],
+        }],
+      },
+      {
+        path: ['chord'],
+        keywords: [],
+        accepts_pattern_prefix: false,
+        target_requirement: 'cell',
+        description: 'Apply a chord',
+        arguments: [{
+          kind: 'chord_name',
+          display_name: 'chord',
+          required: false,
+          default_value: '"cycle"',
+          constraints: [],
+        }, {
+          kind: 'chord_inversion',
+          display_name: 'inversion',
+          required: false,
+          default_value: '-1',
+          constraints: [],
+        }],
       },
       {
         path: ['set', 'gate'],
@@ -95,7 +139,7 @@ describe('command completion', () => {
     expect(ranked.map((candidate) => candidate.command.id).slice(0, 3)).toEqual([
       'transport stop',
       'set velocity',
-      'set gate',
+      'set translateDirection',
     ])
   })
 
@@ -219,5 +263,107 @@ describe('command completion', () => {
     expect(analysis.mode).toBe('commandSearch')
     expect(getVisibleCompletionMode(true, false, true, analysis.mode)).toBe('none')
     expect(getVisibleCompletionMode(true, false, false, analysis.mode)).toBe('commandSearch')
+  })
+
+  it('uses one_of constraints as finite argument completions', () => {
+    const analysis = analyzeCommandCompletion('set translateDirection d', commands)
+    const candidates = getArgumentCompletionCandidates(analysis.activeArgument, {
+      library: libraryFromDto(libraryFixture()),
+      sequenceBank: null,
+      activeTuningName: '',
+      activeScaleId: null,
+    })
+
+    expect(analysis.activeArgument?.typedValue).toBe('d')
+    expect(candidates.map((candidate) => candidate.label)).toEqual(['down'])
+  })
+
+  it('completes quoted runtime values and advances to the next argument', () => {
+    const library = libraryFromDto(libraryFixture())
+    library.chords = [
+      ...library.chords,
+      { name: 'major seventh', intervals: [0, 4, 7, 11], command: 'arp "major seventh"' },
+    ]
+    const input = 'chord "major se'
+    const analysis = analyzeCommandCompletion(input, commands)
+    const candidates = getArgumentCompletionCandidates(analysis.activeArgument, {
+      library,
+      sequenceBank: null,
+      activeTuningName: '',
+      activeScaleId: null,
+    })
+    const applied = applyArgumentCompletion(
+      input,
+      analysis.activeArgument!,
+      candidates[0]!.insertionText
+    )
+
+    expect(candidates[0]?.label).toBe('major seventh')
+    expect(applied.text).toBe('chord "major seventh" ')
+    expect(analyzeCommandCompletion(applied.text, commands).activeArgument?.argument.displayName)
+      .toBe('inversion')
+  })
+
+  it('analyzes the semicolon segment containing the caret and replaces a token in place', () => {
+    const input = 'set velocity 0.5; chord major; transport stop'
+    const caret = input.indexOf('major') + 2
+    const analysis = analyzeCommandCompletion(input, commands, [], caret)
+    const applied = applyArgumentCompletion(input, analysis.activeArgument!, 'minor')
+
+    expect(analysis.recognizedCommand?.id).toBe('chord')
+    expect(analysis.activeArgument?.typedValue).toBe('ma')
+    expect(applied.text).toBe('set velocity 0.5; chord minor; transport stop')
+  })
+
+  it('sources scale, tuning, file, project, and sequence values from runtime snapshots', () => {
+    const library = libraryFromDto(libraryFixture())
+    library.tunings = [{
+      name: '12EDO.scl',
+      stem: '12EDO',
+      path: '/library/tunings/12EDO.scl',
+      relativePath: '12EDO.scl',
+      command: 'load tuning "12EDO"',
+      description: 'Equal temperament',
+      intervals: [],
+      octave: 1200,
+      noteCount: 12,
+    }]
+    const resources = {
+      library,
+      sequenceBank: projectFromDto(projectFixture()).sequenceBank,
+      activeTuningName: '12EDO.scl',
+      activeScaleId: 'scale:major',
+    }
+    const active = (kind: string): ActiveArgument => ({
+      argumentIndex: 0,
+      argument: {
+        kind,
+        displayName: 'value',
+        required: true,
+        defaultValue: null,
+        constraints: [],
+      },
+      replaceStart: 0,
+      replaceEnd: 0,
+      typedValue: '',
+      rawValue: '',
+      hasValue: false,
+    })
+
+    expect(getArgumentCompletionCandidates(active('scale_id'), resources)[0]).toMatchObject({
+      label: 'major', insertionText: 'scale:major', isActive: true,
+    })
+    expect(getArgumentCompletionCandidates({
+      ...active('scale_id'),
+      typedValue: 'scale:',
+      rawValue: 'scale:',
+      hasValue: true,
+    }, resources)[0]?.insertionText).toBe('scale:major')
+    expect(getArgumentCompletionCandidates(active('tuning_name'), resources)[0]).toMatchObject({
+      label: '12EDO', isActive: true,
+    })
+    expect(getArgumentCompletionCandidates(active('cell_name'), resources)[0]?.label).toBe('sequence')
+    expect(getArgumentCompletionCandidates(active('project_name'), resources)[0]?.label).toBe('song')
+    expect(getArgumentCompletionCandidates(active('sequence_name'), resources)[0]?.label).toBe('S1')
   })
 })
