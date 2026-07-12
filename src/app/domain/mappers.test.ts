@@ -13,6 +13,7 @@ describe('DTO to domain mappers', () => {
 
     expect(project.revision).toBe(9)
     expect(project.historyEntryId).toBe(2)
+    expect(project.previewActive).toBe(false)
     expect(project.measure.timeSignature).toEqual({ numerator: 4, denominator: 4 })
     expect(project.pitch.scale?.sourceId).toBe('scale:major')
     expect(project.pitch.scale?.definition.tuningLength).toBe(12)

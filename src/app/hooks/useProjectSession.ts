@@ -81,6 +81,7 @@ export function useProjectSession({
     ingestProject,
     ingestLibrary,
     executeBackendCommand,
+    beginBackendPreview,
   } = useBridgeSession({
     request,
     projectRef,
@@ -205,5 +206,6 @@ export function useProjectSession({
     keymapController,
     request,
     executeBackendCommand,
+    beginBackendPreview,
   }
 }

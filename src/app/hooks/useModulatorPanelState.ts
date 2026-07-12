@@ -39,8 +39,6 @@ export function useModulatorPanelState() {
   const wavePadDragRef = useRef<WavePadDragState | null>(null)
   const lastWaveHandleUsedRef = useRef<'a' | 'b'>('a')
 
-  const liveEmitFrameRef = useRef<number | null>(null)
-  const liveEmitCommandsRef = useRef<string[] | null>(null)
   const waveMenuRef = useRef<HTMLDivElement | null>(null)
   const activeModulator = modulatorInstances[activeModulatorTab] ??
     modulatorInstances[0] ??
@@ -111,8 +109,6 @@ export function useModulatorPanelState() {
     padDragRef,
     wavePadDragRef,
     lastWaveHandleUsedRef,
-    liveEmitFrameRef,
-    liveEmitCommandsRef,
     waveMenuRef,
   }
 }

@@ -77,6 +77,9 @@ type SequencerSectionProps = {
   waveBPreviewPath: string
   morphedWavePreviewPath: string
   setModulatorPreviewWidth: Dispatch<SetStateAction<number>>
+  beginContinuousEdit: () => boolean
+  commitContinuousEdit: () => void
+  cancelContinuousEdit: () => void
 }
 
 function ModulatorOverlay({
@@ -94,6 +97,9 @@ function ModulatorOverlay({
   waveBPreviewPath,
   morphedWavePreviewPath,
   setModulatorPreviewWidth,
+  beginContinuousEdit,
+  commitContinuousEdit,
+  cancelContinuousEdit,
 }: {
   selectedOutline: RollSelectionSpan | null
   wavePadDragRef: { current: WavePadDragState | null }
@@ -118,6 +124,9 @@ function ModulatorOverlay({
   waveBPreviewPath: string
   morphedWavePreviewPath: string
   setModulatorPreviewWidth: Dispatch<SetStateAction<number>>
+  beginContinuousEdit: () => boolean
+  commitContinuousEdit: () => void
+  cancelContinuousEdit: () => void
 }) {
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const hasSelection = selectedOutline !== null && selectedOutline.width > 0
@@ -156,6 +165,7 @@ function ModulatorOverlay({
                 if (!(event.currentTarget instanceof HTMLDivElement)) {
                   return
                 }
+                if (!beginContinuousEdit()) return
                 const bounds = event.currentTarget.getBoundingClientRect()
                 const xRatio = clampNumber((event.clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
                 const yRatio = clampNumber((event.clientY - bounds.top) / Math.max(bounds.height, 1), 0, 1)
@@ -216,6 +226,7 @@ function ModulatorOverlay({
                     }
                   }
                   wavePadDragRef.current = null
+                  commitContinuousEdit()
                 }
               }
             : undefined
@@ -225,6 +236,7 @@ function ModulatorOverlay({
             ? (event) => {
                 if (wavePadDragRef.current?.pointerId === event.pointerId) {
                   wavePadDragRef.current = null
+                  cancelContinuousEdit()
                 }
               }
             : undefined
@@ -277,6 +289,9 @@ export function SequencerSection({
   waveBPreviewPath,
   morphedWavePreviewPath,
   setModulatorPreviewWidth,
+  beginContinuousEdit,
+  commitContinuousEdit,
+  cancelContinuousEdit,
 }: SequencerSectionProps) {
   void [_backgroundOverlayStates, _highlightedPitches]
   const rollRowTemplate = useMemo(() => {
@@ -421,6 +436,9 @@ export function SequencerSection({
                 waveBPreviewPath={waveBPreviewPath}
                 morphedWavePreviewPath={morphedWavePreviewPath}
                 setModulatorPreviewWidth={setModulatorPreviewWidth}
+                beginContinuousEdit={beginContinuousEdit}
+                commitContinuousEdit={commitContinuousEdit}
+                cancelContinuousEdit={cancelContinuousEdit}
               />
             ) : null}
             {playheadPhase !== null ? (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   LFO_FREQUENCY_MAX,
   LFO_PHASE_OFFSET_MAX,
@@ -17,6 +17,7 @@ import {
 import { clampNumber, roundByStep } from '../domain/music'
 import { getErrorMessage } from '../utils/errors'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { ProjectPreviewHandle } from '../bridge/ProjectPreview'
 import type { MessageLevel } from '../domain/models'
 import type {
   ModTarget,
@@ -38,6 +39,7 @@ type UseModulatorControllerArgs = {
   tuningLength: number
   modulatorPreviewWidth: number
   executeBackendCommand: (command: string) => Promise<void>
+  beginBackendPreview: () => ProjectPreviewHandle
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
   activeModulator: ModulatorPanelState
@@ -49,8 +51,6 @@ type UseModulatorControllerArgs = {
   updateActiveTargetControl: (target: ModTarget, update: TargetControlUpdate) => void
   setOpenWaveMenu: Dispatch<SetStateAction<'a' | 'b' | null>>
   lastWaveHandleUsedRef: MutableRefObject<'a' | 'b'>
-  liveEmitFrameRef: MutableRefObject<number | null>
-  liveEmitCommandsRef: MutableRefObject<string[] | null>
 }
 
 export function useModulatorController({
@@ -58,6 +58,7 @@ export function useModulatorController({
   tuningLength,
   modulatorPreviewWidth,
   executeBackendCommand,
+  beginBackendPreview,
   setStatusMessage,
   setStatusLevel,
   activeModulator,
@@ -65,9 +66,57 @@ export function useModulatorController({
   updateActiveTargetControl,
   setOpenWaveMenu,
   lastWaveHandleUsedRef,
-  liveEmitFrameRef,
-  liveEmitCommandsRef,
 }: UseModulatorControllerArgs) {
+  const activeGestureRef = useRef<{
+    preview: ProjectPreviewHandle
+    baseline: ModulatorPanelState
+    finishing: boolean
+  } | null>(null)
+
+  const reportFailure = useCallback((error: unknown): void => {
+    setStatusMessage(`Preview failed: ${getErrorMessage(error)}`)
+    setStatusLevel('error')
+  }, [setStatusLevel, setStatusMessage])
+
+  const beginContinuousEdit = useCallback((): boolean => {
+    if (activeGestureRef.current) return false
+    try {
+      activeGestureRef.current = {
+        preview: beginBackendPreview(),
+        baseline: activeModulator,
+        finishing: false,
+      }
+      return true
+    } catch (error) {
+      reportFailure(error)
+      return false
+    }
+  }, [activeModulator, beginBackendPreview, reportFailure])
+
+  const finishContinuousEdit = useCallback((action: 'commit' | 'cancel'): void => {
+    const gesture = activeGestureRef.current
+    if (!gesture || gesture.finishing) return
+    gesture.finishing = true
+    if (action === 'cancel') {
+      updateActiveModulator(gesture.baseline)
+    }
+    void gesture.preview[action]()
+      .catch((error: unknown) => {
+        updateActiveModulator(gesture.baseline)
+        reportFailure(error)
+      })
+      .finally(() => {
+        if (activeGestureRef.current === gesture) activeGestureRef.current = null
+      })
+  }, [reportFailure, updateActiveModulator])
+
+  const commitContinuousEdit = useCallback((): void => {
+    finishContinuousEdit('commit')
+  }, [finishContinuousEdit])
+
+  const cancelContinuousEdit = useCallback((): void => {
+    finishContinuousEdit('cancel')
+  }, [finishContinuousEdit])
   const { waveAPreviewPath, waveBPreviewPath, morphedWavePreviewPath } = useMemo(() => {
     const maxVisibleFrequency = clampNumber(
       Math.max(activeModulator.lfoAFrequency, activeModulator.lfoBFrequency),
@@ -123,12 +172,29 @@ export function useModulatorController({
         return
       }
 
-      void executeBackendCommand(joinModulatorCommands(commands)).catch((error: unknown) => {
+      const command = joinModulatorCommands(commands)
+      const gesture = activeGestureRef.current
+      if (gesture?.finishing) return
+      const operation = gesture
+        ? gesture.preview.update(command, 'absolute')
+        : executeBackendCommand(command)
+      void operation.catch((error: unknown) => {
+        if (gesture && activeGestureRef.current === gesture) {
+          activeGestureRef.current = null
+          updateActiveModulator(gesture.baseline)
+          void gesture.preview.cancel().catch(() => undefined)
+        }
         setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
         setStatusLevel('error')
       })
     },
-    [bridgeUnavailableMessage, executeBackendCommand, setStatusLevel, setStatusMessage]
+    [
+      bridgeUnavailableMessage,
+      executeBackendCommand,
+      setStatusLevel,
+      setStatusMessage,
+      updateActiveModulator,
+    ]
   )
 
   const scheduleLiveEmit = useCallback(
@@ -137,34 +203,26 @@ export function useModulatorController({
         return
       }
 
-      liveEmitCommandsRef.current = commands
-      if (liveEmitFrameRef.current !== null) {
-        return
-      }
-
-      liveEmitFrameRef.current = requestAnimationFrame(() => {
-        liveEmitFrameRef.current = null
-        const pending = liveEmitCommandsRef.current
-        liveEmitCommandsRef.current = null
-        if (!pending || pending.length === 0) {
-          return
-        }
-        emitCommandsNow(pending)
-      })
+      emitCommandsNow(commands)
     },
-    [bridgeUnavailableMessage, emitCommandsNow, liveEmitCommandsRef, liveEmitFrameRef]
+    [bridgeUnavailableMessage, emitCommandsNow]
   )
 
-  useEffect(
-    () => () => {
-      if (liveEmitFrameRef.current !== null) {
-        cancelAnimationFrame(liveEmitFrameRef.current)
-        liveEmitFrameRef.current = null
-      }
-      liveEmitCommandsRef.current = null
-    },
-    [liveEmitCommandsRef, liveEmitFrameRef]
-  )
+  useEffect(() => {
+    const cancelOnEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !activeGestureRef.current) return
+      event.preventDefault()
+      cancelContinuousEdit()
+    }
+    const cancelOnBlur = (): void => cancelContinuousEdit()
+    window.addEventListener('keydown', cancelOnEscape, true)
+    window.addEventListener('blur', cancelOnBlur)
+    return () => {
+      window.removeEventListener('keydown', cancelOnEscape, true)
+      window.removeEventListener('blur', cancelOnBlur)
+      cancelContinuousEdit()
+    }
+  }, [cancelContinuousEdit])
 
   const emitEnabledTargetsForState = useCallback(
     (state: ModulatorPanelState): void => {
@@ -430,6 +488,9 @@ export function useModulatorController({
   )
 
   return {
+    beginContinuousEdit,
+    commitContinuousEdit,
+    cancelContinuousEdit,
     waveAPreviewPath,
     waveBPreviewPath,
     morphedWavePreviewPath,

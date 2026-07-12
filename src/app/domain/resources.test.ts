@@ -16,6 +16,15 @@ describe('revision ingestion', () => {
       .toBe(true)
   })
 
+  it('installs equal revisions when preview activity changes', () => {
+    const selection = { path: [] }
+    const first = projectFromDto(projectFixture(2))
+    const preview = { ...first, previewActive: true }
+
+    expect(ingestProjectSnapshot(first, preview, selection).installed).toBe(true)
+    expect(ingestProjectSnapshot(preview, preview, selection).installed).toBe(false)
+  })
+
   it('reconciles invalid selections and tracks library revisions independently', () => {
     const invalid = { path: [{ kind: 'element' as const, index: 99 }] }
     expect(ingestProjectSnapshot(null, projectFromDto(projectFixture()), invalid).selection)
@@ -27,4 +36,3 @@ describe('revision ingestion', () => {
     expect(project.revision).toBe(9)
   })
 })
-

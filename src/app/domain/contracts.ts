@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const BRIDGE_PROTOCOL = 'xen.bridge.v3'
+export const BRIDGE_PROTOCOL = 'xen.bridge.v4'
 export const PROJECT_SCHEMA_VERSION = 4
 export const LIBRARY_SCHEMA_VERSION = 1
 export const CATALOG_SCHEMA_VERSION = 3
@@ -155,6 +155,7 @@ export const arrangementProjectSnapshotSchema = z.object({
   schema_version: z.literal(PROJECT_SCHEMA_VERSION),
   history_entry_id: nonNegativeInteger,
   project_revision: nonNegativeInteger,
+  preview_active: z.boolean(),
   project: z.object({
     sequence_bank: sequenceBankSchema,
     composition: compositionSchema,
@@ -448,12 +449,25 @@ export const envelopeSchema = z.object({
   payload: z.record(z.string(), z.unknown()),
 })
 
+export const commandStatusSchema = z.object({
+  level: z.enum(['debug', 'info', 'warning', 'error']),
+  message: z.string(),
+})
+
 export const commandResponseSchema = z.object({
-  status: z.object({
-    level: z.enum(['debug', 'info', 'warning', 'error']),
-    message: z.string(),
-  }),
+  status: commandStatusSchema,
   suggested_selection: selectionSchema.nullable(),
+  snapshot: projectSnapshotSchema,
+})
+
+export const previewBeginResponseSchema = z.object({
+  status: commandStatusSchema,
+  preview_id: z.string().min(1).nullable(),
+  snapshot: projectSnapshotSchema,
+})
+
+export const previewEndResponseSchema = z.object({
+  status: commandStatusSchema,
   snapshot: projectSnapshotSchema,
 })
 
@@ -517,6 +531,9 @@ export const parseLibrarySnapshot = (value: unknown): LibrarySnapshotDto =>
 export const parseCommandResponse = (value: unknown): CommandExecuteResponseDto =>
   commandResponseSchema.parse(value)
 export const parseBridgeEvent = (value: unknown) => bridgeEventSchema.parse(value)
+
+export type PreviewBeginResponseDto = z.infer<typeof previewBeginResponseSchema>
+export type PreviewEndResponseDto = z.infer<typeof previewEndResponseSchema>
 export const parseKeymapDocument = (value: unknown): KeymapDocumentDto =>
   keymapDocumentSchema.parse(value)
 export const parseKeymapStorageResource = (value: unknown): KeymapStorageResourceDto =>

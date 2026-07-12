@@ -43,7 +43,7 @@ describe('schema contract validation', () => {
 
   it('accepts envelopes and rejects invalid payloads', () => {
     expect(parseEnvelope({
-      protocol: 'xen.bridge.v3',
+      protocol: 'xen.bridge.v4',
       type: 'response',
       name: 'state.get',
       request_id: '1',
@@ -59,7 +59,7 @@ describe('schema contract validation', () => {
 
   it('validates hello catalog and opaque keymap storage', () => {
     const hello = parseSessionHello({
-      protocol: 'xen.bridge.v3',
+      protocol: 'xen.bridge.v4',
       plugin_version: '1.0.0',
       project_schema_version: 4,
       library_schema_version: 1,
@@ -148,7 +148,7 @@ describe('schema contract validation', () => {
       snapshot: projectFixture(),
     }).status.message).toBe('ok')
     expect(parseBridgeEvent({
-      protocol: 'xen.bridge.v3',
+      protocol: 'xen.bridge.v4',
       type: 'event',
       name: 'library.changed',
       payload: libraryFixture(),

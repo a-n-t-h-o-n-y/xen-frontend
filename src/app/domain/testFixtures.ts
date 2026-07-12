@@ -58,6 +58,7 @@ export const projectFixture = (revision = 3): ProjectSnapshotDto => ({
   schema_version: 4,
   history_entry_id: 2,
   project_revision: revision,
+  preview_active: false,
   project: {
     sequence_bank: {
       next_id: 2,
@@ -97,6 +98,7 @@ export const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
   schema_version: 4,
   history_entry_id: 2,
   project_revision: revision,
+  preview_active: false,
   project: {
     sequence_bank: {
       next_id: 3,

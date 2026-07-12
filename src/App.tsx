@@ -77,8 +77,6 @@ function App() {
     padDragRef,
     wavePadDragRef,
     lastWaveHandleUsedRef,
-    liveEmitFrameRef,
-    liveEmitCommandsRef,
   } = useModulatorPanelState()
   const {
     projectState,
@@ -91,6 +89,7 @@ function App() {
     keymapRef,
     keymapController,
     executeBackendCommand,
+    beginBackendPreview,
   } = useProjectSession({
     transportRef,
     editorStateRef,
@@ -289,6 +288,9 @@ function App() {
   const currentInputModeLetter = editorState.inputMode.charAt(0).toUpperCase()
 
   const {
+    beginContinuousEdit,
+    commitContinuousEdit,
+    cancelContinuousEdit,
     waveAPreviewPath,
     waveBPreviewPath,
     morphedWavePreviewPath,
@@ -311,6 +313,7 @@ function App() {
     tuningLength,
     modulatorPreviewWidth,
     executeBackendCommand,
+    beginBackendPreview,
     setStatusMessage,
     setStatusLevel,
     activeModulator,
@@ -318,8 +321,6 @@ function App() {
     updateActiveTargetControl,
     setOpenWaveMenu,
     lastWaveHandleUsedRef,
-    liveEmitFrameRef,
-    liveEmitCommandsRef,
   })
 
   useKeyboardController({
@@ -352,10 +353,11 @@ function App() {
   })
 
   useEffect(() => {
-    if (!isModulatorMode) {
+    if (!isModulatorMode || workspaceView !== 'sequencer') {
       setOpenWaveMenu(null)
+      cancelContinuousEdit()
     }
-  }, [isModulatorMode, setOpenWaveMenu])
+  }, [cancelContinuousEdit, isModulatorMode, setOpenWaveMenu, workspaceView])
 
   useEffect(() => {
     const handleContextMenu = (event: MouseEvent): void => {
@@ -494,6 +496,9 @@ function App() {
                 waveBPreviewPath={waveBPreviewPath}
                 morphedWavePreviewPath={morphedWavePreviewPath}
                 setModulatorPreviewWidth={setModulatorPreviewWidth}
+                beginContinuousEdit={beginContinuousEdit}
+                commitContinuousEdit={commitContinuousEdit}
+                cancelContinuousEdit={cancelContinuousEdit}
               />
             </div>
           </>
@@ -524,7 +529,10 @@ function App() {
           <ModulatorsPanel
             activeModulatorTab={activeModulatorTab}
             activeModulator={activeModulator}
-            selectActiveModulatorTab={selectActiveModulatorTab}
+            selectActiveModulatorTab={(index) => {
+              cancelContinuousEdit()
+              selectActiveModulatorTab(index)
+            }}
             selectWaveType={selectWaveType}
             onWaveLerpChange={handleWaveLerpChange}
             onWaveAPulseWidthChange={handleWaveAPulseWidthChange}
@@ -535,6 +543,9 @@ function App() {
             padDragRef={padDragRef}
             applyPadMotion={applyPadMotion}
             tuningLength={tuningLength}
+            beginContinuousEdit={beginContinuousEdit}
+            commitContinuousEdit={commitContinuousEdit}
+            cancelContinuousEdit={cancelContinuousEdit}
           />
         ) : null}
       />

@@ -47,7 +47,21 @@ type ModulatorsPanelProps = {
     precision: 'fine' | 'coarse'
   ) => void
   tuningLength: number
+  beginContinuousEdit: () => boolean
+  commitContinuousEdit: () => void
+  cancelContinuousEdit: () => void
 }
+
+const RANGE_ADJUSTMENT_KEYS = new Set([
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'End',
+  'Home',
+  'PageDown',
+  'PageUp',
+])
 
 const formatSignedAmount = (value: number): string => {
   if (Math.abs(value) < 0.005) {
@@ -72,6 +86,9 @@ function WaveSelectControl({
   pulseWidth,
   setPulseWidth,
   selectWaveType,
+  beginContinuousEdit,
+  commitContinuousEdit,
+  cancelContinuousEdit,
 }: {
   wave: 'a' | 'b'
   label: string
@@ -79,6 +96,9 @@ function WaveSelectControl({
   pulseWidth: number
   setPulseWidth: (value: number) => void
   selectWaveType: (wave: 'a' | 'b', waveType: WaveType) => void
+  beginContinuousEdit: () => boolean
+  commitContinuousEdit: () => void
+  cancelContinuousEdit: () => void
 }) {
   return (
     <div className="modRailWaveSelect" role="radiogroup" aria-label={`${label} type`}>
@@ -109,6 +129,16 @@ function WaveSelectControl({
             step={0.01}
             value={pulseWidth}
             onChange={(event) => setPulseWidth(Number(event.target.value))}
+            onPointerDown={() => beginContinuousEdit()}
+            onPointerUp={commitContinuousEdit}
+            onPointerCancel={cancelContinuousEdit}
+            onKeyDown={(event) => {
+              if (RANGE_ADJUSTMENT_KEYS.has(event.key) && !event.repeat) beginContinuousEdit()
+            }}
+            onKeyUp={(event) => {
+              if (RANGE_ADJUSTMENT_KEYS.has(event.key)) commitContinuousEdit()
+            }}
+            onBlur={cancelContinuousEdit}
           />
           <span className="mono">{pulseWidth.toFixed(2)}</span>
         </label>
@@ -131,6 +161,9 @@ export function ModulatorsPanel({
   padDragRef,
   applyPadMotion,
   tuningLength,
+  beginContinuousEdit,
+  commitContinuousEdit,
+  cancelContinuousEdit,
 }: ModulatorsPanelProps) {
   return (
     <section className="modulatorRail" aria-label="Modulator rail">
@@ -156,6 +189,9 @@ export function ModulatorsPanel({
           pulseWidth={activeModulator.waveAPulseWidth}
           setPulseWidth={onWaveAPulseWidthChange}
           selectWaveType={selectWaveType}
+          beginContinuousEdit={beginContinuousEdit}
+          commitContinuousEdit={commitContinuousEdit}
+          cancelContinuousEdit={cancelContinuousEdit}
         />
         <label className="modRailLerp">
           <span className="modRailLerpValue mono">{Math.round(activeModulator.waveLerp * 100)}%</span>
@@ -167,6 +203,16 @@ export function ModulatorsPanel({
             step={0.01}
             value={activeModulator.waveLerp}
             onChange={(event) => onWaveLerpChange(Number(event.target.value))}
+            onPointerDown={() => beginContinuousEdit()}
+            onPointerUp={commitContinuousEdit}
+            onPointerCancel={cancelContinuousEdit}
+            onKeyDown={(event) => {
+              if (RANGE_ADJUSTMENT_KEYS.has(event.key) && !event.repeat) beginContinuousEdit()
+            }}
+            onKeyUp={(event) => {
+              if (RANGE_ADJUSTMENT_KEYS.has(event.key)) commitContinuousEdit()
+            }}
+            onBlur={cancelContinuousEdit}
             aria-label="Wave lerp"
           />
         </label>
@@ -177,6 +223,9 @@ export function ModulatorsPanel({
           pulseWidth={activeModulator.waveBPulseWidth}
           setPulseWidth={onWaveBPulseWidthChange}
           selectWaveType={selectWaveType}
+          beginContinuousEdit={beginContinuousEdit}
+          commitContinuousEdit={commitContinuousEdit}
+          cancelContinuousEdit={cancelContinuousEdit}
         />
       </div>
       <div className="modTargetChipList">
@@ -207,6 +256,7 @@ export function ModulatorsPanel({
                   if (event.target instanceof HTMLElement && event.target.closest('.modTargetChipLed')) {
                     return
                   }
+                  if (!beginContinuousEdit()) return
                   const mode = event.metaKey || event.ctrlKey ? 'center' : 'amount'
                   padDragRef.current = {
                     pointerId: event.pointerId,
@@ -243,11 +293,13 @@ export function ModulatorsPanel({
                 onPointerUp={(event) => {
                   if (padDragRef.current?.pointerId === event.pointerId) {
                     padDragRef.current = null
+                    commitContinuousEdit()
                   }
                 }}
                 onPointerCancel={(event) => {
                   if (padDragRef.current?.pointerId === event.pointerId) {
                     padDragRef.current = null
+                    cancelContinuousEdit()
                   }
                 }}
                 title="Drag up/down for amount. Shift=fine. Cmd/Ctrl+drag moves center."

@@ -16,7 +16,7 @@ All messages use:
 
 ```ts
 type Envelope = {
-  protocol: 'xen.bridge.v2'
+  protocol: 'xen.bridge.v4'
   type: 'request' | 'response' | 'event'
   name: string
   request_id?: string
@@ -42,15 +42,15 @@ Start with `session.hello`:
 
 ```ts
 type SessionHelloRequest = {
-  protocol: 'xen.bridge.v2'
+  protocol: 'xen.bridge.v4'
   frontend_app: string
   frontend_version: string
 }
 
 type SessionHello = {
-  protocol: 'xen.bridge.v2'
+  protocol: 'xen.bridge.v4'
   plugin_version: string
-  project_schema_version: 1
+  project_schema_version: 4
   library_schema_version: 1
   catalog: Catalog
   keymap: KeymapResource
@@ -63,27 +63,20 @@ events; the backend emits events only after revisions change.
 ## Project State
 
 `state.get`, `state.changed`, and `command.execute` responses all use project schema
-`1`:
+`4`:
 
 ```ts
 type ProjectSnapshot = {
-  schema_version: 1
+  schema_version: 4
   history_entry_id: number
   project_revision: number
+  preview_active: boolean
   project: {
-    measure: {
-      cell: Cell
-      time_signature: { numerator: number; denominator: number }
-    }
-    pitch: {
-      tuning: {
-        name: string
-        definition: { intervals: number[]; octave: number }
-      }
-      scale: { source_id: string | null; definition: ScaleDefinition } | null
-      transposition: number
-      translation_direction: 'up' | 'down'
-      base_frequency: number
+    sequence_bank: { next_id: number; sequences: SequenceEntry[] }
+    composition: {
+      columns: CompositionColumn[]
+      rows: CompositionRow[]
+      loop_region?: { start_column: number; end_column: number }
     }
   }
 }
@@ -94,7 +87,8 @@ state. Snapshots must not overwrite that state.
 
 Use `project_revision` for freshness. `history_entry_id` identifies the history entry
 and can remain unchanged when `project_revision` advances. Ignore older project
-revisions and treat equal revisions as duplicates.
+revisions. Equal revisions are duplicates unless `preview_active` changed; preview
+begin/end can change that flag without changing project content.
 
 Selection is submitted with commands and reconciled locally:
 
@@ -118,12 +112,13 @@ type CommandExecuteRequest = {
   command: string
   context: {
     expected_project_revision: number
+    preview_id?: string
     selection: Selection
-    active_measure_target: {
+    cursor: {
       row_index: number
       column_index: number
-      measure_id: number
-    } | null
+      sequence_id: number | null
+    }
   }
 }
 
@@ -141,6 +136,30 @@ The frontend sends the current project revision and reconciled selection with ev
 command. Always ingest the response snapshot through the normal project-ingestion
 path. If `suggested_selection` is non-null and resolves after the snapshot installs,
 adopt it; otherwise keep the current selection if it still resolves.
+
+## Preview Transactions
+
+Continuous edits use a globally visible staged transaction:
+
+```ts
+preview.begin({ expected_project_revision })
+// => { status, preview_id: string | null, snapshot }
+
+command.execute({
+  command,
+  context: { expected_project_revision, preview_id, selection, cursor },
+})
+
+preview.commit({ preview_id, expected_project_revision })
+preview.cancel({ preview_id, expected_project_revision })
+// => { status, snapshot }
+```
+
+Ingest every response snapshot before forming the next request. Serialize updates and
+queue commit/cancel behind them. Pending absolute commands may be replaced with their
+latest value; relative commands remain ordered and accumulate. A failed begin has a
+null `preview_id`. Error-level statuses are application failures even when the bridge
+envelope itself is valid.
 
 The command catalog comes from `session.hello.payload.catalog`:
 

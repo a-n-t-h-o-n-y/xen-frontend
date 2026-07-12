@@ -8,6 +8,8 @@ import {
   keymapRevisionSchema,
   librarySnapshotSchema,
   projectSnapshotSchema,
+  previewBeginResponseSchema,
+  previewEndResponseSchema,
   selectionSchema,
   sessionHelloSchema,
 } from '../domain/contracts'
@@ -35,6 +37,7 @@ export type CommandExecuteRequest = {
   command: string
   context: {
     expected_project_revision: number
+    preview_id?: string | undefined
     selection: SelectionDto
     cursor: {
       row_index: number
@@ -42,6 +45,14 @@ export type CommandExecuteRequest = {
       sequence_id: number | null
     }
   }
+}
+
+export type PreviewBeginRequest = {
+  expected_project_revision: number
+}
+
+export type PreviewEndRequest = PreviewBeginRequest & {
+  preview_id: string
 }
 
 export type KeymapWriteRequest = {
@@ -77,6 +88,18 @@ export type BridgeMethodMap = {
   'command.execute': {
     request: CommandExecuteRequest
     response: CommandExecuteResponseDto
+  }
+  'preview.begin': {
+    request: PreviewBeginRequest
+    response: import('../domain/contracts').PreviewBeginResponseDto
+  }
+  'preview.commit': {
+    request: PreviewEndRequest
+    response: import('../domain/contracts').PreviewEndResponseDto
+  }
+  'preview.cancel': {
+    request: PreviewEndRequest
+    response: import('../domain/contracts').PreviewEndResponseDto
   }
   'keymap.read': {
     request: EmptyRequest
@@ -125,6 +148,9 @@ const responseSchemas = {
   'state.get': projectSnapshotSchema,
   'library.get': librarySnapshotSchema,
   'command.execute': commandResponseSchema,
+  'preview.begin': previewBeginResponseSchema,
+  'preview.commit': previewEndResponseSchema,
+  'preview.cancel': previewEndResponseSchema,
   'keymap.read': keymapStorageResourceSchema,
   'keymap.write': keymapStorageResourceSchema,
   'keymap.delete': keymapStorageResourceSchema,
@@ -145,6 +171,7 @@ const requestSchemas = {
     command: z.string(),
     context: z.object({
       expected_project_revision: z.number().int().nonnegative(),
+      preview_id: z.string().min(1).optional(),
       selection: selectionSchema,
       cursor: z.object({
         row_index: z.number().int().nonnegative(),
@@ -152,6 +179,17 @@ const requestSchemas = {
         sequence_id: z.number().int().nonnegative().nullable(),
       }),
     }),
+  }),
+  'preview.begin': z.object({
+    expected_project_revision: z.number().int().nonnegative(),
+  }),
+  'preview.commit': z.object({
+    preview_id: z.string().min(1),
+    expected_project_revision: z.number().int().nonnegative(),
+  }),
+  'preview.cancel': z.object({
+    preview_id: z.string().min(1),
+    expected_project_revision: z.number().int().nonnegative(),
   }),
   'keymap.read': z.object({}).strict(),
   'keymap.write': keymapWriteRequestSchema,
@@ -164,6 +202,9 @@ const defaultTimeouts = {
   'state.get': 5_000,
   'library.get': 5_000,
   'command.execute': 15_000,
+  'preview.begin': 15_000,
+  'preview.commit': 15_000,
+  'preview.cancel': 15_000,
   'keymap.read': 5_000,
   'keymap.write': 15_000,
   'keymap.delete': 15_000,

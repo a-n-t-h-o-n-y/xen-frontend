@@ -127,6 +127,7 @@ export type ActiveMeasureTarget = CompositionSelection & {
 export type ProjectSnapshot = {
   revision: number
   historyEntryId: number
+  previewActive: boolean
   measure: Measure
   measureBank: MeasureBank | null
   composition: Composition | null

@@ -19,7 +19,11 @@ export const ingestProjectSnapshot = (
   selection: Selection,
   activeMeasureTarget: ActiveMeasureTarget | null = null
 ): ProjectIngestion => {
-  if (current && incoming.revision <= current.revision) {
+  if (
+    current &&
+    (incoming.revision < current.revision ||
+      (incoming.revision === current.revision && incoming.previewActive === current.previewActive))
+  ) {
     return { snapshot: current, selection, installed: false }
   }
   return {

@@ -92,6 +92,7 @@ export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot =>
   return {
     revision: snapshot.project_revision,
     historyEntryId: snapshot.history_entry_id,
+    previewActive: snapshot.preview_active,
     measure: arrangedMeasureFromDto(snapshot),
     measureBank: {
           nextId: snapshot.project.sequence_bank.next_id,

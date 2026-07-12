@@ -13,6 +13,7 @@ const projectFixture = (): ProjectSnapshotDto => ({
   schema_version: 4,
   history_entry_id: 2,
   project_revision: 3,
+  preview_active: false,
   project: {
     sequence_bank: {
       next_id: 2,
@@ -49,7 +50,7 @@ const responseEnvelope = (
   requestId: string,
   payload: Record<string, unknown>
 ) => ({
-  protocol: 'xen.bridge.v3',
+  protocol: 'xen.bridge.v4',
   type: 'response',
   name,
   request_id: requestId,
@@ -80,7 +81,7 @@ describe('BridgeClient', () => {
 
     expect(payload.project_revision).toBe(3)
     expect(JSON.parse(rawRequest)).toEqual({
-      protocol: 'xen.bridge.v3',
+      protocol: 'xen.bridge.v4',
       type: 'request',
       name: 'state.get',
       request_id: 'req-test',
@@ -113,6 +114,55 @@ describe('BridgeClient', () => {
       column_index: 0,
       sequence_id: null,
     })
+  })
+
+  it('serializes preview lifecycle requests and preview command context', async () => {
+    const requests: Array<Record<string, unknown>> = []
+    const client = createClient(async (requestJson) => {
+      const request = JSON.parse(requestJson) as { name: string }
+      requests.push(request as unknown as Record<string, unknown>)
+      if (request.name === 'preview.begin') {
+        return responseEnvelope('preview.begin', 'req-test', {
+          status: { level: 'info', message: 'Preview started.' },
+          preview_id: 'preview-1',
+          snapshot: { ...projectFixture(), preview_active: true },
+        })
+      }
+      if (request.name === 'command.execute') {
+        return responseEnvelope('command.execute', 'req-test', {
+          status: { level: 'info', message: 'ok' },
+          suggested_selection: null,
+          snapshot: { ...projectFixture(), preview_active: true },
+        })
+      }
+      return responseEnvelope(request.name, 'req-test', {
+        status: { level: 'info', message: 'Preview finished.' },
+        snapshot: projectFixture(),
+      })
+    })
+
+    await client.request('preview.begin', { expected_project_revision: 3 })
+    await client.request('command.execute', {
+      command: 'set key 4',
+      context: {
+        expected_project_revision: 3,
+        preview_id: 'preview-1',
+        selection: { path: [] },
+        cursor: { row_index: 0, column_index: 0, sequence_id: null },
+      },
+    })
+    await client.request('preview.commit', {
+      preview_id: 'preview-1',
+      expected_project_revision: 4,
+    })
+
+    expect(requests.map((request) => request.name)).toEqual([
+      'preview.begin',
+      'command.execute',
+      'preview.commit',
+    ])
+    expect((requests[1]?.payload as { context: { preview_id: string } }).context.preview_id)
+      .toBe('preview-1')
   })
 
   it('serializes instance listener channels in session binding requests', async () => {
