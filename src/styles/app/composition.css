@@ -14,12 +14,13 @@
 .compositionBackdrop {
   position: absolute;
   z-index: -2;
-  inset: 0;
+  inset: -35%;
   background:
     radial-gradient(circle at 30% 34%, rgb(57 82 116 / 24%), transparent 35%),
     radial-gradient(circle at 70% 66%, rgb(48 103 92 / 18%), transparent 38%),
     radial-gradient(circle at 55% 42%, rgb(109 75 105 / 11%), transparent 30%),
     rgb(12 15 22);
+  animation: composition-drift 32s ease-in-out infinite alternate;
 }
 
 .compositionBackdrop::after {
@@ -29,6 +30,11 @@
   background-image: radial-gradient(rgb(255 255 255 / 3%) 0.7px, transparent 0.7px);
   background-size: 7px 7px;
   opacity: 0.35;
+}
+
+@keyframes composition-drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(3%, 2%, 0) scale(1.06); }
 }
 
 .compositionViewport {
@@ -319,6 +325,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .compositionBackdrop { animation: none; }
   .compositionCell { transition: none; }
 }
 
