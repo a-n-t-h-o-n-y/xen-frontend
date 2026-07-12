@@ -1,8 +1,21 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { defaultKeymapDocument } from '../domain/defaultKeymap'
+import { projectFromDto } from '../domain/mappers'
+import { arrangedProjectFixture } from '../domain/testFixtures'
+import { usesMetaForCommand } from '../platform'
 import { useKeyboardController } from './useKeyboardController'
-import type { EditorState, KeymapResource } from '../domain/models'
+import type { EditorState, KeymapResource, ProjectSnapshot } from '../domain/models'
+
+const deferred = () => {
+  let resolve!: () => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
 
 const createResource = (): KeymapResource => {
   const bindings = structuredClone(defaultKeymapDocument.bindings)
@@ -19,9 +32,15 @@ const createResource = (): KeymapResource => {
 const renderController = (
   keymap: KeymapResource,
   openCommandPalette = vi.fn(),
-  executeBackendCommand = vi.fn().mockResolvedValue(undefined)
+  executeBackendCommand = vi.fn().mockResolvedValue(undefined),
+  options: {
+    workspaceView?: 'sequencer' | 'composition'
+    projectRef?: { current: ProjectSnapshot | null }
+    compositionSelectionRef?: { current: { rowIndex: number; columnIndex: number } }
+  } = {}
 ) => {
   const editorState: EditorState = { selection: { path: [] }, inputMode: 'pitch' }
+  const workspaceView = options.workspaceView ?? 'sequencer'
   const args: Parameters<typeof useKeyboardController>[0] = {
     bridgeUnavailableMessage: null,
     isProjectReady: true,
@@ -29,14 +48,16 @@ const renderController = (
     isQuickAccessOpen: false,
     openCommandPalette,
     executeBackendCommand,
-    projectRef: { current: null },
+    projectRef: options.projectRef ?? { current: null },
     editorStateRef: { current: editorState },
     activeMeasureTargetRef: { current: null },
     keymapRef: { current: keymap },
     installEditorState: vi.fn(),
-    workspaceView: 'sequencer',
-    workspaceViewRef: { current: 'sequencer' },
-    compositionSelectionRef: { current: { rowIndex: 0, columnIndex: 0 } },
+    workspaceView,
+    workspaceViewRef: { current: workspaceView },
+    compositionSelectionRef: options.compositionSelectionRef ?? {
+      current: { rowIndex: 0, columnIndex: 0 },
+    },
     installCompositionSelection: vi.fn(),
     setWorkspaceView: vi.fn(),
     editSelectedCompositionCell: vi.fn(),
@@ -54,6 +75,45 @@ const renderController = (
 }
 
 describe('useKeyboardController', () => {
+  it('routes conventional undo and redo accelerators in both workspace views', async () => {
+    const primaryModifier = usesMetaForCommand ? { metaKey: true } : { ctrlKey: true }
+
+    for (const workspaceView of ['sequencer', 'composition'] as const) {
+      const execute = vi.fn().mockResolvedValue(undefined)
+      const rendered = renderController(createResource(), vi.fn(), execute, { workspaceView })
+
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ...primaryModifier }))
+        window.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'z',
+          shiftKey: true,
+          ...primaryModifier,
+        }))
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ...primaryModifier }))
+      })
+
+      expect(execute.mock.calls.map((call) => call[0])).toEqual(['undo', 'redo', 'redo'])
+      rendered.unmount()
+    }
+  })
+
+  it('leaves native text undo to editable controls', () => {
+    const execute = vi.fn().mockResolvedValue(undefined)
+    const rendered = renderController(createResource(), vi.fn(), execute)
+    const input = document.createElement('input')
+    document.body.append(input)
+
+    input.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'z',
+      bubbles: true,
+      ...(usesMetaForCommand ? { metaKey: true } : { ctrlKey: true }),
+    }))
+
+    expect(execute).not.toHaveBeenCalled()
+    input.remove()
+    rendered.unmount()
+  })
+
   it('opens Quick Access through the configured shifted-colon binding', () => {
     const openCommandPalette = vi.fn()
     const rendered = renderController(createResource(), openCommandPalette)
@@ -118,6 +178,57 @@ describe('useKeyboardController', () => {
     })
 
     expect(execute).toHaveBeenCalledWith('split 3')
+    rendered.unmount()
+  })
+
+  it('keeps only the latest pending composition name and clears it after ingestion', async () => {
+    const fixture = arrangedProjectFixture()
+    const firstMeasure = fixture.project.sequence_bank.sequences[0]
+    if (firstMeasure) firstMeasure.name = 'Restored'
+    fixture.project.composition.rows[0]!.cells[1] = 1
+    const projectRef = { current: projectFromDto(fixture) as ProjectSnapshot | null }
+    const selectionRef = { current: { rowIndex: 0, columnIndex: 1 } }
+    const first = deferred()
+    const second = deferred()
+    const execute = vi.fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+    const rendered = renderController(createResource(), vi.fn(), execute, {
+      workspaceView: 'composition',
+      projectRef,
+      compositionSelectionRef: selectionRef,
+    })
+
+    const dispatchClipboardEvent = (
+      type: 'copy' | 'paste',
+      text: string,
+      setData = vi.fn()
+    ): ReturnType<typeof vi.fn> => {
+      const event = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperty(event, 'clipboardData', {
+        value: { getData: () => text, setData },
+      })
+      window.dispatchEvent(event)
+      return setData
+    }
+
+    act(() => {
+      dispatchClipboardEvent('paste', 'First')
+      dispatchClipboardEvent('paste', 'Second')
+    })
+    first.reject(new Error('First assignment failed'))
+    await act(() => first.promise.catch(() => undefined))
+
+    const pendingCopy = vi.fn()
+    act(() => dispatchClipboardEvent('copy', '', pendingCopy))
+    expect(pendingCopy).toHaveBeenCalledWith('text/plain', 'Second')
+
+    second.resolve()
+    await act(() => second.promise)
+
+    const restoredCopy = vi.fn()
+    act(() => dispatchClipboardEvent('copy', '', restoredCopy))
+    expect(restoredCopy).toHaveBeenCalledWith('text/plain', 'Restored')
     rendered.unmount()
   })
 })

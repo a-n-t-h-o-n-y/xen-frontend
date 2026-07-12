@@ -88,6 +88,12 @@ export function useKeyboardController({
   const getCompositionCellKey = (selection: CompositionSelection): string =>
     `${selection.rowIndex}:${selection.columnIndex}`
 
+  const clearOptimisticCompositionName = useCallback((key: string, name: string): void => {
+    if (optimisticCompositionCellNamesRef.current.get(key) === name) {
+      optimisticCompositionCellNamesRef.current.delete(key)
+    }
+  }, [])
+
   const getSelectedCompositionMeasureName = useCallback((): string | null => {
     const project = projectRef.current
     const composition = project?.composition
@@ -115,15 +121,18 @@ export function useKeyboardController({
     selection: CompositionSelection,
     measureName: string
   ): void => {
-    optimisticCompositionCellNamesRef.current.set(getCompositionCellKey(selection), measureName)
+    const key = getCompositionCellKey(selection)
+    optimisticCompositionCellNamesRef.current.set(key, measureName)
     void executeBackendCommand(
       compositionCellAssign(selection.rowIndex, selection.columnIndex, measureName)
-    ).catch((error: unknown) => {
-      optimisticCompositionCellNamesRef.current.delete(getCompositionCellKey(selection))
+    ).then(() => {
+      clearOptimisticCompositionName(key, measureName)
+    }).catch((error: unknown) => {
+      clearOptimisticCompositionName(key, measureName)
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')
     })
-  }, [executeBackendCommand, setStatusLevel, setStatusMessage])
+  }, [clearOptimisticCompositionName, executeBackendCommand, setStatusLevel, setStatusMessage])
 
   const clearCompositionSelection = useCallback((selection: CompositionSelection): void => {
     optimisticCompositionCellNamesRef.current.delete(getCompositionCellKey(selection))

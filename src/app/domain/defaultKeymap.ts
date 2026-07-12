@@ -37,6 +37,12 @@ const add = (bindingTrigger: KeymapTrigger, target: KeymapTarget, context = 'seq
   bindings[context] = contextBindings
 }
 
+const addHistoryBindings = (context = 'sequencer'): void => {
+  add(trigger('z', false, true), command('undo'), context)
+  add(trigger('z', true, true), command('redo'), context)
+  add(trigger('y', false, true), command('redo'), context)
+}
+
 const move = (direction: 'left' | 'right' | 'up' | 'down'): KeymapTarget => action({
   type: 'ui_action',
   action: 'selection.move',
@@ -64,8 +70,7 @@ add(trigger('c', false, true), emptyAction('edit.copy'))
 add(trigger('x', false, true), emptyAction('edit.cut'))
 add(trigger('v', false, true), emptyAction('edit.paste'))
 add(trigger('d', false, true), command('duplicate'))
-add(trigger('z', false, true), command('undo'))
-add(trigger('y', false, true), command('redo'))
+addHistoryBindings()
 add(trigger('.'), command('again'))
 
 for (const [key, direction] of [
@@ -149,6 +154,7 @@ for (const [key, name, shift, commandModifier] of [
   ['[', 'composition.loop.set_start', false, false],
   [']', 'composition.loop.set_end', false, false],
 ] as const) add(trigger(key, shift, commandModifier), emptyAction(name), 'composition')
+addHistoryBindings('composition')
 add(trigger('Tab'), emptyAction('workspace.view.sequencer'), 'composition')
 
 for (const [context, entries] of [
