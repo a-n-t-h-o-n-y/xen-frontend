@@ -1,7 +1,7 @@
 import { useCallback, useReducer, useRef } from 'react'
 import { MAX_COMMAND_HISTORY } from '../constants'
-import { recognizeCommandIds } from '../domain/commandCompletion'
 import {
+  commandInvocationItemId,
   consumePaletteScopePrefix,
   type PaletteItem,
   type PaletteScope,
@@ -273,8 +273,12 @@ export function useQuickAccessPalette({
       return
     }
     dispatch({ type: 'record_command', command })
-    const commandIds = recognizeCommandIds(command, commands)
-    await runBackendCommand(command, commandIds.map((id) => `command:${id}`))
+    const exactCommand = commands.find((entry) =>
+      entry.id === command && entry.arguments.length === 0
+    )
+    await runBackendCommand(command, [
+      exactCommand ? `command:${exactCommand.id}` : commandInvocationItemId(command),
+    ])
   }, [close, commands, runBackendCommand, state.query])
 
   return {

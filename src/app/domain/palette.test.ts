@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildCommandInvocationItems,
   buildPaletteItems,
+  commandInvocationItemId,
   consumePaletteScopePrefix,
   getPaletteSections,
   rankPaletteItems,
@@ -91,7 +93,9 @@ describe('quick access palette domain', () => {
     const sections = getPaletteSections(items, 'all', '', [recentId])
 
     expect(sections[0]).toMatchObject({ id: 'recent', items: [{ id: recentId }] })
-    expect(sections.some((section) => section.id === 'commands')).toBe(true)
+    expect(sections[1]).toMatchObject({ id: 'suggested' })
+    expect(sections[0]!.items.length + sections[1]!.items.length).toBeLessThanOrEqual(6)
+    expect(sections[1]!.items.length).toBeGreaterThan(0)
     expect(consumePaletteScopePrefix('> set vel')).toEqual({
       scope: 'commands',
       query: 'set vel',
@@ -100,5 +104,36 @@ describe('quick access palette domain', () => {
       scope: 'tunings',
       query: 'edo',
     })
+  })
+
+  it('represents exact command invocations as rerunnable recent items', () => {
+    const id = commandInvocationItemId('set velocity 0.75')
+    const invocationItems = buildCommandInvocationItems([id])
+    const sections = getPaletteSections(
+      [...createItems(), ...invocationItems],
+      'all',
+      '',
+      [id]
+    )
+
+    expect(sections[0]).toMatchObject({
+      id: 'recent',
+      items: [{
+        id,
+        kind: 'commandInvocation',
+        label: 'set velocity 0.75',
+        backendCommand: 'set velocity 0.75',
+      }],
+    })
+  })
+
+  it('shows diverse suggestions when there is no recent history', () => {
+    const sections = getPaletteSections(createItems(), 'all', '', [])
+    const suggested = sections.find((section) => section.id === 'suggested')
+
+    expect(sections.some((section) => section.id === 'recent')).toBe(false)
+    expect(suggested?.items.length).toBeGreaterThan(0)
+    expect(suggested?.items.length).toBeLessThanOrEqual(6)
+    expect(new Set(suggested?.items.map((item) => item.kind)).size).toBeGreaterThan(2)
   })
 })

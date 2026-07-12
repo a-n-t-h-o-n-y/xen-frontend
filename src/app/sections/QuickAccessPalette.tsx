@@ -3,10 +3,13 @@ import { createPortal } from 'react-dom'
 import {
   analyzeCommandCompletion,
   applyCommandCompletion,
+  recognizeCommandIds,
 } from '../domain/commandCompletion'
 import { findKeymapBinding } from '../domain/keymap'
 import {
+  buildCommandInvocationItems,
   buildPaletteItems,
+  commandFromInvocationItemId,
   getPaletteSections,
   type CommandPaletteItem,
   type PaletteItem,
@@ -45,7 +48,7 @@ const scopes: Array<{ id: PaletteScope; label: string }> = [
 ]
 
 const itemBadge = (item: PaletteItem): string => {
-  if (item.kind === 'command') return 'Command'
+  if (item.kind === 'command' || item.kind === 'commandInvocation') return 'Command'
   if (item.kind === 'file') return 'Measure'
   if (item.kind === 'tuning') return 'Tuning'
   return 'Scale'
@@ -73,17 +76,30 @@ export function QuickAccessPalette({
     library: librarySnapshot,
     activeTuningName,
     activeScaleId,
-  }), [activeScaleId, activeTuningName, commands, librarySnapshot])
+  }).concat(buildCommandInvocationItems(state.recentItemIds)), [
+    activeScaleId,
+    activeTuningName,
+    commands,
+    librarySnapshot,
+    state.recentItemIds,
+  ])
+
+  const recentCommandIds = useMemo(() => {
+    const ids = state.recentItemIds.flatMap((id) => {
+      if (id.startsWith('command:')) return [id.slice('command:'.length)]
+      const command = commandFromInvocationItemId(id)
+      return command ? recognizeCommandIds(command, commands) : []
+    })
+    return ids.filter((id, index) => ids.indexOf(id) === index)
+  }, [commands, state.recentItemIds])
 
   const completion = useMemo(
     () => analyzeCommandCompletion(
       state.query,
       commands,
-      state.recentItemIds
-        .filter((id) => id.startsWith('command:'))
-        .map((id) => id.slice('command:'.length))
+      recentCommandIds
     ),
-    [commands, state.query, state.recentItemIds]
+    [commands, recentCommandIds, state.query]
   )
   const commandCandidates = state.mode === 'command' && !state.isCompletionDismissed &&
     !state.isHistoryNavigationFrozen && completion.mode === 'commandSearch'
@@ -101,11 +117,38 @@ export function QuickAccessPalette({
     active: false,
     command: candidate.command,
   }))
+  const commandHomeVisible = state.mode === 'command' && !state.query.trim() &&
+    !state.isHistoryNavigationFrozen
+  const commandHomeSections = commandHomeVisible
+    ? (() => {
+        const recentItems = state.recentItemIds
+          .map((id) => items.find((item) => item.id === id))
+          .filter((item): item is PaletteItem =>
+            item !== undefined &&
+            (item.kind === 'command' || item.kind === 'commandInvocation')
+          )
+          .slice(0, 6)
+        const recentSet = new Set(recentItems.map((item) => item.id))
+        const suggestedItems = commandItems
+          .filter((item) => !recentSet.has(item.id))
+          .slice(0, Math.max(0, 6 - recentItems.length))
+        return [
+          ...(recentItems.length > 0
+            ? [{ id: 'recent-commands', label: 'Recent', items: recentItems }]
+            : []),
+          ...(suggestedItems.length > 0
+            ? [{ id: 'suggested-commands', label: 'Suggested', items: suggestedItems }]
+            : []),
+        ]
+      })()
+    : []
   const browseSections = state.mode === 'browse'
     ? getPaletteSections(items, state.scope as Exclude<PaletteScope, 'commands'>, state.query, state.recentItemIds)
     : []
   const visibleItems = state.mode === 'command'
-    ? commandItems
+    ? commandHomeVisible
+      ? commandHomeSections.flatMap((section) => section.items)
+      : commandItems
     : browseSections.flatMap((section) => section.items)
   const selectedIndex = Math.max(0, visibleItems.findIndex((item) => item.id === state.selectedId))
   const selectedItem = visibleItems[selectedIndex] ?? null
@@ -136,11 +179,19 @@ export function QuickAccessPalette({
   }
 
   const acceptCommandCompletion = (item = selectedItem): void => {
+    if (item?.kind === 'commandInvocation') {
+      controller.setInput(item.backendCommand)
+      return
+    }
     if (!item || item.kind !== 'command') return
     controller.setInput(applyCommandCompletion(state.query, completion.segment, item.command))
   }
 
   const activateCommandSelection = async (): Promise<void> => {
+    if (selectedItem?.kind === 'commandInvocation') {
+      await controller.activateItem(selectedItem)
+      return
+    }
     if (!selectedItem || selectedItem.kind !== 'command') {
       await controller.submitCommand()
       return
@@ -383,7 +434,14 @@ export function QuickAccessPalette({
         {state.error ? <div className="quickAccessError" role="alert">{state.error}</div> : null}
         <div id="quick-access-results" className="quickAccessResults" role="listbox">
           {state.mode === 'command' ? (
-            commandItems.length > 0 ? commandItems.map(renderOption) : (
+            commandHomeVisible && commandHomeSections.length > 0 ? (
+              commandHomeSections.map((section) => (
+                <section className="quickAccessSection" key={section.id}>
+                  <h2 className="quickAccessSectionLabel">{section.label}</h2>
+                  {section.items.map(renderOption)}
+                </section>
+              ))
+            ) : commandItems.length > 0 ? commandItems.map(renderOption) : (
               <p className="quickAccessEmpty">Press Enter to run the command.</p>
             )
           ) : browseSections.some((section) => section.items.length > 0) ? (

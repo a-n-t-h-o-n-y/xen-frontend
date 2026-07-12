@@ -19,6 +19,11 @@ export type CommandPaletteItem = PaletteItemBase & {
   command: CommandReferenceEntry
 }
 
+export type CommandInvocationPaletteItem = PaletteItemBase & {
+  kind: 'commandInvocation'
+  backendCommand: string
+}
+
 export type FilePaletteItem = PaletteItemBase & {
   kind: 'file'
   fileKind: 'cell' | 'composition'
@@ -37,6 +42,7 @@ export type ScalePaletteItem = PaletteItemBase & {
 
 export type PaletteItem =
   | CommandPaletteItem
+  | CommandInvocationPaletteItem
   | FilePaletteItem
   | TuningPaletteItem
   | ScalePaletteItem
@@ -82,6 +88,42 @@ const commandItems = (commands: CommandReferenceEntry[]): CommandPaletteItem[] =
     active: false,
     command,
   }))
+
+const COMMAND_INVOCATION_PREFIX = 'command-invocation:'
+
+export const commandInvocationItemId = (command: string): string =>
+  `${COMMAND_INVOCATION_PREFIX}${encodeURIComponent(command)}`
+
+export const buildCommandInvocationItems = (
+  recentItemIds: string[]
+): CommandInvocationPaletteItem[] => recentItemIds.flatMap((id) => {
+  if (!id.startsWith(COMMAND_INVOCATION_PREFIX)) return []
+  try {
+    const command = decodeURIComponent(id.slice(COMMAND_INVOCATION_PREFIX.length))
+    if (!command.trim()) return []
+    return [{
+      kind: 'commandInvocation' as const,
+      id,
+      label: command,
+      detail: 'Run this command again',
+      keywords: ['recent', 'command'],
+      searchText: `${command} recent command`,
+      active: false,
+      backendCommand: command,
+    }]
+  } catch {
+    return []
+  }
+})
+
+export const commandFromInvocationItemId = (id: string): string | null => {
+  if (!id.startsWith(COMMAND_INVOCATION_PREFIX)) return null
+  try {
+    return decodeURIComponent(id.slice(COMMAND_INVOCATION_PREFIX.length)) || null
+  } catch {
+    return null
+  }
+}
 
 const libraryFileItems = (
   entries: LibrarySnapshot['cells'],
@@ -172,7 +214,7 @@ export const buildPaletteItems = ({
 ]
 
 export const scopeForItem = (item: PaletteItem): Exclude<PaletteScope, 'all'> => {
-  if (item.kind === 'command') return 'commands'
+  if (item.kind === 'command' || item.kind === 'commandInvocation') return 'commands'
   if (item.kind === 'file') return 'files'
   if (item.kind === 'tuning') return 'tunings'
   return 'scales'
@@ -325,9 +367,43 @@ export const getPaletteSections = (
     ? [{ id: 'recent', label: 'Recent', items: recentItems }]
     : []
 
+  const suggestionCount = Math.max(0, 6 - recentItems.length)
+  const suggestionPools = scopeOrder.map((providerScope) =>
+    items.filter((item) =>
+      scopeForItem(item) === providerScope &&
+      !recentSet.has(item.id) &&
+      item.kind !== 'commandInvocation' &&
+      !item.active
+    )
+  )
+  const suggestedItems: PaletteItem[] = []
+  for (let index = 0; suggestedItems.length < suggestionCount; index += 1) {
+    let added = false
+    for (const pool of suggestionPools) {
+      const item = pool[index]
+      if (!item) continue
+      suggestedItems.push(item)
+      added = true
+      if (suggestedItems.length === suggestionCount) break
+    }
+    if (!added) break
+  }
+  if (suggestedItems.length > 0) {
+    sections.push({ id: 'suggested', label: 'Suggested', items: suggestedItems })
+  }
+
+  const homeSet = new Set([
+    ...recentSet,
+    ...suggestedItems.map((item) => item.id),
+  ])
+
   for (const providerScope of scopeOrder) {
     const providerItems = items
-      .filter((item) => scopeForItem(item) === providerScope && !recentSet.has(item.id))
+      .filter((item) =>
+        scopeForItem(item) === providerScope &&
+        !homeSet.has(item.id) &&
+        item.kind !== 'commandInvocation'
+      )
       .slice(0, 4)
     if (providerItems.length > 0) {
       sections.push({

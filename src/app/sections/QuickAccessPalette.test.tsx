@@ -107,6 +107,37 @@ describe('QuickAccessPalette', () => {
     expect(screen.queryByRole('dialog', { name: 'Quick access' })).not.toBeInTheDocument()
   })
 
+  it('offers exact successful command invocations on the empty home state', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<PaletteHarness execute={execute} />)
+
+    await user.click(screen.getByRole('button', { name: 'Open commands' }))
+    const input = screen.getByRole('combobox')
+    await user.type(input, 'set velocity 0.75')
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(execute).toHaveBeenCalledWith('set velocity 0.75'))
+
+    await user.click(screen.getByRole('button', { name: 'Open commands' }))
+    expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument()
+    await user.click(screen.getByRole('option', {
+      name: /Command: set velocity 0\.75\. Run this command again/i,
+    }))
+
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(2))
+    expect(execute).toHaveBeenLastCalledWith('set velocity 0.75')
+  })
+
+  it('shows suggestions instead of an empty recent section without history', async () => {
+    const user = userEvent.setup()
+    render(<PaletteHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Open all' }))
+
+    expect(screen.queryByRole('heading', { name: 'Recent' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Suggested' })).toBeInTheDocument()
+  })
+
   it('preserves command prefixes when smart-activating a completion', async () => {
     const execute = vi.fn().mockResolvedValue(undefined)
     const user = userEvent.setup()
