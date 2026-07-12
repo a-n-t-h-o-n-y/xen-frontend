@@ -167,7 +167,15 @@ export const libraryFixture = (revision = 4): LibrarySnapshotDto => ({
       command: 'load cell "sequence.xen"',
     },
   ],
-  compositions: [],
+  compositions: [
+    {
+      name: 'song.xencomp',
+      relative_path: 'song.xencomp',
+      stem: 'song',
+      path: '/library/content/song.xencomp',
+      command: 'project open "song"',
+    },
+  ],
   tunings: [],
   scales: [
     {

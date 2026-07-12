@@ -248,7 +248,7 @@
   font-weight: 500;
 }
 
-.compositionCellClear {
+.compositionCellUnassign {
   position: absolute;
   top: 0;
   right: 0;
@@ -267,14 +267,14 @@
   transition: opacity 180ms ease, color 180ms ease;
 }
 
-.compositionCell:hover .compositionCellClear,
-.compositionCell-selected .compositionCellClear,
-.compositionCellClear:focus-visible {
+.compositionCell:hover .compositionCellUnassign,
+.compositionCell-selected .compositionCellUnassign,
+.compositionCellUnassign:focus-visible {
   opacity: 1;
 }
 
-.compositionCellClear:hover,
-.compositionCellClear:focus-visible {
+.compositionCellUnassign:hover,
+.compositionCellUnassign:focus-visible {
   color: var(--text-primary);
   outline: none;
 }

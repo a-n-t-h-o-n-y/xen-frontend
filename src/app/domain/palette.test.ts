@@ -69,6 +69,11 @@ describe('quick access palette domain', () => {
       fileKind: 'cell',
       label: 'sequence',
     })
+    expect(items.find((item) => item.kind === 'file' && item.fileKind === 'composition'))
+      .toMatchObject({
+        label: 'song',
+        backendCommand: 'project open "song"',
+      })
     expect(items.find((item) => item.kind === 'tuning')).toMatchObject({
       label: '19edo',
       active: true,

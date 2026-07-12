@@ -83,6 +83,7 @@ describe('DTO to domain mappers', () => {
 
     expect(library.revision).toBe(7)
     expect(library.cells[0]?.relativePath).toBe('sequence.xen')
+    expect(library.compositions[0]?.command).toBe('project open "song"')
     expect(library.tunings).toEqual([])
     expect(library.scales[1]).toMatchObject({
       id: 'scale:major',

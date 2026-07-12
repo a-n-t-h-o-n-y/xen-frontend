@@ -86,12 +86,24 @@ describe('QuickAccessPalette', () => {
     const input = screen.getByRole('combobox')
     expect(input).toHaveFocus()
     expect(screen.getByRole('option', { name: /Sequence: sequence/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Project: song/i })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: /major \[4, 3\]/i })).not.toBeInTheDocument()
 
     await user.type(input, 'scale: major')
     expect(screen.getByRole('button', { name: 'Scales' })).toHaveAttribute('aria-pressed', 'true')
     expect(input).toHaveValue('major')
     expect(screen.getByRole('option', { name: /Scale: major/i })).toBeInTheDocument()
+  })
+
+  it('opens project documents with the backend-provided project command', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<PaletteHarness execute={execute} />)
+
+    await user.click(screen.getByRole('button', { name: 'Open all' }))
+    await user.click(screen.getByRole('option', { name: /Project: song/i }))
+
+    await waitFor(() => expect(execute).toHaveBeenCalledWith('project open "song"'))
   })
 
   it('executes a zero-argument command directly', async () => {

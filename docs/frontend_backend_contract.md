@@ -379,7 +379,7 @@ Composition commands use signed coordinates:
 
 ```text
 composition cell assign <row> <column> <sequence-name>
-composition cell clear <row> <column>
+composition cell unassign <row> <column>
 composition cell move <from-row> <from-column> <to-row> <to-column>
 composition row rename <row> <name>
 composition row channel <row> <channel-id>
@@ -390,7 +390,7 @@ composition loop end <column>
 Assigning at an empty position atomically materializes missing axes. A new row inherits
 the nearest materialized row's channel and a new column copies the nearest materialized
 column; ties prefer the candidate nearest coordinate zero, then the lower coordinate.
-Clearing the last placement on an axis removes that axis metadata. Moving preserves the
+Unassigning the last placement on an axis removes that axis metadata. Moving preserves the
 sequence reference, materializes destination axes before pruning source axes, and fails
 if the source is absent or destination occupied. Row/column insert, delete, move, and
 duplicate commands no longer exist.

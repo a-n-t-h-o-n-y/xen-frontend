@@ -9,7 +9,7 @@ import {
   getSequenceById,
   moveCompositionSelection,
 } from '../domain/composition'
-import { compositionCellAssign, compositionCellClear } from '../domain/commands'
+import { compositionCellAssign, compositionCellUnassign } from '../domain/commands'
 import { moveSelection, projectRootCell } from '../domain/selection'
 import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
@@ -147,7 +147,7 @@ export function useKeyboardController({
   const unassignCompositionSelection = useCallback((selection: CompositionSelection): void => {
     optimisticCompositionCellNamesRef.current.delete(getCompositionCellKey(selection))
     void executeBackendCommand(
-      compositionCellClear(selection.rowCoordinate, selection.columnCoordinate)
+      compositionCellUnassign(selection.rowCoordinate, selection.columnCoordinate)
     ).catch((error: unknown) => {
       setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
       setStatusLevel('error')

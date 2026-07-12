@@ -15,10 +15,10 @@ const quoteCommandArgument = (value: string): string => JSON.stringify(value)
    Composition command builders
    ========================================================= */
 
-export const compositionCellClear = (
+export const compositionCellUnassign = (
   rowCoordinate: number,
   columnCoordinate: number
-): string => `composition cell clear ${rowCoordinate} ${columnCoordinate}`
+): string => `composition cell unassign ${rowCoordinate} ${columnCoordinate}`
 
 export const compositionCellAssign = (
   rowCoordinate: number,

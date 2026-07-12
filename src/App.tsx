@@ -203,7 +203,7 @@ function App() {
     commitCompositionRowName,
     commitCompositionRowChannel,
     commitCompositionColumnLength,
-    clearCompositionCell,
+    unassignCompositionCell,
     moveCompositionCell,
   } = useCompositionCommands({
     projectRef,
@@ -450,7 +450,7 @@ function App() {
                   onCommitRowName={commitCompositionRowName}
                   onCommitRowChannel={commitCompositionRowChannel}
                   onCommitColumnLength={commitCompositionColumnLength}
-                  onClearCell={clearCompositionCell}
+                  onUnassignCell={unassignCompositionCell}
                   onMoveCell={moveCompositionCell}
                 />
               ) : (

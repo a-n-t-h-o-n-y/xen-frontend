@@ -30,7 +30,7 @@ type CompositionSectionProps = {
   onCommitRowName: (rowCoordinate: number, name: string) => void
   onCommitRowChannel: (rowCoordinate: number, channelId: string) => void
   onCommitColumnLength: (columnCoordinate: number, length: string) => void
-  onClearCell: (rowCoordinate: number, columnCoordinate: number) => void
+  onUnassignCell: (rowCoordinate: number, columnCoordinate: number) => void
   onMoveCell: (
     fromRowCoordinate: number,
     fromColumnCoordinate: number,
@@ -60,7 +60,7 @@ export function CompositionSection({
   onCommitRowName,
   onCommitRowChannel,
   onCommitColumnLength,
-  onClearCell,
+  onUnassignCell,
   onMoveCell,
 }: CompositionSectionProps) {
   const sectionRef = useRef<HTMLElement | null>(null)
@@ -388,12 +388,12 @@ export function CompositionSection({
                           {placement ? (
                             <button
                               type="button"
-                              className="compositionCellClear mono"
+                              className="compositionCellUnassign mono"
                               onClick={(event) => {
                                 event.stopPropagation()
-                                onClearCell(rowCoordinate, columnCoordinate)
+                                onUnassignCell(rowCoordinate, columnCoordinate)
                               }}
-                              aria-label={`Clear row ${coordinateLabel(rowCoordinate)}, column ${coordinateLabel(columnCoordinate)}`}
+                              aria-label={`Unassign row ${coordinateLabel(rowCoordinate)}, column ${coordinateLabel(columnCoordinate)}`}
                             >×</button>
                           ) : null}
                         </>

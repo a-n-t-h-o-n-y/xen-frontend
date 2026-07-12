@@ -3,7 +3,7 @@ import { getErrorMessage } from '../utils/errors'
 import { getActiveSequenceTarget } from '../domain/composition'
 import {
   compositionCellAssign,
-  compositionCellClear,
+  compositionCellUnassign,
   compositionCellMove,
   compositionLoopBoundary,
   compositionRowChannel,
@@ -104,7 +104,7 @@ export function useCompositionCommands({
     setCompositionEditTarget(null)
     runCompositionCommand(trimmed
       ? compositionCellAssign(rowCoordinate, columnCoordinate, trimmed)
-      : compositionCellClear(rowCoordinate, columnCoordinate))
+      : compositionCellUnassign(rowCoordinate, columnCoordinate))
   }, [runCompositionCommand])
 
   const commitCompositionRowName = useCallback((rowCoordinate: number, name: string): void => {
@@ -146,11 +146,11 @@ export function useCompositionCommands({
     runCompositionCommand(`set duration ${formatTimeSignature(parsed)}`)
   }, [runCompositionCommand, setStatusLevel, setStatusMessage])
 
-  const clearCompositionCell = useCallback((
+  const unassignCompositionCell = useCallback((
     rowCoordinate: number,
     columnCoordinate: number
   ): void => {
-    runCompositionCommand(compositionCellClear(rowCoordinate, columnCoordinate))
+    runCompositionCommand(compositionCellUnassign(rowCoordinate, columnCoordinate))
   }, [runCompositionCommand])
 
   const moveCompositionCell = useCallback((
@@ -177,7 +177,7 @@ export function useCompositionCommands({
       return true
     }
     if (action === 'composition.cell.unassign') {
-      clearCompositionCell(selection.rowCoordinate, selection.columnCoordinate)
+      unassignCompositionCell(selection.rowCoordinate, selection.columnCoordinate)
       return true
     }
     if (action === 'composition.row.rename' && composition.rows.has(selection.rowCoordinate)) {
@@ -199,7 +199,7 @@ export function useCompositionCommands({
       return true
     }
     return false
-  }, [clearCompositionCell, compositionSelectionRef, projectRef])
+  }, [compositionSelectionRef, projectRef, unassignCompositionCell])
 
   return {
     compositionEditTarget,
@@ -213,7 +213,7 @@ export function useCompositionCommands({
     commitCompositionRowName,
     commitCompositionRowChannel,
     commitCompositionColumnLength,
-    clearCompositionCell,
+    unassignCompositionCell,
     moveCompositionCell,
   }
 }
