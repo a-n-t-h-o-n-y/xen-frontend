@@ -1,4 +1,5 @@
-import type { CSSProperties } from 'react'
+import { useRef } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 import {
   MOD_TARGET_ORDER,
   getModTargetSpecForTuning,
@@ -63,6 +64,32 @@ const RANGE_ADJUSTMENT_KEYS = new Set([
   'PageUp',
 ])
 
+const useContinuousRangeKeyboardEdit = (
+  begin: () => boolean,
+  commit: () => void,
+  cancel: () => void
+) => {
+  const keyboardActiveRef = useRef(false)
+
+  return {
+    onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
+      if (RANGE_ADJUSTMENT_KEYS.has(event.key) && !event.repeat) {
+        keyboardActiveRef.current = begin()
+      }
+    },
+    onKeyUp: (event: KeyboardEvent<HTMLInputElement>) => {
+      if (!RANGE_ADJUSTMENT_KEYS.has(event.key) || !keyboardActiveRef.current) return
+      keyboardActiveRef.current = false
+      commit()
+    },
+    onBlur: () => {
+      if (!keyboardActiveRef.current) return
+      keyboardActiveRef.current = false
+      cancel()
+    },
+  }
+}
+
 const formatSignedAmount = (value: number): string => {
   if (Math.abs(value) < 0.005) {
     return '0'
@@ -100,6 +127,12 @@ function WaveSelectControl({
   commitContinuousEdit: () => void
   cancelContinuousEdit: () => void
 }) {
+  const keyboardEditHandlers = useContinuousRangeKeyboardEdit(
+    beginContinuousEdit,
+    commitContinuousEdit,
+    cancelContinuousEdit
+  )
+
   return (
     <div className="modRailWaveSelect" role="radiogroup" aria-label={`${label} type`}>
       <span className="modRailWaveLabel">{label}</span>
@@ -132,13 +165,7 @@ function WaveSelectControl({
             onPointerDown={() => beginContinuousEdit()}
             onPointerUp={commitContinuousEdit}
             onPointerCancel={cancelContinuousEdit}
-            onKeyDown={(event) => {
-              if (RANGE_ADJUSTMENT_KEYS.has(event.key) && !event.repeat) beginContinuousEdit()
-            }}
-            onKeyUp={(event) => {
-              if (RANGE_ADJUSTMENT_KEYS.has(event.key)) commitContinuousEdit()
-            }}
-            onBlur={cancelContinuousEdit}
+            {...keyboardEditHandlers}
           />
           <span className="mono">{pulseWidth.toFixed(2)}</span>
         </label>
@@ -165,6 +192,12 @@ export function ModulatorsPanel({
   commitContinuousEdit,
   cancelContinuousEdit,
 }: ModulatorsPanelProps) {
+  const lerpKeyboardEditHandlers = useContinuousRangeKeyboardEdit(
+    beginContinuousEdit,
+    commitContinuousEdit,
+    cancelContinuousEdit
+  )
+
   return (
     <section className="modulatorRail" aria-label="Modulator rail">
       <div className="modTabs" role="tablist" aria-label="Modulator slots">
@@ -206,13 +239,7 @@ export function ModulatorsPanel({
             onPointerDown={() => beginContinuousEdit()}
             onPointerUp={commitContinuousEdit}
             onPointerCancel={cancelContinuousEdit}
-            onKeyDown={(event) => {
-              if (RANGE_ADJUSTMENT_KEYS.has(event.key) && !event.repeat) beginContinuousEdit()
-            }}
-            onKeyUp={(event) => {
-              if (RANGE_ADJUSTMENT_KEYS.has(event.key)) commitContinuousEdit()
-            }}
-            onBlur={cancelContinuousEdit}
+            {...lerpKeyboardEditHandlers}
             aria-label="Wave lerp"
           />
         </label>

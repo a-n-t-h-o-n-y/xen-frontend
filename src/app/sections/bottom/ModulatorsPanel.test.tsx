@@ -72,4 +72,16 @@ describe('modulator continuous controls', () => {
     expect(controls.beginContinuousEdit).toHaveBeenCalledOnce()
     expect(controls.cancelContinuousEdit).toHaveBeenCalledOnce()
   })
+
+  it('does not let delayed pointer focus loss cancel another gesture', () => {
+    const controls = renderPanel()
+
+    fireEvent.pointerDown(controls.slider)
+    fireEvent.pointerUp(controls.slider)
+    fireEvent.blur(controls.slider)
+
+    expect(controls.beginContinuousEdit).toHaveBeenCalledOnce()
+    expect(controls.commitContinuousEdit).toHaveBeenCalledOnce()
+    expect(controls.cancelContinuousEdit).not.toHaveBeenCalled()
+  })
 })
