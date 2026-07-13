@@ -4,8 +4,9 @@
    ========================================================= */
 
 :root {
-  /* Notes: Use a neutral monospace face for this plugin prototype UI. */
-  font-family: monospace;
+  font-family: var(--font-interface);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
 /* Notes: Include border/padding in element dimensions. */
@@ -28,9 +29,33 @@ body {
   min-width: 320px;
   min-height: 100vh;
   height: 100vh;
-  background: #181b21;
-  color: #f4f7fb;
+  background: var(--canvas);
+  color: var(--text-primary);
   overflow: hidden;
+  transition: background-color var(--transition-medium), color var(--transition-fast);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+input,
+select,
+textarea,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }
 }
 
 #root {

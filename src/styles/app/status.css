@@ -49,7 +49,7 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: rgb(255 255 255 / 45%);
+  color: var(--text-tertiary);
   font-size: var(--font-sm);
   line-height: 1;
   cursor: pointer;
@@ -57,8 +57,8 @@
 
 .statusSettingsButton:hover,
 .statusSettingsButton:focus-visible {
-  border-color: rgb(255 255 255 / 18%);
-  background: rgb(255 255 255 / 7%);
+  border-color: var(--border-subtle-color);
+  background: var(--surface-control-hover);
   color: var(--text-primary);
   outline: none;
 }
@@ -69,43 +69,30 @@
   gap: 0;
   height: var(--control-height-md);
   padding: 1px;
-  border: 1px solid rgb(255 255 255 / 16%);
-  border-radius: 5px;
-  background: rgb(255 255 255 / 4%);
+  border: 0;
+  background: var(--surface-sunken);
 }
 
-.workspaceSwitchButton {
+.workspaceSwitch .uiSegmentedOption {
   height: 100%;
   min-width: 2rem;
   padding: 0 0.42rem;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: rgb(255 255 255 / 48%);
-  font-size: var(--font-xs);
-  line-height: 1;
-  cursor: pointer;
 }
 
-.workspaceSwitchButton:hover,
-.workspaceSwitchButton:focus-visible {
-  color: var(--text-primary);
-  outline: none;
-}
-
-.workspaceSwitchButton-active {
-  background: rgb(245 196 90 / 18%);
-  color: rgb(252 245 223);
+.workspaceSwitch .uiSegmentedOption[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  box-shadow: none;
 }
 
 .statusModeButton {
   height: var(--control-height-md);
   min-width: 2.35rem;
   padding: 0 0.48rem;
-  border: 1px solid rgb(255 255 255 / 16%);
+  border: var(--border-subtle);
   border-radius: 4px;
-  background: rgb(255 255 255 / 4%);
-  color: rgb(255 255 255 / 52%);
+  background: var(--surface-control);
+  color: var(--text-secondary);
   font-size: var(--font-xs);
   line-height: 1;
   cursor: pointer;
@@ -113,15 +100,15 @@
 
 .statusModeButton:hover,
 .statusModeButton:focus-visible {
-  border-color: rgb(255 255 255 / 30%);
+  border-color: var(--border-strong-color);
   color: var(--text-primary);
   outline: none;
 }
 
 .statusModeButton-active {
-  border-color: rgb(245 196 90 / 58%);
-  background: rgb(245 196 90 / 16%);
-  color: rgb(252 245 223);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .statusText {
@@ -139,7 +126,7 @@
   margin-left: auto;
   font-size: var(--font-xs);
   line-height: 1;
-  color: rgb(255 255 255 / 52%);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -151,11 +138,11 @@
 
 .statusMetaKey {
   text-transform: lowercase;
-  color: rgb(255 255 255 / 36%);
+  color: var(--text-tertiary);
 }
 
 .statusMetaValue {
-  color: rgb(255 255 255 / 62%);
+  color: var(--text-secondary);
 }
 
 .statusModulatorDock {
@@ -182,7 +169,7 @@
 
 /* Notes: Semantic colors map directly to status message severity. */
 .status-debug {
-  color: #bcbcbc;
+  color: var(--text-tertiary);
 }
 
 .status-info {
@@ -190,9 +177,9 @@
 }
 
 .status-warning {
-  color: #f3dd9a;
+  color: var(--warning);
 }
 
 .status-error {
-  color: #f7a8a8;
+  color: var(--danger);
 }

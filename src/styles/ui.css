@@ -1,0 +1,121 @@
+.uiButton,
+.uiIconButton,
+.uiSegmentedOption {
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.uiButton:focus-visible,
+.uiIconButton:focus-visible,
+.uiSegmentedOption:focus-visible,
+.uiFormField :is(input, select, textarea):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.uiButton:disabled,
+.uiIconButton:disabled,
+.uiSegmentedOption:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.uiButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-1);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.uiButton-small { min-height: 1.75rem; padding: 0.3rem 0.6rem; }
+.uiButton-medium { min-height: 2.1rem; padding: 0.45rem 0.8rem; }
+.uiButton-secondary { border-color: var(--border-subtle-color); background: var(--surface-control); }
+.uiButton-ghost { background: transparent; }
+.uiButton-primary { background: var(--accent); color: var(--accent-contrast); }
+.uiButton-danger { background: var(--danger-soft); color: var(--danger); }
+
+.uiButton:hover:not(:disabled),
+.uiIconButton:hover:not(:disabled),
+.uiSegmentedOption:hover:not(:disabled) {
+  background: var(--surface-control-hover);
+  color: var(--text-primary);
+}
+
+.uiButton-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  color: var(--accent-contrast);
+}
+
+.uiIconButton {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+}
+
+.uiIconButton-small { width: 1.75rem; height: 1.75rem; }
+.uiIconButton-medium { width: 2.1rem; height: 2.1rem; }
+.uiIcon { display: block; pointer-events: none; }
+
+.uiSegmented {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 2px;
+  border-radius: calc(var(--radius-1) + 2px);
+  background: var(--surface-sunken);
+}
+
+.uiSegmentedOption {
+  min-height: 1.65rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-1);
+  background: transparent;
+  font-size: var(--font-xs);
+  font-weight: 600;
+}
+
+.uiSegmentedOption[aria-pressed='true'] {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.uiFormField {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: 600;
+}
+
+.uiFormField :is(input, select, textarea) {
+  min-height: 2.1rem;
+  padding: 0.45rem 0.65rem;
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-control);
+  color: var(--text-primary);
+}
+
+.uiFormFieldHint {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uiButton,
+  .uiIconButton,
+  .uiSegmentedOption { transition: none; }
+}

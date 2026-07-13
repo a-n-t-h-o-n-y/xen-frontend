@@ -1,0 +1,10 @@
+@import './foundations.css';
+@import '../index.css';
+@import './ui.css';
+@import './app/shell.css';
+@import './app/composition.css';
+@import './app/sequencer.css';
+@import './app/status.css';
+@import './app/modules.css';
+@import './app/palette.css';
+@import './app/settings.css';

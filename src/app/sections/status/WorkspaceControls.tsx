@@ -1,4 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { Icon } from '../../ui/Icon'
+import { IconButton } from '../../ui/IconButton'
+import { SegmentedControl } from '../../ui/SegmentedControl'
 
 export type WorkspaceView = 'composition' | 'sequencer'
 
@@ -30,32 +33,25 @@ export function WorkspaceControls({
       <span className="modeBadge mono" aria-label={`Input mode ${currentInputMode}`}>
         {currentInputModeLetter}
       </span>
-      <button
-        type="button"
+      <IconButton
         className="statusSettingsButton"
         onClick={onOpenSettings}
-        aria-label="Open settings"
+        label="Open settings"
         title="Settings"
       >
-        <span aria-hidden="true">⚙</span>
-      </button>
-      <div className="workspaceSwitch" role="group" aria-label="Workspace view">
-        {([
-          ['composition', 'Comp'],
-          ['sequencer', 'Seq'],
-        ] as const).map(([view, label]) => (
-          <button
-            type="button"
-            key={view}
-            className={`workspaceSwitchButton${workspaceView === view ? ' workspaceSwitchButton-active' : ''}`}
-            aria-pressed={workspaceView === view}
-            onClick={() => setWorkspaceView(view)}
-            disabled={workspaceDisabled}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        <Icon name="settings" size={14} />
+      </IconButton>
+      <SegmentedControl
+        className="workspaceSwitch"
+        label="Workspace view"
+        value={workspaceView}
+        options={[
+          { value: 'composition', label: 'Comp', description: 'Composition workspace' },
+          { value: 'sequencer', label: 'Seq', description: 'Sequencer workspace' },
+        ]}
+        onChange={setWorkspaceView}
+        disabled={workspaceDisabled}
+      />
       <button
         type="button"
         className={`statusModeButton${isModulatorMode ? ' statusModeButton-active' : ''}`}

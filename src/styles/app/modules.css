@@ -5,11 +5,9 @@
 
 .bottomModules {
   min-height: 0;
-  border: 1px solid rgb(255 255 255 / 18%);
+  border: var(--border-subtle);
   border-radius: var(--radius-2);
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.03), rgb(255 255 255 / 0.01)),
-    var(--surface-1);
+  background: var(--surface-1);
   overflow: hidden;
 }
 
@@ -57,7 +55,7 @@
   justify-content: flex-start;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid rgb(255 255 255 / 30%);
+  border: var(--border-strong);
   border-radius: var(--radius-2);
   background: var(--surface-1);
 }
@@ -142,9 +140,9 @@
 .modulatorNumber {
   width: 100%;
   min-width: 0;
-  border: 1px solid rgb(255 255 255 / 24%);
+  border: var(--border-strong);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 6%);
+  background: var(--surface-control);
   color: var(--text-primary);
   font-size: var(--font-sm);
   padding: 0.3rem 0.4rem;
@@ -159,16 +157,16 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  border: 1px solid rgb(255 255 255 / 24%);
+  border: var(--border-strong);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 6%);
+  background: var(--surface-control);
   color: var(--text-primary);
   font-size: var(--font-sm);
   padding: 0.32rem 0.45rem;
 }
 
 .waveSelectChevron {
-  color: rgb(255 255 255 / 62%);
+  color: var(--text-secondary);
   font-size: var(--font-xs);
 }
 
@@ -180,10 +178,10 @@
   display: grid;
   gap: 2px;
   padding: 0.2rem;
-  border: 1px solid rgb(255 255 255 / 20%);
+  border: var(--border-strong);
   border-radius: var(--radius-1);
-  background: rgb(16 16 16 / 96%);
-  box-shadow: 0 10px 24px rgb(0 0 0 / 40%);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-md);
   z-index: 30;
 }
 
@@ -200,13 +198,13 @@
 }
 
 .waveSelectOption:hover {
-  background: rgb(255 255 255 / 10%);
+  background: var(--surface-control-hover);
   color: var(--text-primary);
 }
 
 .waveSelectOption-active {
-  background: rgb(245 196 90 / 14%);
-  color: rgb(252 245 223);
+  background: var(--accent-soft);
+  color: var(--text-primary);
 }
 
 .modulatorSlider {
@@ -227,7 +225,7 @@
 .modulatorTopLerp::-webkit-slider-runnable-track {
   height: 0.22rem;
   border-radius: 999px;
-  background: rgb(255 255 255 / 30%);
+  background: var(--border-strong-color);
 }
 
 .modulatorTopLerp::-webkit-slider-thumb {
@@ -236,24 +234,24 @@
   width: 0.7rem;
   height: 0.7rem;
   margin-top: -0.24rem;
-  border: 1px solid rgb(255 255 255 / 85%);
+  border: var(--border-strong);
   border-radius: 999px;
-  background: rgb(255 255 255 / 96%);
+  background: var(--text-primary);
 }
 
 .modulatorTopLerp::-moz-range-track {
   height: 0.22rem;
   border: 0;
   border-radius: 999px;
-  background: rgb(255 255 255 / 30%);
+  background: var(--border-strong-color);
 }
 
 .modulatorTopLerp::-moz-range-thumb {
   width: 0.7rem;
   height: 0.7rem;
-  border: 1px solid rgb(255 255 255 / 85%);
+  border: var(--border-strong);
   border-radius: 999px;
-  background: rgb(255 255 255 / 96%);
+  background: var(--text-primary);
 }
 
 .modulatorTopLerp:focus-visible {
@@ -261,11 +259,11 @@
 }
 
 .modulatorTopLerp:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 2px rgb(245 196 90 / 28%);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .modulatorTopLerp:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 2px rgb(245 196 90 / 28%);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .modWaveLine {
@@ -274,15 +272,15 @@
 }
 
 .modWaveLine-a {
-  stroke: rgb(103 232 249 / 78%);
+  stroke: var(--wave-a);
 }
 
 .modWaveLine-b {
-  stroke: rgb(248 113 113 / 78%);
+  stroke: var(--wave-b);
 }
 
 .modWaveLine-mix {
-  stroke: rgb(245 196 90 / 92%);
+  stroke: var(--accent);
 }
 
 .modWaveHandle {
@@ -290,13 +288,13 @@
 }
 
 .modWaveHandle-a {
-  fill: rgb(103 232 249 / 94%);
-  stroke: rgb(9 22 27 / 90%);
+  fill: var(--wave-a);
+  stroke: var(--surface-sunken);
 }
 
 .modWaveHandle-b {
-  fill: rgb(248 113 113 / 94%);
-  stroke: rgb(36 10 10 / 90%);
+  fill: var(--wave-b);
+  stroke: var(--surface-sunken);
 }
 
 .modTargetHeader {
@@ -313,12 +311,10 @@
   width: 0.7rem;
   height: 0.7rem;
   margin: 0;
-  border: 1px solid rgb(255 255 255 / 26%);
+  border: var(--border-strong);
   border-radius: 999px;
-  background: rgb(28 10 10 / 92%);
-  box-shadow:
-    inset 0 0 0 1px rgb(0 0 0 / 35%),
-    0 0 0 1px rgb(0 0 0 / 18%);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--divider-color);
   cursor: pointer;
   transition:
     border-color 140ms ease,
@@ -327,19 +323,16 @@
 }
 
 .modTargetLed:checked {
-  border-color: rgb(255 136 136 / 86%);
-  background: rgb(245 80 80 / 94%);
+  border-color: var(--danger);
+  background: var(--danger);
   box-shadow:
-    0 0 0 1px rgb(245 80 80 / 25%),
-    0 0 8px rgb(245 80 80 / 55%),
-    inset 0 0 0 1px rgb(255 255 255 / 20%);
+    0 0 0 1px var(--danger-soft),
+    0 0 8px var(--danger-soft);
 }
 
 .modTargetLed:focus-visible {
   outline: none;
-  box-shadow:
-    0 0 0 2px rgb(245 80 80 / 26%),
-    0 0 0 1px rgb(245 80 80 / 40%);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .modulatorRail {
@@ -373,7 +366,7 @@
 }
 
 .modRailWaveLabel {
-  color: rgb(255 255 255 / 58%);
+  color: var(--text-secondary);
   font-size: var(--font-xs);
   line-height: 1;
 }
@@ -382,9 +375,9 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   min-width: 0;
-  border: 1px solid rgb(255 255 255 / 18%);
+  border: var(--border-subtle);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 4%);
+  background: var(--surface-control);
   overflow: hidden;
 }
 
@@ -393,9 +386,9 @@
   height: var(--control-height-sm);
   padding: 0 0.22rem;
   border: 0;
-  border-right: 1px solid rgb(255 255 255 / 11%);
+  border-right: 1px solid var(--divider-color);
   background: transparent;
-  color: rgb(255 255 255 / 62%);
+  color: var(--text-secondary);
   font-size: 0.68rem;
   line-height: 1;
   white-space: nowrap;
@@ -410,13 +403,13 @@
 }
 
 .modRailWaveSegment:hover {
-  background: rgb(255 255 255 / 9%);
+  background: var(--surface-control-hover);
   color: var(--text-primary);
 }
 
 .modRailWaveSegment-active {
-  background: rgb(245 196 90 / 18%);
-  color: rgb(252 245 223);
+  background: var(--accent-soft);
+  color: var(--text-primary);
 }
 
 .modRailPulseControl {
@@ -432,7 +425,7 @@
 }
 
 .modRailPulseLabel {
-  color: rgb(255 255 255 / 64%);
+  color: var(--text-secondary);
 }
 
 .modRailLerp {
@@ -467,9 +460,9 @@
   gap: 0.22rem;
   min-height: var(--control-height-md);
   padding: 0 0.32rem;
-  border: 1px solid rgb(255 255 255 / 18%);
+  border: var(--border-subtle);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 4%);
+  background: var(--surface-control);
   color: var(--text-secondary);
   cursor: ns-resize;
   touch-action: none;
@@ -481,13 +474,13 @@
 }
 
 .modTargetChip:hover {
-  border-color: rgb(255 255 255 / 30%);
-  background: rgb(255 255 255 / 7%);
+  border-color: var(--border-strong-color);
+  background: var(--surface-control-hover);
 }
 
 .modTargetChip-enabled {
-  border-color: rgb(245 196 90 / 42%);
-  background: rgb(245 196 90 / 10%);
+  border-color: var(--focus-ring);
+  background: var(--accent-soft);
   color: var(--text-primary);
 }
 
@@ -504,7 +497,7 @@
 
 .modTargetChipAmount {
   min-width: 0;
-  color: rgb(255 255 255 / 72%);
+  color: var(--text-primary);
   font-size: var(--font-xs);
   line-height: 1;
   text-align: right;
@@ -516,8 +509,8 @@
   width: 0.95rem;
   height: 0.42rem;
   border-radius: 999px;
-  background: rgb(255 255 255 / 11%);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--divider-color);
 }
 
 .modTargetChipCenter::before {
@@ -527,7 +520,7 @@
   bottom: 0.07rem;
   left: 50%;
   width: 1px;
-  background: rgb(255 255 255 / 18%);
+  background: var(--border-strong-color);
 }
 
 .modTargetChipCenterDot {
@@ -537,12 +530,12 @@
   width: 0.3rem;
   height: 0.3rem;
   border-radius: 999px;
-  background: rgb(255 255 255 / 70%);
+  background: var(--text-secondary);
   transform: translate(-50%, -50%);
 }
 
 .modTargetChip-enabled .modTargetChipCenterDot {
-  background: rgb(245 196 90 / 92%);
+  background: var(--accent);
 }
 
 /* =========================================================
@@ -565,9 +558,9 @@
   place-items: center;
   width: 100%;
   min-height: 0;
-  border: 1px solid rgb(255 255 255 / 20%);
+  border: var(--border-strong);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 3%);
+  background: var(--surface-control);
   color: var(--text-secondary);
   cursor: pointer;
   transition:
@@ -577,19 +570,19 @@
 }
 
 .sequenceBankCell:hover:not(:disabled) {
-  border-color: rgb(255 255 255 / 48%);
-  background: rgb(255 255 255 / 10%);
+  border-color: var(--text-tertiary);
+  background: var(--surface-control-hover);
   color: var(--text-primary);
 }
 
 .sequenceBankCell-selected {
-  border-color: rgb(245 196 90 / 72%);
-  background: rgb(245 196 90 / 14%);
-  color: rgb(252 245 223);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
 }
 
 .sequenceBankCell-active {
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 22%);
+  box-shadow: inset 0 0 0 1px var(--border-strong-color);
 }
 
 .sequenceBankCell:disabled {
@@ -615,9 +608,9 @@
   place-items: center;
   width: var(--control-height-sm);
   height: var(--control-height-sm);
-  border: 1px solid rgb(255 255 255 / 24%);
+  border: var(--border-strong);
   border-radius: 4px;
-  background: rgb(255 255 255 / 6%);
+  background: var(--surface-control);
   color: var(--text-secondary);
   font-size: var(--font-xs);
   line-height: 1;
@@ -626,9 +619,9 @@
 }
 
 .modTab-active {
-  border-color: rgb(245 196 90 / 58%);
-  background: rgb(245 196 90 / 14%);
-  color: rgb(252 245 223);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
 }
 
 .referenceCommandSearchField {
@@ -636,17 +629,17 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   width: 100%;
-  border: 1px solid rgb(255 255 255 / 20%);
+  border: var(--border-strong);
   border-radius: 7px;
-  background: rgb(255 255 255 / 4%);
+  background: var(--surface-control);
   transition:
     border-color 180ms ease,
     background-color 180ms ease;
 }
 
 .referenceCommandSearchField:focus-within {
-  border-color: rgb(245 196 90 / 60%);
-  background: rgb(255 255 255 / 7%);
+  border-color: var(--accent);
+  background: var(--surface-control-hover);
 }
 
 .referenceCommandSearchInput {
@@ -656,13 +649,14 @@
   background: transparent;
   color: var(--text-primary);
   font-size: var(--font-xs);
+  font-family: var(--font-mono);
   line-height: 1.2;
   padding: 0.34rem 0.3rem 0.34rem 0.48rem;
   min-width: 0;
 }
 
 .referenceCommandSearchInput::placeholder {
-  color: rgb(255 255 255 / 46%);
+  color: var(--text-tertiary);
 }
 
 .referenceCommandSearchInput:focus-visible {
@@ -687,19 +681,19 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: rgb(255 255 255 / 56%);
+  color: var(--text-secondary);
   font-size: var(--font-sm);
   line-height: 1;
   cursor: pointer;
 }
 
 .referenceCommandSearchClear:hover {
-  background: rgb(255 255 255 / 14%);
+  background: var(--surface-control-pressed);
   color: var(--text-primary);
 }
 
 .referenceCommandSearchClear:focus-visible {
-  outline: 1px solid rgb(245 196 90 / 60%);
+  outline: 1px solid var(--accent);
   outline-offset: 1px;
 }
 

@@ -4,47 +4,6 @@
    Notes: Favor tokens first before introducing one-off values.
    ========================================================= */
 
-:root {
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --radius-1: 6px;
-  --radius-2: 10px;
-  --font-xs: 0.75rem;
-  --font-sm: 0.82rem;
-  --font-md: 0.92rem;
-  --font-lg: 1rem;
-  --control-height-sm: 1.45rem;
-  --control-height-md: 1.65rem;
-  --bar-height: calc(var(--control-height-md) + (var(--space-2) * 2) + 2px);
-  --border-subtle: 1px solid rgb(255 255 255 / 18%);
-  --surface-1: #171a20;
-  --surface-2: #1f232b;
-  --text-primary: #f4f7fb;
-  --text-secondary: #b8c0cc;
-  --seq-shell-bg: #1a1d24;
-  --seq-panel-bg: #242a33;
-  --seq-border: 1px solid rgb(255 255 255 / 11%);
-  --seq-grid-line: rgb(255 255 255 / 9%);
-  --seq-row-even: rgb(61 64 69 / 94%);
-  --seq-row-odd: rgb(73 77 82 / 94%);
-  --seq-playhead: rgb(255 255 255 / 76%);
-  --seq-note: rgb(235 239 245 / 90%);
-  --seq-note-text: rgb(13 18 25 / 94%);
-  --seq-roll-border: 1px solid rgb(255 255 255 / 42%);
-  --seq-divider-line: rgb(255 255 255 / 12%);
-  --seq-selection: rgb(245 196 90 / 48%);
-  --seq-selection-soft: rgb(245 196 90 / 20%);
-  --roll-island-gap: 5px;
-  --roll-divider-x-bias: 0px;
-  --roll-divider-edge-inset-base: 12px;
-  --roll-divider-edge-inset-step: 12px;
-  --extras-row-height: 21rem;
-  --square-module-label-offset: 2.5rem;
-}
-
 /* =========================================================
    Section 2: App Layout
    Purpose: Define the high-level vertical frame for the app.
@@ -126,7 +85,8 @@
   padding: var(--space-1);
   border: var(--border-subtle);
   border-radius: var(--radius-2);
-  background: rgb(31 35 43 / 92%);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-sm);
   overflow: visible;
 }
 
@@ -137,9 +97,9 @@
   min-height: 2rem;
   gap: var(--space-2);
   padding: 0.2rem 0.5rem;
-  border: 1px solid rgb(255 255 255 / 10%);
+  border: 1px solid transparent;
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 3%);
+  background: transparent;
 }
 
 .headerSpacer {
@@ -159,10 +119,10 @@
   min-width: 0;
   min-height: 2rem;
   padding: 0 var(--space-2);
-  border: 1px solid rgb(255 255 255 / 14%);
+  border: var(--border-subtle);
   border-radius: var(--radius-1);
-  background: rgb(255 255 255 / 4%);
-  color: rgb(255 255 255 / 48%);
+  background: var(--surface-control);
+  color: var(--text-tertiary);
   cursor: pointer;
   transition:
     border-color 160ms ease,
@@ -172,8 +132,8 @@
 
 .headerQuickAccessTrigger:hover:not(:disabled),
 .headerQuickAccessTrigger:focus-visible:not(:disabled) {
-  border-color: rgb(245 196 90 / 52%);
-  background: rgb(255 255 255 / 7%);
+  border-color: var(--accent);
+  background: var(--surface-control-hover);
   color: var(--text-primary);
   outline: none;
 }
@@ -288,7 +248,17 @@
 .timeSignatureDisplay:focus-visible:not(:disabled),
 .headerEditableDisplay:hover:not(:disabled),
 .headerEditableDisplay:focus-visible:not(:disabled) {
-  background: rgb(255 255 255 / 8%);
+  background: var(--surface-control-hover);
+}
+
+.timeSignatureDisplay:focus-visible:not(:disabled),
+.headerEditableDisplay:focus-visible:not(:disabled),
+.headerQuickAccessTrigger:focus-visible:not(:disabled),
+.modeChip:focus-visible,
+.scaleDirectionGlyph:focus-visible,
+.timeSignatureAction:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
 }
 
 .timeSignatureInput,
@@ -300,7 +270,7 @@
   border: 0;
   border-radius: 5px;
   outline: none;
-  background: rgb(255 255 255 / 14%);
+  background: var(--surface-control-pressed);
   font: inherit;
   color: var(--text-primary);
   line-height: 1.1;
@@ -332,10 +302,10 @@
   min-width: 1.28rem;
   height: 1.28rem;
   padding: 0 0.25rem;
-  border: 1px solid rgb(255 255 255 / 18%);
+  border: var(--border-subtle);
   border-radius: 999px;
-  background: rgb(255 255 255 / 4%);
-  color: rgb(255 255 255 / 62%);
+  background: var(--surface-control);
+  color: var(--text-secondary);
   font-size: var(--font-xs);
   line-height: 1;
   cursor: pointer;
@@ -346,9 +316,9 @@
 }
 
 .modeChip:hover:not(:disabled) {
-  border-color: rgb(255 255 255 / 32%);
-  background: rgb(255 255 255 / 9%);
-  color: rgb(255 255 255 / 86%);
+  border-color: var(--border-strong-color);
+  background: var(--surface-control-hover);
+  color: var(--text-primary);
 }
 
 .modeChip:disabled {
@@ -357,14 +327,14 @@
 }
 
 .modeChip-active {
-  border-color: rgb(245 196 90 / 48%);
-  background: rgb(245 196 90 / 20%);
-  color: rgb(252 245 223);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .modePickerEmpty {
   font-size: var(--font-xs);
-  color: rgb(255 255 255 / 45%);
+  color: var(--text-tertiary);
 }
 
 .headerScaleSelect {
@@ -385,16 +355,16 @@
   min-width: 0;
   height: var(--control-height-sm);
   padding: 0 0.42rem;
-  border-color: rgb(255 255 255 / 18%);
-  background: rgb(255 255 255 / 5%);
+  border-color: var(--border-subtle-color);
+  background: var(--surface-control);
   line-height: 1.1;
   font-size: var(--font-sm);
 }
 
 .headerScaleTrigger:hover:not(:disabled),
 .headerScaleTrigger:focus-visible:not(:disabled) {
-  border-color: rgb(255 255 255 / 32%);
-  background: rgb(255 255 255 / 9%);
+  border-color: var(--border-strong-color);
+  background: var(--surface-control-hover);
 }
 
 .headerScaleTrigger:disabled {
@@ -423,10 +393,10 @@
   justify-content: center;
   width: var(--control-height-sm);
   height: var(--control-height-sm);
-  border: 1px solid rgb(255 255 255 / 20%);
+  border: var(--border-strong);
   border-radius: 999px;
-  background: rgb(255 255 255 / 6%);
-  color: rgb(255 255 255 / 82%);
+  background: var(--surface-control);
+  color: var(--text-primary);
   font-size: var(--font-md);
   line-height: 1;
   cursor: pointer;
@@ -438,8 +408,8 @@
 
 .scaleDirectionGlyph:hover:not(:disabled),
 .scaleDirectionGlyph:focus-visible:not(:disabled) {
-  border-color: rgb(255 255 255 / 32%);
-  background: rgb(255 255 255 / 10%);
+  border-color: var(--border-strong-color);
+  background: var(--surface-control-hover);
   color: var(--text-primary);
 }
 
@@ -463,10 +433,10 @@
   min-width: 2.2rem;
   height: 1.28rem;
   padding: 0 0.35rem;
-  border: 1px solid rgb(255 255 255 / 20%);
+  border: var(--border-strong);
   border-radius: 999px;
-  background: rgb(255 255 255 / 4%);
-  color: rgb(255 255 255 / 62%);
+  background: var(--surface-control);
+  color: var(--text-secondary);
   font-size: var(--font-xs);
   line-height: 1;
   cursor: pointer;
@@ -477,9 +447,9 @@
 }
 
 .timeSignatureAction:hover:not(:disabled) {
-  border-color: rgb(255 255 255 / 30%);
-  background: rgb(255 255 255 / 9%);
-  color: rgb(255 255 255 / 80%);
+  border-color: var(--border-strong-color);
+  background: var(--surface-control-hover);
+  color: var(--text-primary);
 }
 
 .timeSignatureAction:disabled {

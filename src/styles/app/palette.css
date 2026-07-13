@@ -11,7 +11,7 @@
   justify-items: center;
   align-items: start;
   padding: clamp(3.8rem, 10vh, 7rem) var(--space-3) var(--space-3);
-  background: rgb(9 11 15 / 48%);
+  background: var(--surface-backdrop);
 }
 
 .quickAccessPanel {
@@ -19,11 +19,11 @@
   width: min(46rem, 100%);
   max-height: min(38rem, calc(100vh - 5rem));
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 18%);
+  border: var(--border-subtle);
   border-radius: var(--radius-2);
   outline: none;
-  background: #20242c;
-  box-shadow: 0 18px 52px rgb(0 0 0 / 48%);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-md);
 }
 
 .quickAccessSearchField {
@@ -33,16 +33,16 @@
   gap: var(--space-2);
   min-height: 3.15rem;
   padding: 0 var(--space-3);
-  border-bottom: 1px solid rgb(255 255 255 / 12%);
-  background: rgb(255 255 255 / 4%);
+  border-bottom: 1px solid var(--divider-color);
+  background: var(--surface-control);
 }
 
 .quickAccessSearchField:focus-within {
-  box-shadow: inset 0 -2px 0 rgb(245 196 90 / 62%);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .quickAccessSearchIcon {
-  color: rgb(255 255 255 / 50%);
+  color: var(--text-secondary);
   font-size: 1.25rem;
 }
 
@@ -56,14 +56,15 @@
   outline: 0;
   background: transparent;
   color: var(--text-primary);
-  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--font-md);
 }
 
 .quickAccessComposer {
   position: relative;
   min-width: 0;
   overflow: hidden;
-  font-family: inherit;
+  font-family: var(--font-mono);
   font-size: var(--font-lg);
   line-height: normal;
 }
@@ -84,15 +85,15 @@
 }
 
 .quickAccessGhostActive {
-  color: rgb(245 196 90 / 72%);
+  color: var(--accent);
 }
 
 .quickAccessGhostFuture {
-  color: rgb(255 255 255 / 32%);
+  color: var(--text-tertiary);
 }
 
 .quickAccessInput::placeholder {
-  color: rgb(255 255 255 / 38%);
+  color: var(--text-tertiary);
 }
 
 .quickAccessBusy {
@@ -105,17 +106,17 @@
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   overflow-x: auto;
-  border-bottom: 1px solid rgb(255 255 255 / 9%);
+  border-bottom: 1px solid var(--divider-color);
 }
 
 .quickAccessScope {
   flex: 0 0 auto;
   min-height: var(--control-height-sm);
   padding: 0 var(--space-2);
-  border: 1px solid rgb(255 255 255 / 14%);
+  border: var(--border-subtle);
   border-radius: 999px;
   background: transparent;
-  color: rgb(255 255 255 / 58%);
+  color: var(--text-secondary);
   font-size: var(--font-xs);
   cursor: pointer;
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
@@ -123,22 +124,22 @@
 
 .quickAccessScope:hover:not(:disabled),
 .quickAccessScope:focus-visible:not(:disabled) {
-  border-color: rgb(255 255 255 / 30%);
+  border-color: var(--border-strong-color);
   color: var(--text-primary);
   outline: none;
 }
 
 .quickAccessScope-active {
-  border-color: rgb(245 196 90 / 58%);
-  background: rgb(245 196 90 / 16%);
-  color: rgb(252 245 223);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
 }
 
 .quickAccessError {
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid rgb(247 168 168 / 20%);
-  background: rgb(180 55 55 / 12%);
-  color: #f7a8a8;
+  border-bottom: 1px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
   font-size: var(--font-sm);
 }
 
@@ -152,7 +153,7 @@
 }
 
 .quickAccessSection + .quickAccessSection {
-  border-top: 1px solid rgb(255 255 255 / 8%);
+  border-top: 1px solid var(--divider-color);
 }
 
 .quickAccessSectionLabel {
@@ -161,8 +162,8 @@
   top: 0;
   margin: 0;
   padding: var(--space-1) var(--space-3);
-  background: #20242c;
-  color: rgb(255 255 255 / 38%);
+  background: var(--surface-overlay);
+  color: var(--text-tertiary);
   font-size: var(--font-xs);
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -181,13 +182,13 @@
 }
 
 .quickAccessOption + .quickAccessOption {
-  border-top: 1px solid rgb(255 255 255 / 5%);
+  border-top: 1px solid var(--divider-color);
 }
 
 .quickAccessOption:hover,
 .quickAccessOption-selected,
 .quickAccessArgumentOption:hover {
-  background: rgb(245 196 90 / 12%);
+  background: var(--accent-soft);
 }
 
 .quickAccessArgumentOption {
@@ -203,7 +204,7 @@
 }
 
 .quickAccessArgumentOption + .quickAccessArgumentOption {
-  border-top: 1px solid rgb(255 255 255 / 5%);
+  border-top: 1px solid var(--divider-color);
 }
 
 .quickAccessArgumentValue,
@@ -221,12 +222,12 @@
 
 .quickAccessArgumentDetail,
 .quickAccessArgumentMarkers {
-  color: rgb(255 255 255 / 46%);
+  color: var(--text-tertiary);
   font-size: var(--font-xs);
 }
 
 .quickAccessArgumentMarkers {
-  color: rgb(245 196 90 / 82%);
+  color: var(--accent);
 }
 
 .visuallyHidden {
@@ -243,9 +244,9 @@
 .quickAccessBadge {
   justify-self: start;
   padding: 0.18rem 0.38rem;
-  border: 1px solid rgb(255 255 255 / 12%);
+  border: var(--border-subtle);
   border-radius: 4px;
-  color: rgb(255 255 255 / 46%);
+  color: var(--text-tertiary);
   font-size: 0.68rem;
   text-transform: uppercase;
 }
@@ -272,16 +273,21 @@
 .quickAccessOptionDetail,
 .quickAccessSignature,
 .quickAccessActiveLabel {
-  color: rgb(255 255 255 / 46%);
+  color: var(--text-tertiary);
   font-size: var(--font-xs);
 }
 
 .quickAccessSignature {
   max-width: 15rem;
+  font-family: var(--font-mono);
+}
+
+.quickAccessArgumentValue {
+  font-family: var(--font-mono);
 }
 
 .quickAccessActiveLabel {
-  color: rgb(245 196 90 / 82%);
+  color: var(--accent);
 }
 
 .quickAccessEmpty {
@@ -297,15 +303,16 @@
   gap: var(--space-3);
   min-height: 2rem;
   padding: var(--space-1) var(--space-3);
-  border-top: 1px solid rgb(255 255 255 / 9%);
-  color: rgb(255 255 255 / 38%);
+  border-top: 1px solid var(--divider-color);
+  color: var(--text-tertiary);
   font-size: var(--font-xs);
 }
 
 .quickAccessFooter kbd {
   margin-right: 0.18rem;
-  color: rgb(255 255 255 / 62%);
-  font: inherit;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: inherit;
 }
 
 @media (max-width: 620px) {

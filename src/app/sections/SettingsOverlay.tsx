@@ -7,6 +7,11 @@ import {
 } from '../domain/keymap'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { CommandReferenceSection } from './settings/CommandReferenceSection'
+import { AppearanceSection } from './settings/AppearanceSection'
+import { Icon } from '../ui/Icon'
+import { IconButton } from '../ui/IconButton'
+import { Button } from '../ui/Button'
+import { FormField } from '../ui/FormField'
 import {
   formatKeymapContext,
   isUiActionAllowedInContext,
@@ -165,7 +170,7 @@ export function SettingsOverlay({
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [conflict, setConflict] = useState<KeymapBinding | null>(null)
-  const [activeSection, setActiveSection] = useState<'shortcuts' | 'commands'>('shortcuts')
+  const [activeSection, setActiveSection] = useState<'appearance' | 'shortcuts' | 'commands'>('shortcuts')
   const settingsPanelRef = useRef<HTMLElement | null>(null)
   const shortcutEditorRef = useRef<HTMLElement | null>(null)
   const shortcutEditorOpenerRef = useRef<HTMLElement | null>(null)
@@ -273,12 +278,21 @@ export function SettingsOverlay({
             <p className="settingsEyebrow">Preferences</p>
             <h2 id="settings-title">Settings</h2>
           </div>
-          <button type="button" className="settingsClose" onClick={closeOverlay} aria-label="Close settings">
-            ×
-          </button>
+          <IconButton className="settingsClose" onClick={closeOverlay} label="Close settings">
+            <Icon name="close" />
+          </IconButton>
         </header>
         <div className="settingsBody">
           <nav className="settingsNav" aria-label="Settings sections">
+            <button
+              type="button"
+              className={`settingsNavItem${activeSection === 'appearance' ? ' settingsNavItem-active' : ''}`}
+              aria-current={activeSection === 'appearance' ? 'page' : undefined}
+              onClick={() => setActiveSection('appearance')}
+            >
+              <span>Appearance</span>
+              <small>Light and dark</small>
+            </button>
             <button
               type="button"
               className={`settingsNavItem${activeSection === 'shortcuts' ? ' settingsNavItem-active' : ''}`}
@@ -299,7 +313,9 @@ export function SettingsOverlay({
             </button>
           </nav>
           <main className="settingsContent">
-            {activeSection === 'shortcuts' ? (
+            {activeSection === 'appearance' ? (
+              <AppearanceSection />
+            ) : activeSection === 'shortcuts' ? (
               <>
                 <div className="settingsSectionIntro">
                   <div>
@@ -307,9 +323,8 @@ export function SettingsOverlay({
                     <p>Bindings are matched by logical or physical key, modifiers, context, and optional input mode.</p>
                   </div>
                   <div className="settingsSectionActions">
-                    <button
-                      type="button"
-                      className="settingsButton"
+                    <Button
+                      size="small"
                       disabled={!resource || busy}
                       onClick={(event) => openEditor(
                         editorFromBinding(contexts[0] ?? 'sequencer'),
@@ -317,15 +332,15 @@ export function SettingsOverlay({
                       )}
                     >
                       Add shortcut
-                    </button>
-                    <button
-                      type="button"
-                      className="settingsButton settingsButton-danger"
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="danger"
                       disabled={!resource || (resource.source === 'default' && !resource.loadError) || busy}
                       onClick={() => void onReset().catch(() => undefined)}
                     >
                       Reset all
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {error ? <p className="settingsError" role="alert">{error}</p> : null}
@@ -395,10 +410,11 @@ export function SettingsOverlay({
                 <p className="settingsEyebrow">{editor.originalTrigger ? 'Edit binding' : 'New binding'}</p>
                 <h3 id="shortcut-editor-title">Configure shortcut</h3>
               </div>
-              <button type="button" className="settingsClose" onClick={() => closeEditor()} aria-label="Close editor">×</button>
+              <IconButton className="settingsClose" onClick={() => closeEditor()} label="Close editor">
+                <Icon name="close" />
+              </IconButton>
             </div>
-            <label className="settingsField">
-              <span>Context</span>
+            <FormField className="settingsField" label="Context">
               <select
                 value={editor.context}
                 onChange={(event) => setEditor({ ...editor, context: event.target.value })}
@@ -408,9 +424,8 @@ export function SettingsOverlay({
                   <option value={context} key={context}>{formatKeymapContext(context)}</option>
                 ))}
               </select>
-            </label>
-            <label className="settingsField">
-              <span>Key matching</span>
+            </FormField>
+            <FormField className="settingsField" label="Key matching">
               <select value={editor.matchKind} onChange={(event) => setEditor({
                 ...editor,
                 matchKind: event.target.value as EditorState['matchKind'],
@@ -419,7 +434,7 @@ export function SettingsOverlay({
                 <option value="key">Logical key</option>
                 <option value="code">Physical key</option>
               </select>
-            </label>
+            </FormField>
             <label className="settingsField">
               <span>Trigger</span>
               <button
@@ -557,10 +572,10 @@ export function SettingsOverlay({
               </div>
             ) : null}
             <div className="shortcutEditorFooter">
-              <button type="button" className="settingsButton" onClick={() => closeEditor()}>Cancel</button>
-              <button
-                type="button"
-                className="settingsButton settingsButton-primary"
+              <Button size="small" onClick={() => closeEditor()}>Cancel</Button>
+              <Button
+                size="small"
+                variant="primary"
                 disabled={
                   busy ||
                   !editor.context.trim() ||
@@ -574,7 +589,7 @@ export function SettingsOverlay({
                 onClick={() => void saveEditor()}
               >
                 {busy ? 'Saving…' : 'Save shortcut'}
-              </button>
+              </Button>
             </div>
           </section>
         </div>

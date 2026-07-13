@@ -1,5 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { TranslateDirection } from '../domain/models'
+import { Icon } from '../ui/Icon'
+import { EditableHeaderField } from './header/EditableHeaderField'
 
 type HeaderSectionProps = {
   isTimeSignatureEditing: boolean
@@ -153,88 +155,36 @@ export function HeaderSection({
           </div>
         </div>
       </div>
-      <div className="headerField headerField-key">
-        <span className="fieldLabel">Key</span>
-        <div className="headerEditableValueSlot">
-          {isKeyEditing ? (
-            <input
-              ref={keyInputRef}
-              className="headerEditableInput mono"
-              type="text"
-              value={keyDraft}
-              onChange={(event) => setKeyDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void commitKey(keyDraft)
-                  return
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  cancelKeyEdit()
-                }
-              }}
-              onBlur={cancelKeyEdit}
-              spellCheck={false}
-              autoCapitalize="off"
-              autoComplete="off"
-              autoCorrect="off"
-              aria-label="Edit key"
-            />
-          ) : (
-            <button
-              type="button"
-              className="headerEditableDisplay fieldValue mono"
-              onClick={beginKeyEdit}
-              disabled={disabledReason !== null}
-              aria-label={`Key ${keyDisplay}. Click to edit`}
-            >
-              {keyDisplay}
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="headerField headerField-baseFrequency">
-        <span className="fieldLabel">Zero Hz</span>
-        <div className="headerEditableValueSlot">
-          {isBaseFrequencyEditing ? (
-            <input
-              ref={baseFrequencyInputRef}
-              className="headerEditableInput mono"
-              type="text"
-              value={baseFrequencyDraft}
-              onChange={(event) => setBaseFrequencyDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void commitBaseFrequency(baseFrequencyDraft)
-                  return
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  cancelBaseFrequencyEdit()
-                }
-              }}
-              onBlur={cancelBaseFrequencyEdit}
-              spellCheck={false}
-              autoCapitalize="off"
-              autoComplete="off"
-              autoCorrect="off"
-              aria-label="Edit base frequency"
-            />
-          ) : (
-            <button
-              type="button"
-              className="headerEditableDisplay fieldValue mono"
-              onClick={beginBaseFrequencyEdit}
-              disabled={disabledReason !== null}
-              aria-label={`Zero frequency ${baseFrequency} hertz. Click to edit`}
-            >
-              {baseFrequency}
-            </button>
-          )}
-        </div>
-      </div>
+      <EditableHeaderField
+        className="headerField-key"
+        label="Key"
+        editing={isKeyEditing}
+        inputRef={keyInputRef}
+        draft={keyDraft}
+        setDraft={setKeyDraft}
+        commit={commitKey}
+        cancel={cancelKeyEdit}
+        begin={beginKeyEdit}
+        disabled={disabledReason !== null}
+        value={keyDisplay}
+        inputLabel="Edit key"
+        displayLabel={`Key ${keyDisplay}. Click to edit`}
+      />
+      <EditableHeaderField
+        className="headerField-baseFrequency"
+        label="Zero Hz"
+        editing={isBaseFrequencyEditing}
+        inputRef={baseFrequencyInputRef}
+        draft={baseFrequencyDraft}
+        setDraft={setBaseFrequencyDraft}
+        commit={commitBaseFrequency}
+        cancel={cancelBaseFrequencyEdit}
+        begin={beginBaseFrequencyEdit}
+        disabled={disabledReason !== null}
+        value={baseFrequency}
+        inputLabel="Edit base frequency"
+        displayLabel={`Zero frequency ${baseFrequency} hertz. Click to edit`}
+      />
       <div className="headerSpacer">
         <button
           type="button"
@@ -243,7 +193,7 @@ export function HeaderSection({
           disabled={disabledReason !== null}
           aria-label="Open quick access"
         >
-          <span className="headerQuickAccessIcon" aria-hidden="true">⌕</span>
+          <span className="headerQuickAccessIcon" aria-hidden="true"><Icon name="search" size={15} /></span>
           <span className="headerQuickAccessLabel">
             Search files, tunings, scales, and commands
           </span>
