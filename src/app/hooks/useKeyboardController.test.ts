@@ -39,6 +39,7 @@ const renderController = (
     compositionSelectionRef?: {
       current: { rowCoordinate: number; columnCoordinate: number }
     }
+    beginCompositionColumnLengthEdit?: () => void
   } = {}
 ) => {
   const editorState: EditorState = { selection: { path: [] }, inputMode: 'pitch' }
@@ -64,6 +65,7 @@ const renderController = (
     setWorkspaceView: vi.fn(),
     editSelectedCompositionCell: vi.fn(),
     runSelectedCompositionAction: vi.fn().mockReturnValue(false),
+    beginCompositionColumnLengthEdit: options.beginCompositionColumnLengthEdit ?? vi.fn(),
     setLoopStart: vi.fn(),
     setLoopEnd: vi.fn(),
     setIsModulatorMode: vi.fn(),
@@ -127,6 +129,32 @@ describe('useKeyboardController', () => {
     })))
 
     expect(openCommandPalette).toHaveBeenCalledOnce()
+    rendered.unmount()
+  })
+
+  it('routes composition column-length bindings to the global header editor', () => {
+    const keymap = createResource()
+    const template = keymap.bindings.composition?.find((binding) =>
+      binding.target.type === 'ui_action' && binding.target.action === 'composition.row.rename'
+    )
+    if (!template) throw new Error('Expected composition row rename binding')
+    const binding = structuredClone(template)
+    binding.trigger.match.value = 't'
+    binding.target = {
+      type: 'ui_action',
+      action: 'composition.column.length',
+      arguments: {},
+    }
+    keymap.bindings.composition?.push(binding)
+    const beginCompositionColumnLengthEdit = vi.fn()
+    const rendered = renderController(keymap, vi.fn(), vi.fn(), {
+      workspaceView: 'composition',
+      beginCompositionColumnLengthEdit,
+    })
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', code: 'KeyT' })))
+
+    expect(beginCompositionColumnLengthEdit).toHaveBeenCalledOnce()
     rendered.unmount()
   })
 

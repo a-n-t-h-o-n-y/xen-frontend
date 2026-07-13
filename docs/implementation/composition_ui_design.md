@@ -68,29 +68,21 @@ they should be ordinary keymap bindings in a `composition` context.
 
 ## Matrix Layout
 
-The composition matrix has a fixed metadata row at the top and one or more
-arrangement rows below it.
+The composition matrix has a locked row-metadata rail at the left and one or more
+arrangement rows beside it. The rail reserves horizontal space and stays visible at
+all supported window sizes while the virtual cell grid recenters around selection.
 
 Suggested columns:
 
-- Row header: row name and output destination.
-- Time columns: one visual column per composition column.
+- Locked row header: signed row coordinate, row name, and output destination.
+- Time columns: one equal-width visual column per virtual composition coordinate.
 
-The top metadata row displays each column's length as a time signature, such as
-`4/4`, `7/8`, or `5/16`. A column's visual width is proportional to its musical
-length so longer spans read as longer time. Use a minimum width so short columns
-remain selectable and labels fit.
+The matrix does not render column headers. The global app header displays and edits
+the selected column's duration, key, scale, tuning, and related pitch metadata.
+Virtual columns use `default_column`; materialized columns use their stored metadata.
 
-Column width rule:
-
-```ts
-columnBeats = numerator * (4 / denominator)
-columnWidth = max(minColumnWidth, columnBeats * beatWidth)
-```
-
-The row header should remain visible when horizontally scrolling. The metadata row
-should remain visible when vertically scrolling. If both axes scroll, the top-left
-corner cell remains pinned.
+Column width is a fixed responsive design token and never scales with duration or
+time signature.
 
 ## Selection
 
@@ -98,8 +90,8 @@ The matrix owns its own selection state:
 
 ```ts
 type CompositionSelection = {
-  rowIndex: number
-  columnIndex: number
+  rowCoordinate: number
+  columnCoordinate: number
 }
 ```
 
@@ -108,7 +100,6 @@ Selection visuals:
 - selected cell: strongest highlight,
 - selected row: light horizontal highlight,
 - selected column: light vertical highlight,
-- selected metadata cell: active when editing column length,
 - selected row header: active when editing row output or row name.
 
 The row and column highlight should be quiet enough to preserve matrix readability.
@@ -121,12 +112,23 @@ Each arrangement cell displays the sequence name. If the backend only has numeri
 sequence IDs, the frontend can temporarily show a generated label like `S1`, but the
 intended design needs stable sequence names.
 
-Suggested cell states:
+Cell states:
 
 - named sequence reference: show the sequence name.
-- empty rest: show a muted placeholder or blank cell.
+- empty rest: show only a faint, transparent wireframe with no visible label or
+  coordinate; selection and active inline editing may strengthen its outline.
 - unresolved reference: show the requested name in an error state.
 - shared reference: optional small indicator if the same sequence appears elsewhere.
+- loop membership: show the green lower boundary only on populated placements, never
+  on virtual or otherwise empty cells.
+
+## Interaction
+
+The composition canvas and row rail are keyboard-only. They expose no click,
+double-click, drag/drop, hover action, or per-cell unassign control. Keymapped actions
+own navigation, assignment, row metadata editing, unassignment, and loop bounds.
+The global header remains pointer-editable, and the `composition.column.length`
+action opens its Time editor.
 
 The sequence bank remains implicit:
 
@@ -315,17 +317,16 @@ The composition matrix should be a new section component, likely
 - Should empty cells render as rests in all outputs? Recommended: yes.
 - Should the matrix allow multiple rows with the same output? Current backend
   semantics allow it; keep that behavior.
-- Should column length edits in the sequencer affect the selected composition column?
-  Recommended: The sequencer will remove its time signature/length and it will
-  no longer be editable from there.
+- Column metadata is edited through the global header for the selected composition
+  column or active sequencer target; there is no in-grid column editor.
 
 ## First Build Slice
 
 1. Extend frontend project models and mappers to expose schema `2` composition data.
 2. Add `composition` as a workspace view beside `sequencer` (the former Library
    workspace was later replaced by Quick Access).
-3. Render a read-only matrix with proportional columns, row output labels, sequence
-   labels, and selection highlight.
+3. Render a keyboard-only matrix with fixed-width columns, a locked row rail,
+   sequence labels, sparse empty wireframes, and selection highlight.
 4. Add keymapped matrix selection movement for arrows and `hjkl`.
 5. Add `Enter` to switch from a matrix cell to the sequencer active sequence.
 6. Add backend commands for assigning cells, inserting/deleting rows, and

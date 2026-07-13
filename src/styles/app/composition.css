@@ -29,50 +29,53 @@
 }
 
 .compositionViewport {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-}
-
-.compositionWorld {
   --composition-cell-width: 8.25rem;
   --composition-cell-height: 4.75rem;
   --composition-cell-gap: var(--space-2);
+  --composition-row-rail-width: 8.75rem;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: var(--composition-row-rail-width) minmax(0, 1fr);
+  gap: var(--composition-cell-gap);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.compositionRowRail,
+.compositionGridViewport {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.compositionWorld,
+.compositionRowHeaders {
   position: absolute;
   top: 50%;
+}
+
+.compositionWorld {
   left: 50%;
   transform: translate(-50%, -50%);
 }
 
-/* Coordinate headers float around the grid and do not offset its center. */
-.compositionColumnHeaders,
 .compositionCells {
   display: grid;
   grid-template-columns: repeat(var(--composition-column-count), var(--composition-cell-width));
+  grid-template-rows: repeat(var(--composition-row-count), var(--composition-cell-height));
   gap: var(--composition-cell-gap);
 }
 
-.compositionColumnHeaders {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + var(--space-2));
-  left: 0;
-  height: 2.65rem;
-}
-
+/* Row metadata stays locked to the left edge while the virtual grid recenters. */
 .compositionRowHeaders {
-  position: absolute;
-  top: 0;
-  right: calc(100% + var(--space-2));
-  bottom: 0;
+  right: var(--space-1);
+  left: 0;
   display: grid;
   grid-template-rows: repeat(var(--composition-row-count), var(--composition-cell-height));
   gap: var(--composition-cell-gap);
-  width: 8.75rem;
-}
-
-.compositionCells {
-  grid-template-rows: repeat(var(--composition-row-count), var(--composition-cell-height));
+  transform: translateY(-50%);
 }
 
 .compositionAxisHeader {
@@ -83,24 +86,13 @@
   background: var(--surface-control);
   color: var(--text-secondary);
   text-align: left;
-  cursor: pointer;
   backdrop-filter: blur(8px);
 }
 
-.compositionAxisHeader:hover,
-.compositionAxisHeader:focus-visible,
 .compositionAxisHeader-selected {
   border-color: var(--focus-ring);
   background: var(--surface-control-hover);
   color: var(--text-primary);
-  outline: none;
-}
-
-.compositionColumnHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1);
 }
 
 .compositionRowHeader {
@@ -147,37 +139,22 @@
   color: var(--text-primary);
   font: inherit;
   text-align: left;
-  cursor: pointer;
   overflow: hidden;
   transition:
     border-color 180ms ease,
     background-color 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
+    box-shadow 180ms ease;
 }
 
 .compositionCell-empty {
   border-color: rgb(var(--composition-wire-rgb) / calc(var(--wire-opacity) * 0.18));
-  background: rgb(var(--composition-wire-rgb) / calc(var(--wire-opacity) * 0.012));
-}
-
-.compositionCell-empty .compositionCellOverlay {
-  opacity: calc(var(--wire-opacity) * 0.34);
+  background: transparent;
 }
 
 .compositionCell-materialized {
   border-color: var(--border-strong-color);
   background: var(--composition-materialized);
   box-shadow: var(--shadow-sm);
-}
-
-.compositionCell:hover {
-  border-color: var(--border-strong-color);
-  background-color: var(--composition-cell-hover);
-}
-
-.compositionCell-materialized:hover {
-  transform: translateY(-1px);
 }
 
 .compositionCell:focus-visible,
@@ -188,6 +165,12 @@
     0 0 0 2px var(--focus-ring),
     var(--shadow-sm);
   outline: none;
+}
+
+.compositionCell-empty:focus-visible,
+.compositionCell-empty.compositionCell-selected {
+  background: transparent;
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .compositionCell-referenceMatch {
@@ -233,43 +216,6 @@
   white-space: nowrap;
 }
 
-.compositionCell-empty .compositionCellLabel {
-  color: var(--text-tertiary);
-  font-size: var(--font-xs);
-  font-weight: 500;
-}
-
-.compositionCellUnassign {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: grid;
-  place-items: center;
-  width: 1.2rem;
-  height: 1.2rem;
-  padding: 0;
-  border: var(--border-subtle);
-  border-radius: 50%;
-  background: var(--surface-overlay);
-  color: var(--text-secondary);
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: auto;
-  transition: opacity 180ms ease, color 180ms ease;
-}
-
-.compositionCell:hover .compositionCellUnassign,
-.compositionCell-selected .compositionCellUnassign,
-.compositionCellUnassign:focus-visible {
-  opacity: 1;
-}
-
-.compositionCellUnassign:hover,
-.compositionCellUnassign:focus-visible {
-  color: var(--text-primary);
-  outline: none;
-}
-
 .compositionMiniMap {
   position: absolute;
   z-index: 1;
@@ -303,15 +249,6 @@
   color: var(--text-primary);
   font: inherit;
   outline: none;
-  pointer-events: auto;
-}
-
-.compositionHint {
-  position: absolute;
-  right: var(--space-3);
-  bottom: var(--space-2);
-  color: var(--text-tertiary);
-  font-size: 0.62rem;
   pointer-events: none;
 }
 
@@ -320,11 +257,9 @@
 }
 
 @media (max-width: 760px) {
-  .compositionWorld {
+  .compositionViewport {
     --composition-cell-width: 7rem;
     --composition-cell-height: 4.25rem;
+    --composition-row-rail-width: 7.25rem;
   }
-
-  .compositionRowHeaders { width: 7.25rem; }
-  .compositionHint { display: none; }
 }

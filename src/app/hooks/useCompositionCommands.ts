@@ -4,16 +4,13 @@ import { getActiveSequenceTarget } from '../domain/composition'
 import {
   compositionCellAssign,
   compositionCellUnassign,
-  compositionCellMove,
   compositionLoopBoundary,
   compositionRowChannel,
   compositionRowRename,
 } from '../domain/commands'
-import { formatTimeSignature, parseTimeSignatureInput } from '../presentation/viewModels'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   ActiveSequenceTarget,
-  Composition,
   CompositionSelection,
   EditorState,
   MessageLevel,
@@ -26,7 +23,6 @@ type UseCompositionCommandsArgs = {
   compositionSelectionRef: MutableRefObject<CompositionSelection>
   editorStateRef: MutableRefObject<EditorState>
   compositionSelection: CompositionSelection
-  projectComposition: Composition | null
   bridgeUnavailableMessage: string | null
   executeBackendCommand: (command: string) => Promise<void>
   setStatusMessage: Dispatch<SetStateAction<string>>
@@ -91,10 +87,6 @@ export function useCompositionCommands({
     ))
   }, [compositionSelectionRef, runCompositionCommand])
 
-  const beginCompositionEdit = useCallback((target: CompositionEditTarget): void => {
-    setCompositionEditTarget(target)
-  }, [])
-
   const commitCompositionCellName = useCallback((
     rowCoordinate: number,
     columnCoordinate: number,
@@ -132,39 +124,11 @@ export function useCompositionCommands({
     runCompositionCommand(compositionRowChannel(rowCoordinate, trimmed))
   }, [runCompositionCommand, setStatusLevel, setStatusMessage])
 
-  const commitCompositionColumnLength = useCallback((
-    _columnCoordinate: number,
-    length: string
-  ): void => {
-    const parsed = parseTimeSignatureInput(length)
-    setCompositionEditTarget(null)
-    if (!parsed) {
-      setStatusMessage('Invalid column length. Use N/D, e.g. 4/4')
-      setStatusLevel('warning')
-      return
-    }
-    runCompositionCommand(`set duration ${formatTimeSignature(parsed)}`)
-  }, [runCompositionCommand, setStatusLevel, setStatusMessage])
-
   const unassignCompositionCell = useCallback((
     rowCoordinate: number,
     columnCoordinate: number
   ): void => {
     runCompositionCommand(compositionCellUnassign(rowCoordinate, columnCoordinate))
-  }, [runCompositionCommand])
-
-  const moveCompositionCell = useCallback((
-    fromRowCoordinate: number,
-    fromColumnCoordinate: number,
-    toRowCoordinate: number,
-    toColumnCoordinate: number
-  ): void => {
-    runCompositionCommand(compositionCellMove(
-      fromRowCoordinate,
-      fromColumnCoordinate,
-      toRowCoordinate,
-      toColumnCoordinate
-    ))
   }, [runCompositionCommand])
 
   const runSelectedCompositionAction = useCallback((action: string): boolean => {
@@ -188,16 +152,6 @@ export function useCompositionCommands({
       setCompositionEditTarget({ kind: 'rowChannel', rowCoordinate: selection.rowCoordinate })
       return true
     }
-    if (
-      action === 'composition.column.length' &&
-      composition.columns.has(selection.columnCoordinate)
-    ) {
-      setCompositionEditTarget({
-        kind: 'columnLength',
-        columnCoordinate: selection.columnCoordinate,
-      })
-      return true
-    }
     return false
   }, [compositionSelectionRef, projectRef, unassignCompositionCell])
 
@@ -208,12 +162,8 @@ export function useCompositionCommands({
     editSelectedCompositionCell,
     setLoopBoundary,
     runSelectedCompositionAction,
-    beginCompositionEdit,
     commitCompositionCellName,
     commitCompositionRowName,
     commitCompositionRowChannel,
-    commitCompositionColumnLength,
-    unassignCompositionCell,
-    moveCompositionCell,
   }
 }

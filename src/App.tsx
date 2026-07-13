@@ -169,10 +169,14 @@ function App() {
     }
   }, [installActiveSequenceTarget, projectSnapshot])
 
+  const headerColumnCoordinate = workspaceView === 'composition'
+    ? compositionSelection.columnCoordinate
+    : activeSequenceTarget?.columnCoordinate ?? null
   const projectViewModel = useProjectViewModel(
     projectSnapshot,
     editorState.selection,
-    activeSequenceTarget
+    activeSequenceTarget,
+    headerColumnCoordinate
   )
 
   const tuningLength = projectViewModel?.tuningLength ?? DEFAULT_TUNING_LENGTH
@@ -200,19 +204,14 @@ function App() {
     editSelectedCompositionCell,
     setLoopBoundary,
     runSelectedCompositionAction,
-    beginCompositionEdit,
     commitCompositionCellName,
     commitCompositionRowName,
     commitCompositionRowChannel,
-    commitCompositionColumnLength,
-    unassignCompositionCell,
-    moveCompositionCell,
   } = useCompositionCommands({
     projectRef,
     compositionSelectionRef,
     editorStateRef,
     compositionSelection,
-    projectComposition: projectSnapshot?.composition ?? null,
     bridgeUnavailableMessage,
     executeBackendCommand,
     setStatusMessage,
@@ -347,6 +346,7 @@ function App() {
     setWorkspaceView: installWorkspaceView,
     editSelectedCompositionCell,
     runSelectedCompositionAction,
+    beginCompositionColumnLengthEdit: beginTimeSignatureEdit,
     setLoopStart: () => setLoopBoundary('start'),
     setLoopEnd: () => setLoopBoundary('end'),
     setIsModulatorMode,
@@ -443,18 +443,10 @@ function App() {
                   selection={displayedCompositionSelection}
                   tuningLength={tuningLength}
                   editTarget={compositionEditTarget}
-                  onSelectCell={(selection) => {
-                    setCompositionEditTarget(null)
-                    installCompositionSelection(selection)
-                  }}
-                  onBeginEdit={beginCompositionEdit}
                   onCancelEdit={() => setCompositionEditTarget(null)}
                   onCommitCellName={commitCompositionCellName}
                   onCommitRowName={commitCompositionRowName}
                   onCommitRowChannel={commitCompositionRowChannel}
-                  onCommitColumnLength={commitCompositionColumnLength}
-                  onUnassignCell={unassignCompositionCell}
-                  onMoveCell={moveCompositionCell}
                 />
               ) : (
                 <div className="workspaceNotice" role="status" aria-live="polite">

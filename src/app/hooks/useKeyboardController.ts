@@ -46,6 +46,7 @@ type UseKeyboardControllerArgs = {
   setWorkspaceView: Dispatch<SetStateAction<WorkspaceView>>
   editSelectedCompositionCell: () => void
   runSelectedCompositionAction: (action: string) => boolean
+  beginCompositionColumnLengthEdit: () => void
   setLoopStart: () => void
   setLoopEnd: () => void
   setIsModulatorMode: Dispatch<SetStateAction<boolean>>
@@ -75,6 +76,7 @@ export function useKeyboardController({
   setWorkspaceView,
   editSelectedCompositionCell,
   runSelectedCompositionAction,
+  beginCompositionColumnLengthEdit,
   setLoopStart,
   setLoopEnd,
   setIsModulatorMode,
@@ -413,6 +415,11 @@ export function useKeyboardController({
               return
             }
 
+            if (matchedBinding.target.action === 'composition.column.length') {
+              beginCompositionColumnLengthEdit()
+              return
+            }
+
             if (runSelectedCompositionAction(matchedBinding.target.action)) {
               return
             }
@@ -497,6 +504,7 @@ export function useKeyboardController({
     }
   }, [
     bridgeUnavailableMessage,
+    beginCompositionColumnLengthEdit,
     editorStateRef,
     activeSequenceTargetRef,
     executeBackendCommand,

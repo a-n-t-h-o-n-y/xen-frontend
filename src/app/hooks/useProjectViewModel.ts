@@ -10,7 +10,7 @@ import {
   normalizePitch,
 } from '../domain/music'
 import { sequenceFromTarget } from '../domain/composition'
-import { getCompositionColumn } from '../domain/composition'
+import { getCompositionColumnOrDefault } from '../domain/composition'
 import { resolveSelection } from '../domain/selection'
 import {
   collectLeafCells,
@@ -50,19 +50,18 @@ export type ProjectViewModel = {
 export function useProjectViewModel(
   projectSnapshot: ProjectSnapshot | null,
   selection: Selection,
-  activeSequenceTarget: ActiveSequenceTarget | null
+  activeSequenceTarget: ActiveSequenceTarget | null,
+  headerColumnCoordinate: number | null
 ): ProjectViewModel | null {
   return useMemo(() => {
     if (!projectSnapshot) {
       return null
     }
 
-    const pitchState = projectSnapshot.composition && activeSequenceTarget
-      ? getCompositionColumn(
-          projectSnapshot.composition,
-          activeSequenceTarget.columnCoordinate
-        )?.pitch ?? projectSnapshot.pitch
-      : projectSnapshot.pitch
+    const headerColumn = projectSnapshot.composition && headerColumnCoordinate !== null
+      ? getCompositionColumnOrDefault(projectSnapshot.composition, headerColumnCoordinate)
+      : null
+    const pitchState = headerColumn?.pitch ?? projectSnapshot.pitch
     const activeScale = pitchState.scale
     const rawTuningLength = pitchState.tuning.definition.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
@@ -105,7 +104,8 @@ export function useProjectViewModel(
       }
     }
 
-    const signature = `${sequence.timeSignature.numerator}/${sequence.timeSignature.denominator}`
+    const headerLength = headerColumn?.length ?? sequence.timeSignature
+    const signature = `${headerLength.numerator}/${headerLength.denominator}`
     const selectedNumerator = sequence.timeSignature.numerator
     const selectedDenominator = sequence.timeSignature.denominator
     const directLeafCells = collectLeafCells(rootCell)
@@ -166,5 +166,5 @@ export function useProjectViewModel(
       selectedElementIndex: resolvedSelection?.selectedElementIndex ?? null,
       selectedElementKind: resolvedSelection?.selectedElementKind ?? null,
     }
-  }, [activeSequenceTarget, projectSnapshot, selection])
+  }, [activeSequenceTarget, headerColumnCoordinate, projectSnapshot, selection])
 }
