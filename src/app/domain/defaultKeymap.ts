@@ -127,19 +127,20 @@ add(trigger('n'), command('note :N=0:'))
 add(trigger('r'), command('rest'))
 add(trigger('k', false, true), emptyAction('command.open'))
 add(trigger(':', true), emptyAction('command.open'))
-add(trigger('Tab'), emptyAction('workspace.view.composition'))
-
 for (const [key, direction] of [
   ['h', 'left'], ['ArrowLeft', 'left'], ['l', 'right'], ['ArrowRight', 'right'],
   ['j', 'down'], ['ArrowDown', 'down'], ['k', 'up'], ['ArrowUp', 'up'],
 ] as const) add(trigger(key), compositionMove(direction), 'composition')
+
+for (const key of ['j', 'ArrowDown']) {
+  add(trigger(key, true), move('down'), 'composition')
+}
 
 for (const [key, name, shift, commandModifier] of [
   ['c', 'edit.copy', false, true],
   ['x', 'edit.cut', false, true],
   ['v', 'edit.paste', false, true],
   ['d', 'composition.cell.duplicate_right', false, true],
-  ['Enter', 'composition.cell.edit_sequence', false, false],
   ['n', 'composition.cell.rename_or_create_sequence', false, false],
   ['Delete', 'composition.cell.unassign', false, false],
   ['Backspace', 'composition.cell.unassign', false, false],
@@ -149,7 +150,6 @@ for (const [key, name, shift, commandModifier] of [
   [']', 'composition.loop.set_end', false, false],
 ] as const) add(trigger(key, shift, commandModifier), emptyAction(name), 'composition')
 addHistoryBindings('composition')
-add(trigger('Tab'), emptyAction('workspace.view.sequencer'), 'composition')
 
 for (const [context, entries] of [
   ['quick_access.command', [

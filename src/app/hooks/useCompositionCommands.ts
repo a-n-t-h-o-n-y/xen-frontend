@@ -1,6 +1,9 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { getErrorMessage } from '../utils/errors'
-import { getActiveSequenceTarget } from '../domain/composition'
+import {
+  getActiveSequenceTarget,
+  getNextGeneratedSequenceName,
+} from '../domain/composition'
 import {
   compositionCellAssign,
   compositionCellUnassign,
@@ -22,7 +25,6 @@ type UseCompositionCommandsArgs = {
   projectRef: MutableRefObject<ProjectSnapshot | null>
   compositionSelectionRef: MutableRefObject<CompositionSelection>
   editorStateRef: MutableRefObject<EditorState>
-  compositionSelection: CompositionSelection
   bridgeUnavailableMessage: string | null
   executeBackendCommand: (command: string) => Promise<void>
   setStatusMessage: Dispatch<SetStateAction<string>>
@@ -36,7 +38,6 @@ export function useCompositionCommands({
   projectRef,
   compositionSelectionRef,
   editorStateRef,
-  compositionSelection,
   bridgeUnavailableMessage,
   executeBackendCommand,
   setStatusMessage,
@@ -46,24 +47,51 @@ export function useCompositionCommands({
   installWorkspaceView,
 }: UseCompositionCommandsArgs) {
   const [compositionEditTarget, setCompositionEditTarget] = useState<CompositionEditTarget | null>(null)
+  const sequenceEntryPendingRef = useRef(false)
 
-  const editSelectedCompositionCell = useCallback((): void => {
-    const composition = projectRef.current?.composition
-    if (!composition) return
+  const enterSelectedCompositionSequence = useCallback(async (): Promise<boolean> => {
+    const selection = { ...compositionSelectionRef.current }
+    let project = projectRef.current
+    let target = getActiveSequenceTarget(project?.composition ?? null, selection)
 
-    const target = getActiveSequenceTarget(composition, compositionSelectionRef.current)
     if (!target) {
-      setStatusMessage('Empty composition cell. Assign a sequence before opening it.')
-      setStatusLevel('warning')
-      return
+      if (!project?.composition || bridgeUnavailableMessage !== null) return false
+      if (sequenceEntryPendingRef.current) return false
+
+      const sequenceName = getNextGeneratedSequenceName(project.sequenceBank)
+      sequenceEntryPendingRef.current = true
+      try {
+        await executeBackendCommand(compositionCellAssign(
+          selection.rowCoordinate,
+          selection.columnCoordinate,
+          sequenceName
+        ))
+      } catch (error: unknown) {
+        sequenceEntryPendingRef.current = false
+        setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
+        setStatusLevel('error')
+        return false
+      }
+      sequenceEntryPendingRef.current = false
+
+      project = projectRef.current
+      target = getActiveSequenceTarget(project?.composition ?? null, selection)
+      if (!target) {
+        setStatusMessage('Sequence assignment completed without creating the selected cell.')
+        setStatusLevel('error')
+        return false
+      }
     }
 
     installActiveSequenceTarget(target)
     installEditorState({ ...editorStateRef.current, selection: { path: [] } })
     installWorkspaceView('sequencer')
+    return true
   }, [
+    bridgeUnavailableMessage,
     compositionSelectionRef,
     editorStateRef,
+    executeBackendCommand,
     installActiveSequenceTarget,
     installEditorState,
     installWorkspaceView,
@@ -158,8 +186,7 @@ export function useCompositionCommands({
   return {
     compositionEditTarget,
     setCompositionEditTarget,
-    displayedCompositionSelection: compositionSelection,
-    editSelectedCompositionCell,
+    enterSelectedCompositionSequence,
     setLoopBoundary,
     runSelectedCompositionAction,
     commitCompositionCellName,

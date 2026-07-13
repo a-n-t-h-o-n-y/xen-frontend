@@ -28,22 +28,22 @@ references or rests.
 
 ## Workspace Switching
 
-`Enter` on a populated or editable composition cell should switch to the sequencer
-and make that cell's sequence the active sequencer target. A dedicated key action
-returns to the composition matrix.
+Composition and sequence navigation form one vertical hierarchy:
 
-Initial bindings can be conservative:
+- `Shift+Down` on a composition cell enters its sequence at the root.
+- If the cell is empty, entry first creates and assigns the next available generated
+  `S<number>` sequence name.
+- `Shift+Up` in the sequencer moves toward its root. The root remains a selectable
+  whole-sequence state; one additional `Shift+Up` returns to the composition matrix.
+- `Shift+Down` retains its recursive descent behavior inside the sequencer.
 
-- `Enter`: edit selected matrix cell in sequencer.
-- `Escape`: return from sequencer to composition when the sequencer was opened from
-  the matrix.
-- A visible segmented workspace control or two buttons: `Composition` and
-  `Sequencer`.
+There is no dedicated workspace toggle in the status bar and the default keymap does
+not use `Tab` or composition `Enter` for workspace crossing. Legacy workspace and
+cell-entry action IDs remain valid so stored custom keymaps continue to load.
 
-These must be custom keymap actions, not hard-coded keyboard behavior. The current
-keymap system already supports UI actions, but it only has sequence-oriented
-selection and a binary workspace toggle. Composition needs its own keymap context
-and action IDs.
+These remain custom keymap actions rather than hard-coded keyboard behavior. The
+composition context uses `selection.move` for hierarchical entry and its own
+`composition.selection.move` action for movement across matrix coordinates.
 
 Suggested UI actions:
 

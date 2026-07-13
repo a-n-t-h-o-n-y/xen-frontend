@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { defaultKeymapDocument } from '../domain/defaultKeymap'
 import { projectFromDto } from '../domain/mappers'
-import { arrangedProjectFixture } from '../domain/testFixtures'
+import { arrangedProjectFixture, projectFixture } from '../domain/testFixtures'
 import { usesMetaForCommand } from '../platform'
 import { useKeyboardController } from './useKeyboardController'
 import type { EditorState, KeymapResource, ProjectSnapshot } from '../domain/models'
@@ -40,9 +40,14 @@ const renderController = (
       current: { rowCoordinate: number; columnCoordinate: number }
     }
     beginCompositionColumnLengthEdit?: () => void
+    editorStateRef?: { current: EditorState }
+    installEditorState?: (nextState: EditorState) => void
+    setWorkspaceView?: Parameters<typeof useKeyboardController>[0]['setWorkspaceView']
+    enterSelectedCompositionSequence?: () => Promise<boolean>
   } = {}
 ) => {
   const editorState: EditorState = { selection: { path: [] }, inputMode: 'pitch' }
+  const editorStateRef = options.editorStateRef ?? { current: editorState }
   const workspaceView = options.workspaceView ?? 'sequencer'
   const args: Parameters<typeof useKeyboardController>[0] = {
     bridgeUnavailableMessage: null,
@@ -52,18 +57,19 @@ const renderController = (
     openCommandPalette,
     executeBackendCommand,
     projectRef: options.projectRef ?? { current: null },
-    editorStateRef: { current: editorState },
+    editorStateRef,
     activeSequenceTargetRef: { current: null },
     keymapRef: { current: keymap },
-    installEditorState: vi.fn(),
+    installEditorState: options.installEditorState ?? vi.fn(),
     workspaceView,
     workspaceViewRef: { current: workspaceView },
     compositionSelectionRef: options.compositionSelectionRef ?? {
       current: { rowCoordinate: 0, columnCoordinate: 0 },
     },
     installCompositionSelection: vi.fn(),
-    setWorkspaceView: vi.fn(),
-    editSelectedCompositionCell: vi.fn(),
+    setWorkspaceView: options.setWorkspaceView ?? vi.fn(),
+    enterSelectedCompositionSequence: options.enterSelectedCompositionSequence ??
+      vi.fn().mockResolvedValue(true),
     runSelectedCompositionAction: vi.fn().mockReturnValue(false),
     beginCompositionColumnLengthEdit: options.beginCompositionColumnLengthEdit ?? vi.fn(),
     setLoopStart: vi.fn(),
@@ -79,6 +85,114 @@ const renderController = (
 }
 
 describe('useKeyboardController', () => {
+  it('uses hierarchical movement to cross between Composition and the Sequencer', async () => {
+    const enterSelectedCompositionSequence = vi.fn().mockResolvedValue(true)
+    const compositionController = renderController(createResource(), vi.fn(), vi.fn(), {
+      workspaceView: 'composition',
+      enterSelectedCompositionSequence,
+    })
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        shiftKey: true,
+      }))
+    })
+    expect(enterSelectedCompositionSequence).toHaveBeenCalledOnce()
+    compositionController.unmount()
+
+    const editorStateRef: { current: EditorState } = {
+      current: {
+        selection: { path: [{ kind: 'element' as const, index: 0 }] },
+        inputMode: 'pitch' as const,
+      },
+    }
+    const installEditorState = vi.fn((nextState: EditorState) => {
+      editorStateRef.current = nextState
+    })
+    const setWorkspaceView = vi.fn()
+    const sequencerController = renderController(createResource(), vi.fn(), vi.fn(), {
+      projectRef: { current: projectFromDto(projectFixture()) },
+      editorStateRef,
+      installEditorState,
+      setWorkspaceView,
+    })
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'ArrowUp',
+      shiftKey: true,
+    })))
+    expect(installEditorState).toHaveBeenLastCalledWith({
+      selection: { path: [] },
+      inputMode: 'pitch',
+    })
+    expect(setWorkspaceView).not.toHaveBeenCalled()
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'ArrowUp',
+      shiftKey: true,
+    })))
+    expect(setWorkspaceView).toHaveBeenCalledWith('composition')
+    sequencerController.unmount()
+  })
+
+  it('keeps unshifted composition movement separate from sequence entry', () => {
+    const selectionRef = { current: { rowCoordinate: 1, columnCoordinate: 2 } }
+    const enterSelectedCompositionSequence = vi.fn().mockResolvedValue(true)
+    const rendered = renderController(createResource(), vi.fn(), vi.fn(), {
+      workspaceView: 'composition',
+      compositionSelectionRef: selectionRef,
+      enterSelectedCompositionSequence,
+    })
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' })))
+
+    expect(enterSelectedCompositionSequence).not.toHaveBeenCalled()
+    rendered.unmount()
+  })
+
+  it('does not include default Tab or composition Enter crossings', () => {
+    for (const context of ['sequencer', 'composition']) {
+      expect(defaultKeymapDocument.bindings[context]?.some((binding) =>
+        binding.trigger.match.value === 'Tab'
+      )).toBe(false)
+    }
+    expect(defaultKeymapDocument.bindings.composition?.some((binding) =>
+      binding.trigger.match.value === 'Enter' &&
+      binding.target.type === 'ui_action' &&
+      binding.target.action === 'composition.cell.edit_sequence'
+    )).toBe(false)
+  })
+
+  it('continues to dispatch a legacy custom composition entry action', async () => {
+    const keymap = createResource()
+    const template = keymap.bindings.composition?.find((binding) =>
+      binding.target.type === 'ui_action' &&
+      binding.target.action === 'composition.cell.rename_or_create_sequence'
+    )
+    if (!template) throw new Error('Expected a composition action binding')
+    const binding = structuredClone(template)
+    binding.trigger.match.value = 'Enter'
+    binding.target = {
+      type: 'ui_action',
+      action: 'composition.cell.edit_sequence',
+      arguments: {},
+    }
+    keymap.bindings.composition?.push(binding)
+    const enterSelectedCompositionSequence = vi.fn().mockResolvedValue(true)
+    const rendered = renderController(keymap, vi.fn(), vi.fn(), {
+      workspaceView: 'composition',
+      enterSelectedCompositionSequence,
+    })
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    })
+
+    expect(enterSelectedCompositionSequence).toHaveBeenCalledOnce()
+    rendered.unmount()
+  })
+
   it('routes conventional undo and redo accelerators in both workspace views', async () => {
     const primaryModifier = usesMetaForCommand ? { metaKey: true } : { ctrlKey: true }
 

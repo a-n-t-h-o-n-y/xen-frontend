@@ -4,6 +4,7 @@ import {
   MIN_COMPOSITION_COORDINATE,
   getActiveSequenceTarget,
   getCompositionPlacement,
+  getNextGeneratedSequenceName,
   isColumnInLoopRegion,
   moveCompositionSelection,
   reconcileActiveSequenceTarget,
@@ -74,5 +75,17 @@ describe('sparse composition helpers', () => {
       { rowCoordinate: 3, columnCoordinate: 0, sequenceId: 2 },
       { rowCoordinate: -2, columnCoordinate: 9 }
     )).toEqual({ rowCoordinate: -2, columnCoordinate: 9, sequenceId: 2 })
+  })
+
+  it('generates the next collision-free sequence name', () => {
+    expect(getNextGeneratedSequenceName(null)).toBe('S1')
+    expect(getNextGeneratedSequenceName({
+      nextId: 3,
+      sequences: [
+        { id: 1, name: 'Intro', sequence: { cell: { weight: 1, elements: [] } } },
+        { id: 2, name: 's3', sequence: { cell: { weight: 1, elements: [] } } },
+        { id: 7, name: 'S4', sequence: { cell: { weight: 1, elements: [] } } },
+      ],
+    })).toBe('S5')
   })
 })

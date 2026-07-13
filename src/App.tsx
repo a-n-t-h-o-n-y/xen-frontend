@@ -201,8 +201,7 @@ function App() {
   const {
     compositionEditTarget,
     setCompositionEditTarget,
-    displayedCompositionSelection,
-    editSelectedCompositionCell,
+    enterSelectedCompositionSequence,
     setLoopBoundary,
     runSelectedCompositionAction,
     commitCompositionCellName,
@@ -212,7 +211,6 @@ function App() {
     projectRef,
     compositionSelectionRef,
     editorStateRef,
-    compositionSelection,
     bridgeUnavailableMessage,
     executeBackendCommand,
     setStatusMessage,
@@ -345,7 +343,7 @@ function App() {
     compositionSelectionRef,
     installCompositionSelection,
     setWorkspaceView: installWorkspaceView,
-    editSelectedCompositionCell,
+    enterSelectedCompositionSequence,
     runSelectedCompositionAction,
     beginCompositionColumnLengthEdit: beginTimeSignatureEdit,
     setLoopStart: () => setLoopBoundary('start'),
@@ -447,7 +445,7 @@ function App() {
                 <CompositionSection
                   composition={projectSnapshot.composition}
                   sequenceBank={projectSnapshot.sequenceBank}
-                  selection={displayedCompositionSelection}
+                  selection={compositionSelection}
                   tuningLength={tuningLength}
                   editTarget={compositionEditTarget}
                   onCancelEdit={() => setCompositionEditTarget(null)}
@@ -513,14 +511,11 @@ function App() {
       <StatusSection
         currentInputMode={editorState.inputMode}
         currentInputModeLetter={currentInputModeLetter}
-        workspaceView={workspaceView}
-        setWorkspaceView={installWorkspaceView}
         isModulatorMode={isModulatorMode}
         setIsModulatorMode={setIsModulatorMode}
         statusLevel={statusLevel}
         statusMessage={statusMessage}
         selectedCellMeta={selectedCellMeta}
-        workspaceDisabled={!isProjectReady}
         modulatorDisabled={!isProjectReady || workspaceView !== 'sequencer'}
         onOpenSettings={() => {
           quickAccess.close(false)

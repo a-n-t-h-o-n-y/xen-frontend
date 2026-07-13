@@ -4,9 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { WorkspaceControls } from './WorkspaceControls'
 
 describe('WorkspaceControls', () => {
-  it('announces active state and routes workspace and modulator actions', async () => {
+  it('announces input mode and routes settings and modulator actions', async () => {
     const user = userEvent.setup()
-    const setWorkspaceView = vi.fn()
     const setIsModulatorMode = vi.fn()
     const onOpenSettings = vi.fn()
 
@@ -14,21 +13,16 @@ describe('WorkspaceControls', () => {
       <WorkspaceControls
         currentInputMode="velocity"
         currentInputModeLetter="V"
-        workspaceView="sequencer"
-        setWorkspaceView={setWorkspaceView}
         isModulatorMode={false}
         setIsModulatorMode={setIsModulatorMode}
-        workspaceDisabled={false}
         modulatorDisabled={false}
         onOpenSettings={onOpenSettings}
       />
     )
 
     expect(screen.getByLabelText('Input mode velocity')).toHaveTextContent('V')
-    expect(screen.getByRole('button', { name: 'Seq' })).toHaveAttribute('aria-pressed', 'true')
-
-    await user.click(screen.getByRole('button', { name: 'Comp' }))
-    expect(setWorkspaceView).toHaveBeenCalledWith('composition')
+    expect(screen.queryByRole('button', { name: 'Comp' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Seq' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Mod' }))
     const update = setIsModulatorMode.mock.calls[0]?.[0]
@@ -39,23 +33,18 @@ describe('WorkspaceControls', () => {
     expect(onOpenSettings).toHaveBeenCalledOnce()
   })
 
-  it('disables unavailable workspace actions', () => {
+  it('disables unavailable modulator actions', () => {
     render(
       <WorkspaceControls
         currentInputMode="pitch"
         currentInputModeLetter="P"
-        workspaceView="sequencer"
-        setWorkspaceView={vi.fn()}
         isModulatorMode={false}
         setIsModulatorMode={vi.fn()}
-        workspaceDisabled
         modulatorDisabled
         onOpenSettings={vi.fn()}
       />
     )
 
-    expect(screen.getByRole('button', { name: 'Comp' })).toBeDisabled()
-    expect(screen.queryByRole('button', { name: 'Lib' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Mod' })).toBeDisabled()
   })
 })

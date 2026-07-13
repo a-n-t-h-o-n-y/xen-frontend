@@ -80,6 +80,15 @@ export const getSequenceById = (
 ): SequenceBank['sequences'][number] | null =>
   sequenceBank?.sequences.find((entry) => entry.id === sequenceId) ?? null
 
+export const getNextGeneratedSequenceName = (sequenceBank: SequenceBank | null): string => {
+  const existingNames = new Set(
+    sequenceBank?.sequences.map((entry) => entry.name.trim().toLocaleLowerCase()) ?? []
+  )
+  let candidateId = Math.max(1, Math.trunc(sequenceBank?.nextId ?? 1))
+  while (existingNames.has(`s${candidateId}`)) candidateId += 1
+  return `S${candidateId}`
+}
+
 export const getActiveSequenceTarget = (
   composition: Composition | null,
   selection: CompositionSelection

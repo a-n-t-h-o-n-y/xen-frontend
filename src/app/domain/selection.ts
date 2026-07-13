@@ -81,6 +81,11 @@ const resolveParentCell = (rootCell: Cell, selection: Selection): Cell | null =>
 
 export type MoveDirection = 'left' | 'right' | 'up' | 'down'
 
+export type BoundarySelectionMove = {
+  selection: Selection
+  crossedAboveRoot: boolean
+}
+
 export const moveSelection = (
   rootCell: Cell,
   selection: Selection,
@@ -174,6 +179,33 @@ export const moveSelection = (
   }
 
   return { path }
+}
+
+export const moveSelectionWithTopBoundary = (
+  rootCell: Cell,
+  selection: Selection,
+  direction: MoveDirection,
+  amount = 1
+): BoundarySelectionMove => {
+  const validSelection = reconcileSelection(rootCell, selection)
+  const count = Math.max(0, Math.trunc(amount))
+
+  if (direction !== 'up') {
+    return {
+      selection: moveSelection(rootCell, validSelection, direction, count),
+      crossedAboveRoot: false,
+    }
+  }
+
+  let nextSelection = validSelection
+  for (let index = 0; index < count; index += 1) {
+    if (nextSelection.path.length === 0) {
+      return { selection: nextSelection, crossedAboveRoot: true }
+    }
+    nextSelection = moveSelection(rootCell, nextSelection, 'up')
+  }
+
+  return { selection: nextSelection, crossedAboveRoot: false }
 }
 
 export const projectRootCell = (

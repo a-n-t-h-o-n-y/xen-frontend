@@ -10,7 +10,7 @@ import {
   moveCompositionSelection,
 } from '../domain/composition'
 import { compositionCellAssign, compositionCellUnassign } from '../domain/commands'
-import { moveSelection, projectRootCell } from '../domain/selection'
+import { moveSelectionWithTopBoundary, projectRootCell } from '../domain/selection'
 import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
 import { usesMetaForCommand } from '../platform'
@@ -44,7 +44,7 @@ type UseKeyboardControllerArgs = {
   compositionSelectionRef: MutableRefObject<CompositionSelection>
   installCompositionSelection: (nextSelection: CompositionSelection) => void
   setWorkspaceView: Dispatch<SetStateAction<WorkspaceView>>
-  editSelectedCompositionCell: () => void
+  enterSelectedCompositionSequence: () => Promise<boolean>
   runSelectedCompositionAction: (action: string) => boolean
   beginCompositionColumnLengthEdit: () => void
   setLoopStart: () => void
@@ -74,7 +74,7 @@ export function useKeyboardController({
   compositionSelectionRef,
   installCompositionSelection,
   setWorkspaceView,
-  editSelectedCompositionCell,
+  enterSelectedCompositionSequence,
   runSelectedCompositionAction,
   beginCompositionColumnLengthEdit,
   setLoopStart,
@@ -341,16 +341,22 @@ export function useKeyboardController({
             }
 
             if (matchedBinding.target.action === 'selection.move') {
-              if (workspaceViewRef.current !== 'sequencer') return
+              if (workspaceViewRef.current === 'composition') {
+                if (matchedBinding.target.arguments.direction === 'down') {
+                  await enterSelectedCompositionSequence()
+                }
+                return
+              }
               const project = projectRef.current
               if (!project) return
-              const selection = moveSelection(
+              const result = moveSelectionWithTopBoundary(
                 projectRootCell(project, activeSequenceTargetRef.current),
                 editorStateRef.current.selection,
                 matchedBinding.target.arguments.direction,
                 matchedBinding.target.arguments.amount
               )
-              installEditorState({ ...editorStateRef.current, selection })
+              installEditorState({ ...editorStateRef.current, selection: result.selection })
+              if (result.crossedAboveRoot) setWorkspaceView('composition')
               return
             }
 
@@ -388,7 +394,7 @@ export function useKeyboardController({
             }
 
             if (matchedBinding.target.action === 'composition.cell.edit_sequence') {
-              editSelectedCompositionCell()
+              await enterSelectedCompositionSequence()
               return
             }
 
@@ -508,7 +514,7 @@ export function useKeyboardController({
     editorStateRef,
     activeSequenceTargetRef,
     executeBackendCommand,
-    editSelectedCompositionCell,
+    enterSelectedCompositionSequence,
     handleCompositionCellAction,
     handleCompositionCellPaste,
     compositionSelectionRef,

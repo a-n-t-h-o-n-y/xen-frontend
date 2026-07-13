@@ -8,14 +8,11 @@ describe('StatusSection', () => {
       <StatusSection
         currentInputMode="pitch"
         currentInputModeLetter="P"
-        workspaceView="sequencer"
-        setWorkspaceView={vi.fn()}
         isModulatorMode={false}
         setIsModulatorMode={vi.fn()}
         statusLevel="info"
         statusMessage="Project loaded"
         selectedCellMeta={[{ label: 'weight', value: '1' }]}
-        workspaceDisabled={false}
         modulatorDisabled={false}
         onOpenSettings={vi.fn()}
         modulatorRail={null}

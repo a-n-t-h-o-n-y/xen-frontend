@@ -1,19 +1,16 @@
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import type { InputMode, MessageLevel } from '../domain/models'
 import type { StatusCellMetaItem } from '../presentation/viewModels'
-import { WorkspaceControls, type WorkspaceView } from './status/WorkspaceControls'
+import { WorkspaceControls } from './status/WorkspaceControls'
 
 type StatusSectionProps = {
   currentInputMode: InputMode
   currentInputModeLetter: string
-  workspaceView: WorkspaceView
-  setWorkspaceView: Dispatch<SetStateAction<WorkspaceView>>
   isModulatorMode: boolean
   setIsModulatorMode: Dispatch<SetStateAction<boolean>>
   statusLevel: MessageLevel
   statusMessage: string
   selectedCellMeta: StatusCellMetaItem[]
-  workspaceDisabled: boolean
   modulatorDisabled: boolean
   onOpenSettings: () => void
   modulatorRail: ReactNode
@@ -22,14 +19,11 @@ type StatusSectionProps = {
 export function StatusSection({
   currentInputMode,
   currentInputModeLetter,
-  workspaceView,
-  setWorkspaceView,
   isModulatorMode,
   setIsModulatorMode,
   statusLevel,
   statusMessage,
   selectedCellMeta,
-  workspaceDisabled,
   modulatorDisabled,
   onOpenSettings,
   modulatorRail,
@@ -40,11 +34,8 @@ export function StatusSection({
         <WorkspaceControls
           currentInputMode={currentInputMode}
           currentInputModeLetter={currentInputModeLetter}
-          workspaceView={workspaceView}
-          setWorkspaceView={setWorkspaceView}
           isModulatorMode={isModulatorMode}
           setIsModulatorMode={setIsModulatorMode}
-          workspaceDisabled={workspaceDisabled}
           modulatorDisabled={modulatorDisabled}
           onOpenSettings={onOpenSettings}
         />
