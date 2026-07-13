@@ -25,6 +25,13 @@
   --square-module-label-offset: 2.5rem;
   --transition-fast: 160ms ease;
   --transition-medium: 220ms ease;
+  --workspace-mesh-background:
+    radial-gradient(ellipse 68% 82% at 4% 96%, var(--workspace-mesh-a), transparent 68%),
+    radial-gradient(ellipse 54% 72% at 93% 8%, var(--workspace-mesh-c), transparent 67%),
+    radial-gradient(ellipse 58% 72% at 72% 91%, var(--workspace-mesh-b), transparent 68%),
+    radial-gradient(ellipse 58% 66% at 34% 8%, var(--workspace-mesh-d), transparent 68%),
+    var(--workspace-mesh-base);
+  --workspace-grain-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='.76'/%3E%3C/svg%3E");
 }
 
 :root,
@@ -61,15 +68,18 @@
   --shadow-sm: 0 6px 18px rgb(0 0 0 / 20%);
   --shadow-md: 0 18px 52px rgb(0 0 0 / 36%);
   --shadow-lg: 0 28px 90px rgb(0 0 0 / 48%);
-  --composition-canvas: #0b1118;
-  --composition-ambient-a: rgb(49 92 133 / 22%);
-  --composition-ambient-b: rgb(34 113 99 / 15%);
-  --composition-grid-dot: rgb(225 235 245 / 3%);
+  --workspace-mesh-base: #0b1118;
+  --workspace-mesh-a: rgb(18 135 151 / 52%);
+  --workspace-mesh-b: rgb(83 65 167 / 48%);
+  --workspace-mesh-c: rgb(202 78 37 / 43%);
+  --workspace-mesh-d: rgb(58 108 156 / 38%);
+  --workspace-grain-opacity: 0.2;
+  --composition-canvas: var(--workspace-mesh-base);
   --composition-wire-rgb: 184 199 219;
   --composition-materialized: rgb(27 35 45 / 92%);
   --composition-cell-hover: #273341;
-  --seq-shell-bg: #121820;
-  --seq-panel-bg: #1b242e;
+  --seq-shell-bg: var(--workspace-mesh-base);
+  --seq-panel-bg: rgb(27 36 46 / 94%);
   --seq-grid-line: rgb(225 235 245 / 10%);
   --seq-grid-line-strong: rgb(225 235 245 / 20%);
   --seq-row-even: #313a45;
@@ -118,15 +128,18 @@
   --shadow-sm: 0 6px 18px rgb(36 49 62 / 10%);
   --shadow-md: 0 18px 52px rgb(36 49 62 / 16%);
   --shadow-lg: 0 28px 90px rgb(36 49 62 / 22%);
-  --composition-canvas: #dfe7ee;
-  --composition-ambient-a: rgb(77 147 205 / 15%);
-  --composition-ambient-b: rgb(47 155 132 / 10%);
-  --composition-grid-dot: rgb(28 48 66 / 5%);
+  --workspace-mesh-base: #dfe7ee;
+  --workspace-mesh-a: rgb(47 176 186 / 42%);
+  --workspace-mesh-b: rgb(111 91 202 / 34%);
+  --workspace-mesh-c: rgb(238 119 69 / 42%);
+  --workspace-mesh-d: rgb(67 139 205 / 33%);
+  --workspace-grain-opacity: 0.14;
+  --composition-canvas: var(--workspace-mesh-base);
   --composition-wire-rgb: 44 62 80;
   --composition-materialized: rgb(255 255 255 / 88%);
   --composition-cell-hover: #f4f7fa;
-  --seq-shell-bg: #dfe6ed;
-  --seq-panel-bg: #edf2f6;
+  --seq-shell-bg: var(--workspace-mesh-base);
+  --seq-panel-bg: rgb(237 242 246 / 93%);
   --seq-grid-line: rgb(31 45 58 / 12%);
   --seq-grid-line-strong: rgb(31 45 58 / 23%);
   --seq-row-even: #d8e0e7;

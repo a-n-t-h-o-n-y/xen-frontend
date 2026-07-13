@@ -4,6 +4,8 @@
    ========================================================= */
 
 .sequencer {
+  position: relative;
+  isolation: isolate;
   height: 100%;
   width: 100%;
   min-height: 0;
@@ -11,6 +13,29 @@
   border: var(--seq-border);
   border-radius: var(--radius-2);
   background: var(--seq-shell-bg);
+  overflow: hidden;
+}
+
+/* Match the composition canvas while keeping the editor panels legible. */
+.sequencer::before,
+.sequencer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sequencer::before {
+  z-index: -2;
+  background: var(--workspace-mesh-background);
+}
+
+.sequencer::after {
+  z-index: -1;
+  background-image: var(--workspace-grain-image);
+  background-size: 180px 180px;
+  mix-blend-mode: soft-light;
+  opacity: var(--workspace-grain-opacity);
 }
 
 .sequencerShell {

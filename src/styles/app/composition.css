@@ -1,4 +1,4 @@
-/* Composition shell and atmospheric canvas */
+/* Composition shell and static textured canvas */
 .composition {
   position: relative;
   min-width: 0;
@@ -14,26 +14,18 @@
 .compositionBackdrop {
   position: absolute;
   z-index: -2;
-  inset: -35%;
-  background:
-    radial-gradient(circle at 30% 34%, var(--composition-ambient-a), transparent 35%),
-    radial-gradient(circle at 70% 66%, var(--composition-ambient-b), transparent 38%),
-    var(--composition-canvas);
-  animation: composition-drift 32s ease-in-out infinite alternate;
+  inset: 0;
+  background: var(--workspace-mesh-background);
 }
 
 .compositionBackdrop::after {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(var(--composition-grid-dot) 0.7px, transparent 0.7px);
-  background-size: 7px 7px;
-  opacity: 0.35;
-}
-
-@keyframes composition-drift {
-  from { transform: translate3d(-2%, -1%, 0) scale(1); }
-  to { transform: translate3d(3%, 2%, 0) scale(1.06); }
+  background-image: var(--workspace-grain-image);
+  background-size: 180px 180px;
+  mix-blend-mode: soft-light;
+  opacity: var(--workspace-grain-opacity);
 }
 
 .compositionViewport {
@@ -324,7 +316,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .compositionBackdrop { animation: none; }
   .compositionCell { transition: none; }
 }
 
