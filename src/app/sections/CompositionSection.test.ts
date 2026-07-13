@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildVirtualCoordinateRange } from './compositionViewport'
+import {
+  buildVirtualCoordinateRange,
+  getCompositionColumnBeats,
+} from './compositionViewport'
 
 describe('composition virtual viewport', () => {
   it('keeps the selected signed coordinate at the center without materializing gaps', () => {
@@ -18,5 +21,11 @@ describe('composition virtual viewport', () => {
       -2_147_483_648,
       -2_147_483_647,
     ])
+  })
+
+  it('converts time signatures to quarter-note column widths', () => {
+    expect(getCompositionColumnBeats({ numerator: 4, denominator: 4 })).toBe(4)
+    expect(getCompositionColumnBeats({ numerator: 7, denominator: 8 })).toBe(3.5)
+    expect(getCompositionColumnBeats({ numerator: 5, denominator: 16 })).toBe(1.25)
   })
 })

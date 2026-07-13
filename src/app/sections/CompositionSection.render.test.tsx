@@ -34,6 +34,14 @@ describe('CompositionSection rendering', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByText(/double-click assigns/i)).not.toBeInTheDocument()
 
+    const materializedRow = screen.getByRole('rowheader', {
+      name: 'Row +3, channel-1, channel channel-1',
+    })
+    expect(materializedRow).toHaveTextContent('channel-1')
+    expect(materializedRow).not.toHaveTextContent('+3')
+    const virtualRow = screen.getByRole('rowheader', { name: 'Row +2, virtual' })
+    expect(virtualRow).toBeEmptyDOMElement()
+
     const populated = screen.getByRole('gridcell', {
       name: 'Row +3, column 0: S1',
     })
@@ -46,7 +54,17 @@ describe('CompositionSection rendering', () => {
     expect(empty).toHaveClass('compositionCell-empty')
     expect(empty).not.toHaveClass('compositionCell-loop')
     expect(empty).toBeEmptyDOMElement()
-    expect(empty.style.width).toBe('')
+  })
+
+  it('sizes column tracks from their musical durations', () => {
+    const { container } = render(<CompositionSection {...createProps({
+      selection: { rowCoordinate: 3, columnCoordinate: -4 },
+    })} />)
+    const world = container.querySelector<HTMLElement>('.compositionWorld')
+    const tracks = world?.style.getPropertyValue('--composition-column-tracks') ?? ''
+
+    expect(tracks).toContain('calc(var(--composition-beat-width) * 3.5)')
+    expect(tracks).toContain('calc(var(--composition-beat-width) * 4)')
   })
 
   it('keeps keyboard-triggered cell assignment editable', async () => {

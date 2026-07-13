@@ -4,7 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { HeaderSection } from './HeaderSection'
 
-const renderHeader = (onOpenQuickAccess: () => void, disabledReason: string | null = null) =>
+const renderHeader = (
+  onOpenQuickAccess: () => void,
+  disabledReason: string | null = null,
+  metadataAvailable = true
+) =>
   render(
     <HeaderSection
       isTimeSignatureEditing={false}
@@ -15,7 +19,11 @@ const renderHeader = (onOpenQuickAccess: () => void, disabledReason: string | nu
       cancelTimeSignatureEdit={vi.fn()}
       beginTimeSignatureEdit={vi.fn()}
       disabledReason={disabledReason}
-      timeSignature="4/4"
+      metadataDisabledReason={disabledReason ?? (
+        metadataAvailable ? null : 'Selected composition column has no metadata'
+      )}
+      metadataAvailable={metadataAvailable}
+      timeSignature={metadataAvailable ? '4/4' : '--'}
       applyTimeSignatureScale={vi.fn()}
       isKeyEditing={false}
       keyInputRef={createRef<HTMLInputElement>()}
@@ -24,7 +32,7 @@ const renderHeader = (onOpenQuickAccess: () => void, disabledReason: string | nu
       commitKey={vi.fn().mockResolvedValue(undefined)}
       cancelKeyEdit={vi.fn()}
       beginKeyEdit={vi.fn()}
-      keyDisplay="0"
+      keyDisplay={metadataAvailable ? '0' : '--'}
       isBaseFrequencyEditing={false}
       baseFrequencyInputRef={createRef<HTMLInputElement>()}
       baseFrequencyDraft="440"
@@ -32,20 +40,20 @@ const renderHeader = (onOpenQuickAccess: () => void, disabledReason: string | nu
       commitBaseFrequency={vi.fn().mockResolvedValue(undefined)}
       cancelBaseFrequencyEdit={vi.fn()}
       beginBaseFrequencyEdit={vi.fn()}
-      baseFrequency="440"
+      baseFrequency={metadataAvailable ? '440' : '--'}
       scaleMenuRef={createRef<HTMLDivElement>()}
       openScaleMenu={false}
       setOpenScaleMenu={vi.fn()}
       isScaleUpdating={false}
       scaleOptions={[{ id: 'chromatic', name: 'chromatic', command: 'set scale chromatic' }]}
-      scaleName="chromatic"
+      scaleName={metadataAvailable ? 'chromatic' : '--'}
       applyScaleSelection={vi.fn().mockResolvedValue(undefined)}
-      scaleTranslateDirection="up"
+      scaleTranslateDirection={metadataAvailable ? 'up' : null}
       toggleTranslateDirection={vi.fn().mockResolvedValue(undefined)}
       modeOptions={[]}
       scaleMode={0}
       applyModeSelection={vi.fn().mockResolvedValue(undefined)}
-      tuningName="12EDO"
+      tuningName={metadataAvailable ? '12EDO' : '--'}
       onOpenQuickAccess={onOpenQuickAccess}
     />
   )
@@ -63,5 +71,23 @@ describe('HeaderSection quick access trigger', () => {
   it('disables the trigger until project resources are ready', () => {
     renderHeader(vi.fn(), 'Project is loading')
     expect(screen.getByRole('button', { name: 'Open quick access' })).toBeDisabled()
+  })
+
+  it('shows disabled placeholders while keeping global search available for a virtual column', () => {
+    renderHeader(vi.fn(), null, false)
+
+    expect(screen.getByRole('button', {
+      name: 'Time signature --. Click to edit',
+    })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Key --. Click to edit' })).toBeDisabled()
+    expect(screen.getByRole('button', {
+      name: 'Zero frequency -- hertz. Click to edit',
+    })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Select active scale' })).toBeDisabled()
+    expect(screen.getByRole('button', {
+      name: 'Translate direction unavailable',
+    })).toBeDisabled()
+    expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(6)
+    expect(screen.getByRole('button', { name: 'Open quick access' })).toBeEnabled()
   })
 })

@@ -71,18 +71,27 @@ they should be ordinary keymap bindings in a `composition` context.
 The composition matrix has a locked row-metadata rail at the left and one or more
 arrangement rows beside it. The rail reserves horizontal space and stays visible at
 all supported window sizes while the virtual cell grid recenters around selection.
+A small left inset separates the rail from the composition canvas border.
 
 Suggested columns:
 
-- Locked row header: signed row coordinate, row name, and output destination.
-- Time columns: one equal-width visual column per virtual composition coordinate.
+- Locked row header: row name and output destination for materialized rows. Virtual
+  row headers remain visually blank, and no row header displays its coordinate.
+- Time columns: one duration-scaled visual column per virtual composition coordinate.
 
-The matrix does not render column headers. The global app header displays and edits
-the selected column's duration, key, scale, tuning, and related pitch metadata.
-Virtual columns use `default_column`; materialized columns use their stored metadata.
+The matrix does not render column headers. In every workspace, the global app header
+displays and edits the selected composition column's duration, key, scale, tuning,
+and related pitch metadata. Materialized columns use their stored metadata. A virtual
+selected column displays disabled `--` placeholders because it has no stored
+metadata; `default_column` remains a layout/playback fallback, not a header value.
 
-Column width is a fixed responsive design token and never scales with duration or
-time signature.
+Column width represents quarter-note duration, with a responsive minimum width so
+short columns remain legible:
+
+```ts
+columnBeats = numerator * (4 / denominator)
+columnWidth = max(minColumnWidth, columnBeats * beatWidth)
+```
 
 ## Selection
 
@@ -318,14 +327,15 @@ The composition matrix should be a new section component, likely
 - Should the matrix allow multiple rows with the same output? Current backend
   semantics allow it; keep that behavior.
 - Column metadata is edited through the global header for the selected composition
-  column or active sequencer target; there is no in-grid column editor.
+  column in every workspace; there is no in-grid column editor. Virtual selections
+  expose disabled placeholders until the column is materialized.
 
 ## First Build Slice
 
 1. Extend frontend project models and mappers to expose schema `2` composition data.
 2. Add `composition` as a workspace view beside `sequencer` (the former Library
    workspace was later replaced by Quick Access).
-3. Render a keyboard-only matrix with fixed-width columns, a locked row rail,
+3. Render a keyboard-only matrix with duration-scaled columns, a locked row rail,
    sequence labels, sparse empty wireframes, and selection highlight.
 4. Add keymapped matrix selection movement for arrows and `hjkl`.
 5. Add `Enter` to switch from a matrix cell to the sequencer active sequence.

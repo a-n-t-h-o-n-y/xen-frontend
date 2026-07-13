@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   getCompositionColumnOrDefault,
   getCompositionPlacement,
@@ -6,7 +6,7 @@ import {
   isColumnInLoopRegion,
 } from '../domain/composition'
 import { getMiniMapNotes } from './compositionMiniMap'
-import { buildVirtualCoordinateRange } from './compositionViewport'
+import { buildVirtualCoordinateRange, getCompositionColumnBeats } from './compositionViewport'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { Composition, CompositionSelection, SequenceBank } from '../domain/models'
 
@@ -47,12 +47,19 @@ export function CompositionSection({
   onCommitRowChannel,
 }: CompositionSectionProps) {
   const sectionRef = useRef<HTMLElement | null>(null)
+  const worldRef = useRef<HTMLDivElement | null>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
   const rowCoordinates = buildVirtualCoordinateRange(selection.rowCoordinate, viewportRowRadius)
   const columnCoordinates = buildVirtualCoordinateRange(
     selection.columnCoordinate,
     viewportColumnRadius
   )
+  const columnTracks = columnCoordinates.map((columnCoordinate) => {
+    const column = columnCoordinate === null
+      ? composition.defaultColumn
+      : getCompositionColumnOrDefault(composition, columnCoordinate)
+    return `max(var(--composition-cell-min-width), calc(var(--composition-beat-width) * ${getCompositionColumnBeats(column.length)}))`
+  }).join(' ')
   const selectedPlacement = getCompositionPlacement(
     composition,
     selection.rowCoordinate,
@@ -93,6 +100,24 @@ export function CompositionSection({
       selected.focus({ preventScroll: true })
     }
   }, [selection.columnCoordinate, selection.rowCoordinate])
+
+  useLayoutEffect(() => {
+    const world = worldRef.current
+    if (!world) return
+
+    const centerSelectedColumn = (): void => {
+      const selected = world.querySelector('[data-composition-selected="true"]')
+      if (!(selected instanceof HTMLElement)) return
+      const center = selected.offsetLeft + selected.offsetWidth / 2
+      world.style.setProperty('--composition-selected-column-center', `${center}px`)
+    }
+
+    centerSelectedColumn()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(centerSelectedColumn)
+    observer.observe(world)
+    return () => observer.disconnect()
+  }, [columnTracks, selection.columnCoordinate, selection.rowCoordinate])
 
   useEffect(() => {
     if (!editTarget) return
@@ -154,7 +179,6 @@ export function CompositionSection({
                   key={`row-${rowCoordinate}`}
                   aria-label={`Row ${coordinateLabel(rowCoordinate)}${row ? `, ${row.name}, channel ${row.channelId}` : ', virtual'}`}
                 >
-                  <span className="compositionCoordinate mono">{coordinateLabel(rowCoordinate)}</span>
                   {row ? (
                     <span className="compositionRowMetadata">
                       {editTarget?.kind === 'rowName' && editTarget.rowCoordinate === rowCoordinate ? (
@@ -183,7 +207,7 @@ export function CompositionSection({
                         <span className="compositionAxisMetadata mono">{row.channelId}</span>
                       )}
                     </span>
-                  ) : <span className="compositionAxisMetadata">virtual</span>}
+                  ) : null}
                 </div>
               )
             })}
@@ -193,7 +217,11 @@ export function CompositionSection({
         <div className="compositionGridViewport">
           <div
             className="compositionWorld"
-            style={{ '--composition-column-count': columnCoordinates.length } as CSSProperties}
+            ref={worldRef}
+            style={{
+              '--composition-selected-column-center': '50%',
+              '--composition-column-tracks': columnTracks,
+            } as CSSProperties}
           >
             <div className="compositionCells">
               {rowCoordinates.flatMap((rowCoordinate, rowIndex) =>

@@ -9,8 +9,7 @@ import {
   mapPitchToScale,
   normalizePitch,
 } from '../domain/music'
-import { sequenceFromTarget } from '../domain/composition'
-import { getCompositionColumnOrDefault } from '../domain/composition'
+import { getCompositionColumn, sequenceFromTarget } from '../domain/composition'
 import { resolveSelection } from '../domain/selection'
 import {
   collectLeafCells,
@@ -27,15 +26,16 @@ export type ProjectViewModel = {
   rootCell: ProjectSnapshot['sequence']['cell']
   sequenceNumerator: number
   sequenceDenominator: number
+  hasHeaderColumnMetadata: boolean
   timeSignature: string
   scaleName: string
-  scaleSourceId: string
+  scaleSourceId: string | null
   scaleMode: number
   scaleSize: number
-  scaleTranslateDirection: ProjectSnapshot['pitch']['translationDirection']
+  scaleTranslateDirection: ProjectSnapshot['pitch']['translationDirection'] | null
   tuningName: string
-  keyDisplay: number
-  baseFrequency: number
+  keyDisplay: number | string
+  baseFrequency: number | string
   staffLineBandByPitch: number[]
   leafCells: ReturnType<typeof collectLeafCells>
   selectedLeafFlags: boolean[]
@@ -58,12 +58,16 @@ export function useProjectViewModel(
       return null
     }
 
-    const headerColumn = projectSnapshot.composition && headerColumnCoordinate !== null
-      ? getCompositionColumnOrDefault(projectSnapshot.composition, headerColumnCoordinate)
+    const composition = projectSnapshot.composition
+    const headerColumn = composition && headerColumnCoordinate !== null
+      ? getCompositionColumn(composition, headerColumnCoordinate)
       : null
-    const pitchState = headerColumn?.pitch ?? projectSnapshot.pitch
-    const activeScale = pitchState.scale
-    const rawTuningLength = pitchState.tuning.definition.intervals.length
+    const contentPitchState = composition && activeSequenceTarget
+      ? getCompositionColumn(composition, activeSequenceTarget.columnCoordinate)?.pitch ??
+        projectSnapshot.pitch
+      : projectSnapshot.pitch
+    const contentScale = contentPitchState.scale
+    const rawTuningLength = contentPitchState.tuning.definition.intervals.length
     const derivedTuningLength = rawTuningLength > 0 ? rawTuningLength : DEFAULT_TUNING_LENGTH
     const sequence = sequenceFromTarget(
       projectSnapshot.sequence,
@@ -71,19 +75,19 @@ export function useProjectViewModel(
       projectSnapshot.composition,
       activeSequenceTarget
     )
-    const scaleValidPitches = activeScale
-      ? generateValidPitches(activeScale.definition, derivedTuningLength)
+    const scaleValidPitches = contentScale
+      ? generateValidPitches(contentScale.definition, derivedTuningLength)
       : []
-    const translateDirection = pitchState.translationDirection
+    const translateDirection = contentPitchState.translationDirection
 
     const mapPitch = (pitch: number): number =>
       mapPitchToScale(pitch, scaleValidPitches, derivedTuningLength, translateDirection)
 
     const rootCell = sequence.cell
 
-    const tuningRatios = getTuningRatios(pitchState.tuning.definition.intervals)
+    const tuningRatios = getTuningRatios(contentPitchState.tuning.definition.intervals)
     const rowMap = Array.from({ length: derivedTuningLength }, (_, pitch) => mapPitch(pitch))
-    const hasScale = activeScale !== null
+    const hasScale = contentScale !== null
     const staffLineBands: number[] = []
 
     if (hasScale) {
@@ -104,8 +108,11 @@ export function useProjectViewModel(
       }
     }
 
-    const headerLength = headerColumn?.length ?? sequence.timeSignature
-    const signature = `${headerLength.numerator}/${headerLength.denominator}`
+    const headerPitchState = headerColumn?.pitch ?? null
+    const headerScale = headerPitchState?.scale ?? null
+    const signature = headerColumn
+      ? `${headerColumn.length.numerator}/${headerColumn.length.denominator}`
+      : '--'
     const selectedNumerator = sequence.timeSignature.numerator
     const selectedDenominator = sequence.timeSignature.denominator
     const directLeafCells = collectLeafCells(rootCell)
@@ -147,15 +154,16 @@ export function useProjectViewModel(
       rootCell,
       sequenceNumerator: selectedNumerator,
       sequenceDenominator: selectedDenominator,
+      hasHeaderColumnMetadata: headerColumn !== null,
       timeSignature: signature,
-      scaleName: activeScale?.definition.name ?? 'chromatic',
-      scaleSourceId: activeScale?.sourceId ?? 'chromatic',
-      scaleMode: activeScale?.definition.mode ?? 0,
-      scaleSize: activeScale?.definition.intervals.length ?? 0,
-      scaleTranslateDirection: pitchState.translationDirection,
-      tuningName: pitchState.tuning.name,
-      keyDisplay: pitchState.transposition,
-      baseFrequency: pitchState.baseFrequency,
+      scaleName: headerPitchState ? headerScale?.definition.name ?? 'chromatic' : '--',
+      scaleSourceId: headerPitchState ? headerScale?.sourceId ?? 'chromatic' : null,
+      scaleMode: headerScale?.definition.mode ?? 0,
+      scaleSize: headerScale?.definition.intervals.length ?? 0,
+      scaleTranslateDirection: headerPitchState?.translationDirection ?? null,
+      tuningName: headerPitchState?.tuning.name ?? '--',
+      keyDisplay: headerPitchState?.transposition ?? '--',
+      baseFrequency: headerPitchState?.baseFrequency ?? '--',
       staffLineBandByPitch: staffLineBands,
       leafCells: directLeafCells,
       selectedLeafFlags: selectionFlags,

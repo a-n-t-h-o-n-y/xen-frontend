@@ -29,7 +29,8 @@
 }
 
 .compositionViewport {
-  --composition-cell-width: 8.25rem;
+  --composition-beat-width: 2.0625rem;
+  --composition-cell-min-width: 5.5rem;
   --composition-cell-height: 4.75rem;
   --composition-cell-gap: var(--space-2);
   --composition-row-rail-width: 8.75rem;
@@ -38,6 +39,7 @@
   display: grid;
   grid-template-columns: var(--composition-row-rail-width) minmax(0, 1fr);
   gap: var(--composition-cell-gap);
+  padding-left: var(--space-2);
   overflow: hidden;
   pointer-events: none;
 }
@@ -58,12 +60,15 @@
 
 .compositionWorld {
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(
+    calc(0px - var(--composition-selected-column-center, 50%)),
+    -50%
+  );
 }
 
 .compositionCells {
   display: grid;
-  grid-template-columns: repeat(var(--composition-column-count), var(--composition-cell-width));
+  grid-template-columns: var(--composition-column-tracks);
   grid-template-rows: repeat(var(--composition-row-count), var(--composition-cell-height));
   gap: var(--composition-cell-gap);
 }
@@ -98,13 +103,7 @@
 .compositionRowHeader {
   display: grid;
   align-content: center;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2);
-}
-
-.compositionCoordinate {
-  color: var(--text-secondary);
-  font-size: var(--font-xs);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .compositionAxisMetadata {
@@ -258,7 +257,8 @@
 
 @media (max-width: 760px) {
   .compositionViewport {
-    --composition-cell-width: 7rem;
+    --composition-beat-width: 1.75rem;
+    --composition-cell-min-width: 4.75rem;
     --composition-cell-height: 4.25rem;
     --composition-row-rail-width: 7.25rem;
   }

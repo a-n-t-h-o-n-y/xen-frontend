@@ -169,26 +169,24 @@ function App() {
     }
   }, [installActiveSequenceTarget, projectSnapshot])
 
-  const headerColumnCoordinate = workspaceView === 'composition'
-    ? compositionSelection.columnCoordinate
-    : activeSequenceTarget?.columnCoordinate ?? null
   const projectViewModel = useProjectViewModel(
     projectSnapshot,
     editorState.selection,
     activeSequenceTarget,
-    headerColumnCoordinate
+    compositionSelection.columnCoordinate
   )
 
   const tuningLength = projectViewModel?.tuningLength ?? DEFAULT_TUNING_LENGTH
   const rootCell = projectViewModel?.rootCell ?? EMPTY_ROOT_CELL
   const sequenceNumerator = projectViewModel?.sequenceNumerator ?? 0
   const sequenceDenominator = projectViewModel?.sequenceDenominator ?? 0
+  const hasHeaderColumnMetadata = projectViewModel?.hasHeaderColumnMetadata ?? false
   const timeSignature = projectViewModel?.timeSignature ?? '--'
   const scaleName = projectViewModel?.scaleName ?? '--'
   const scaleSourceId = projectViewModel?.scaleSourceId ?? null
   const scaleMode = projectViewModel?.scaleMode ?? 0
   const scaleSize = projectViewModel?.scaleSize ?? 0
-  const scaleTranslateDirection = projectViewModel?.scaleTranslateDirection ?? 'up'
+  const scaleTranslateDirection = projectViewModel?.scaleTranslateDirection ?? null
   const tuningName = projectViewModel?.tuningName ?? '--'
   const keyDisplay = projectViewModel?.keyDisplay ?? '--'
   const baseFrequency = projectViewModel?.baseFrequency ?? '--'
@@ -196,6 +194,9 @@ function App() {
   const selectedCellMeta = projectViewModel?.selectedCellMeta ?? []
   const rulerRatios = projectViewModel?.rulerRatios ?? []
   const highlightedPitches = projectViewModel?.highlightedPitches ?? new Set<number>()
+  const metadataDisabledReason = disabledReason ?? (
+    hasHeaderColumnMetadata ? null : 'Selected composition column has no metadata'
+  )
 
   const {
     compositionEditTarget,
@@ -248,7 +249,7 @@ function App() {
     applyScaleSelection,
     toggleTranslateDirection,
   } = useHeaderEditing({
-    bridgeUnavailableMessage: disabledReason,
+    disabledReason: metadataDisabledReason,
     timeSignature,
     keyDisplay,
     baseFrequency,
@@ -256,7 +257,7 @@ function App() {
     scaleSourceId,
     scaleMode,
     scaleSize,
-    scaleTranslateDirection,
+    scaleTranslateDirection: scaleTranslateDirection ?? 'up',
     librarySnapshot,
     executeBackendCommand,
     setStatusMessage,
@@ -365,6 +366,10 @@ function App() {
   }, [cancelContinuousEdit, isModulatorMode, setOpenWaveMenu, workspaceView])
 
   useEffect(() => {
+    if (!hasHeaderColumnMetadata) setOpenScaleMenu(false)
+  }, [hasHeaderColumnMetadata, setOpenScaleMenu])
+
+  useEffect(() => {
     const handleContextMenu = (event: MouseEvent): void => {
       event.preventDefault()
     }
@@ -384,6 +389,8 @@ function App() {
         cancelTimeSignatureEdit={cancelTimeSignatureEdit}
         beginTimeSignatureEdit={beginTimeSignatureEdit}
         disabledReason={disabledReason}
+        metadataDisabledReason={metadataDisabledReason}
+        metadataAvailable={hasHeaderColumnMetadata}
         timeSignature={timeSignature}
         applyTimeSignatureScale={applyTimeSignatureScale}
         isKeyEditing={isKeyEditing}

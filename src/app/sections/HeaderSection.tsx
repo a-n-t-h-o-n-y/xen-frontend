@@ -12,6 +12,8 @@ type HeaderSectionProps = {
   cancelTimeSignatureEdit: () => void
   beginTimeSignatureEdit: () => void
   disabledReason: string | null
+  metadataDisabledReason: string | null
+  metadataAvailable: boolean
   timeSignature: string
   applyTimeSignatureScale: (mode: 'half' | 'double') => void
   isKeyEditing: boolean
@@ -37,7 +39,7 @@ type HeaderSectionProps = {
   scaleOptions: Array<{ id: string; name: string; command: string }>
   scaleName: string
   applyScaleSelection: (id: string) => Promise<void>
-  scaleTranslateDirection: TranslateDirection
+  scaleTranslateDirection: TranslateDirection | null
   toggleTranslateDirection: () => Promise<void>
   modeOptions: number[]
   scaleMode: number
@@ -55,6 +57,8 @@ export function HeaderSection({
   cancelTimeSignatureEdit,
   beginTimeSignatureEdit,
   disabledReason,
+  metadataDisabledReason,
+  metadataAvailable,
   timeSignature,
   applyTimeSignatureScale,
   isKeyEditing,
@@ -94,7 +98,7 @@ export function HeaderSection({
         <span className="fieldLabel">Time</span>
         <div className="timeSignatureControl">
           <div className="timeSignatureValueSlot">
-            {isTimeSignatureEditing ? (
+            {isTimeSignatureEditing && metadataAvailable ? (
               <input
                 ref={timeSignatureInputRef}
                 className="timeSignatureInput mono"
@@ -124,7 +128,7 @@ export function HeaderSection({
                 type="button"
                 className="timeSignatureDisplay fieldValue mono"
                 onClick={beginTimeSignatureEdit}
-                disabled={disabledReason !== null}
+                disabled={metadataDisabledReason !== null}
                 aria-label={`Time signature ${timeSignature}. Click to edit`}
               >
                 {timeSignature}
@@ -137,7 +141,7 @@ export function HeaderSection({
               className="timeSignatureAction mono"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => applyTimeSignatureScale('half')}
-              disabled={disabledReason !== null || isTimeSignatureEditing}
+              disabled={metadataDisabledReason !== null || isTimeSignatureEditing}
               aria-label="Halve time signature numerator"
             >
               /2
@@ -147,7 +151,7 @@ export function HeaderSection({
               className="timeSignatureAction mono"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => applyTimeSignatureScale('double')}
-              disabled={disabledReason !== null || isTimeSignatureEditing}
+              disabled={metadataDisabledReason !== null || isTimeSignatureEditing}
               aria-label="Double time signature numerator"
             >
               x2
@@ -158,14 +162,14 @@ export function HeaderSection({
       <EditableHeaderField
         className="headerField-key"
         label="Key"
-        editing={isKeyEditing}
+        editing={isKeyEditing && metadataAvailable}
         inputRef={keyInputRef}
         draft={keyDraft}
         setDraft={setKeyDraft}
         commit={commitKey}
         cancel={cancelKeyEdit}
         begin={beginKeyEdit}
-        disabled={disabledReason !== null}
+        disabled={metadataDisabledReason !== null}
         value={keyDisplay}
         inputLabel="Edit key"
         displayLabel={`Key ${keyDisplay}. Click to edit`}
@@ -173,14 +177,14 @@ export function HeaderSection({
       <EditableHeaderField
         className="headerField-baseFrequency"
         label="Zero Hz"
-        editing={isBaseFrequencyEditing}
+        editing={isBaseFrequencyEditing && metadataAvailable}
         inputRef={baseFrequencyInputRef}
         draft={baseFrequencyDraft}
         setDraft={setBaseFrequencyDraft}
         commit={commitBaseFrequency}
         cancel={cancelBaseFrequencyEdit}
         begin={beginBaseFrequencyEdit}
-        disabled={disabledReason !== null}
+        disabled={metadataDisabledReason !== null}
         value={baseFrequency}
         inputLabel="Edit base frequency"
         displayLabel={`Zero frequency ${baseFrequency} hertz. Click to edit`}
@@ -207,7 +211,9 @@ export function HeaderSection({
               type="button"
               className="waveSelectTrigger headerScaleTrigger fieldValue"
               onClick={() => setOpenScaleMenu((previous) => !previous)}
-              disabled={disabledReason !== null || isScaleUpdating || scaleOptions.length === 0}
+              disabled={
+                metadataDisabledReason !== null || isScaleUpdating || scaleOptions.length === 0
+              }
               aria-haspopup="listbox"
               aria-expanded={openScaleMenu}
               aria-label="Select active scale"
@@ -217,7 +223,7 @@ export function HeaderSection({
                 ▾
               </span>
             </button>
-            {openScaleMenu ? (
+            {openScaleMenu && metadataAvailable ? (
               <div className="waveSelectMenu headerScaleMenu" role="listbox" aria-label="Scale options">
                 {scaleOptions.map((option) => (
                   <button
@@ -243,13 +249,19 @@ export function HeaderSection({
             onClick={() => {
               void toggleTranslateDirection()
             }}
-            disabled={disabledReason !== null}
-            aria-label={`Translate direction ${scaleTranslateDirection}. Click to set ${
-              scaleTranslateDirection === 'down' ? 'up' : 'down'
-            }`}
-            title={`Translate ${scaleTranslateDirection} (click to flip)`}
+            disabled={metadataDisabledReason !== null}
+            aria-label={scaleTranslateDirection === null
+              ? 'Translate direction unavailable'
+              : `Translate direction ${scaleTranslateDirection}. Click to set ${
+                scaleTranslateDirection === 'down' ? 'up' : 'down'
+              }`}
+            title={scaleTranslateDirection === null
+              ? 'Translate direction unavailable'
+              : `Translate ${scaleTranslateDirection} (click to flip)`}
           >
-            {scaleTranslateDirection === 'down' ? '↓' : '↑'}
+            {scaleTranslateDirection === null
+              ? '--'
+              : scaleTranslateDirection === 'down' ? '↓' : '↑'}
           </button>
         </div>
       </div>
@@ -265,7 +277,7 @@ export function HeaderSection({
                 onClick={() => {
                   void applyModeSelection(modeIndex)
                 }}
-                disabled={disabledReason !== null}
+                disabled={metadataDisabledReason !== null}
                 role="option"
                 aria-selected={modeIndex === scaleMode}
                 aria-label={`Set mode ${modeIndex}`}
@@ -274,7 +286,7 @@ export function HeaderSection({
               </button>
             ))
           ) : (
-            <span className="modePickerEmpty mono">n/a</span>
+            <span className="modePickerEmpty mono">{metadataAvailable ? 'n/a' : '--'}</span>
           )}
         </div>
       </div>

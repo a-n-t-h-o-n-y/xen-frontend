@@ -2,6 +2,7 @@ import {
   MAX_COMPOSITION_COORDINATE,
   MIN_COMPOSITION_COORDINATE,
 } from '../domain/composition'
+import type { CompositionLength } from '../domain/models'
 
 export const buildVirtualCoordinateRange = (center: number, radius: number): Array<number | null> =>
   Array.from({ length: radius * 2 + 1 }, (_, index) => {
@@ -10,3 +11,6 @@ export const buildVirtualCoordinateRange = (center: number, radius: number): Arr
       ? null
       : coordinate
   })
+
+export const getCompositionColumnBeats = (length: CompositionLength): number =>
+  length.denominator > 0 ? length.numerator * (4 / length.denominator) : 1

@@ -18,7 +18,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { LibrarySnapshot, MessageLevel, TranslateDirection } from '../domain/models'
 
 type UseHeaderEditingArgs = {
-  bridgeUnavailableMessage: string | null
+  disabledReason: string | null
   timeSignature: string
   keyDisplay: string | number
   baseFrequency: string | number
@@ -37,7 +37,7 @@ type UseHeaderEditingArgs = {
 }
 
 export function useHeaderEditing({
-  bridgeUnavailableMessage,
+  disabledReason,
   timeSignature,
   keyDisplay,
   baseFrequency,
@@ -100,7 +100,7 @@ export function useHeaderEditing({
 
   const commitTimeSignature = useCallback(
     async (value: string): Promise<boolean> => {
-      if (bridgeUnavailableMessage !== null) {
+      if (disabledReason !== null) {
         return false
       }
 
@@ -126,12 +126,12 @@ export function useHeaderEditing({
         return false
       }
     },
-    [bridgeUnavailableMessage, executeBackendCommand, setStatusLevel, setStatusMessage, timeSignature]
+    [disabledReason, executeBackendCommand, setStatusLevel, setStatusMessage, timeSignature]
   )
 
   const commitKey = useCallback(
     async (value: string): Promise<boolean> => {
-      if (bridgeUnavailableMessage !== null) {
+      if (disabledReason !== null) {
         return false
       }
 
@@ -156,12 +156,12 @@ export function useHeaderEditing({
         return false
       }
     },
-    [bridgeUnavailableMessage, executeBackendCommand, keyDisplay, setStatusLevel, setStatusMessage]
+    [disabledReason, executeBackendCommand, keyDisplay, setStatusLevel, setStatusMessage]
   )
 
   const commitBaseFrequency = useCallback(
     async (value: string): Promise<boolean> => {
-      if (bridgeUnavailableMessage !== null) {
+      if (disabledReason !== null) {
         return false
       }
 
@@ -186,13 +186,14 @@ export function useHeaderEditing({
         return false
       }
     },
-    [baseFrequency, bridgeUnavailableMessage, executeBackendCommand, setStatusLevel, setStatusMessage]
+    [baseFrequency, disabledReason, executeBackendCommand, setStatusLevel, setStatusMessage]
   )
 
   const beginTimeSignatureEdit = useCallback((): void => {
+    if (disabledReason !== null) return
     setTimeSignatureDraft(timeSignature)
     setIsTimeSignatureEditing(true)
-  }, [timeSignature])
+  }, [disabledReason, timeSignature])
 
   const cancelTimeSignatureEdit = useCallback((): void => {
     setTimeSignatureDraft(timeSignature)
@@ -200,9 +201,10 @@ export function useHeaderEditing({
   }, [timeSignature])
 
   const beginKeyEdit = useCallback((): void => {
+    if (disabledReason !== null) return
     setKeyDraft(`${keyDisplay}`)
     setIsKeyEditing(true)
-  }, [keyDisplay])
+  }, [disabledReason, keyDisplay])
 
   const cancelKeyEdit = useCallback((): void => {
     setKeyDraft(`${keyDisplay}`)
@@ -210,9 +212,10 @@ export function useHeaderEditing({
   }, [keyDisplay])
 
   const beginBaseFrequencyEdit = useCallback((): void => {
+    if (disabledReason !== null) return
     setBaseFrequencyDraft(`${baseFrequency}`)
     setIsBaseFrequencyEditing(true)
-  }, [baseFrequency])
+  }, [baseFrequency, disabledReason])
 
   const cancelBaseFrequencyEdit = useCallback((): void => {
     setBaseFrequencyDraft(`${baseFrequency}`)
@@ -221,7 +224,7 @@ export function useHeaderEditing({
 
   const applyTimeSignatureScale = useCallback(
     (mode: 'half' | 'double'): void => {
-      if (bridgeUnavailableMessage !== null || isTimeSignatureEditing) {
+      if (disabledReason !== null || isTimeSignatureEditing) {
         return
       }
 
@@ -233,7 +236,7 @@ export function useHeaderEditing({
       )
     },
     [
-      bridgeUnavailableMessage,
+      disabledReason,
       executeBackendCommand,
       isTimeSignatureEditing,
       setStatusLevel,
@@ -262,7 +265,7 @@ export function useHeaderEditing({
   const applyModeSelection = useCallback(
     async (modeIndex: number): Promise<void> => {
       if (
-        bridgeUnavailableMessage !== null ||
+        disabledReason !== null ||
         !Number.isFinite(modeIndex) ||
         modeIndex < 0 ||
         modeIndex === scaleMode
@@ -277,14 +280,14 @@ export function useHeaderEditing({
         setStatusLevel('error')
       }
     },
-    [bridgeUnavailableMessage, executeBackendCommand, scaleMode, setStatusLevel, setStatusMessage]
+    [disabledReason, executeBackendCommand, scaleMode, setStatusLevel, setStatusMessage]
   )
 
   const applyScaleSelection = useCallback(
     async (nextScaleId: string): Promise<void> => {
       const selectedScale = scaleOptions.find((scale) => scale.id === nextScaleId)
       if (
-        bridgeUnavailableMessage !== null ||
+        disabledReason !== null ||
         isScaleUpdating ||
         !selectedScale ||
         nextScaleId === scaleSourceId
@@ -303,7 +306,7 @@ export function useHeaderEditing({
       }
     },
     [
-      bridgeUnavailableMessage,
+      disabledReason,
       executeBackendCommand,
       isScaleUpdating,
       scaleOptions,
@@ -314,7 +317,7 @@ export function useHeaderEditing({
   )
 
   const toggleTranslateDirection = useCallback(async (): Promise<void> => {
-    if (bridgeUnavailableMessage !== null) {
+    if (disabledReason !== null) {
       return
     }
 
@@ -326,7 +329,7 @@ export function useHeaderEditing({
       setStatusLevel('error')
     }
   }, [
-    bridgeUnavailableMessage,
+    disabledReason,
     executeBackendCommand,
     scaleTranslateDirection,
     setStatusLevel,
