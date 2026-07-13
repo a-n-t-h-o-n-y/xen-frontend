@@ -54,11 +54,38 @@ const renderHeader = (
       scaleMode={0}
       applyModeSelection={vi.fn().mockResolvedValue(undefined)}
       tuningName={metadataAvailable ? '12EDO' : '--'}
+      sequenceName="Lead"
+      currentInputMode="velocity"
+      selectionInspector={{
+        kind: 'note',
+        summary: 'Note · P7',
+        items: [{ label: 'Pitch', value: '7' }],
+      }}
+      showSelectionInspector
       onOpenQuickAccess={onOpenQuickAccess}
+      onOpenSettings={vi.fn()}
+      onEnterModulation={vi.fn()}
+      modulationDisabled={false}
     />
   )
 
 describe('HeaderSection quick access trigger', () => {
+  it('shows sequence identity, input mode, and selection metadata', async () => {
+    const user = userEvent.setup()
+    renderHeader(vi.fn())
+
+    expect(screen.getByText('Lead')).toBeInTheDocument()
+    expect(screen.getByLabelText('Input mode velocity')).toHaveTextContent('V')
+    expect(screen.getByRole('button', { name: 'Open settings' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Modulate' })).toBeInTheDocument()
+    const inspectorTrigger = screen.getByRole('button', { name: 'Note · P7' })
+    await user.click(inspectorTrigger)
+    expect(screen.getByRole('dialog', { name: 'Selection inspector' })).toHaveTextContent('Pitch7')
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Selection inspector' })).not.toBeInTheDocument()
+    expect(inspectorTrigger).toHaveFocus()
+  })
+
   it('opens Quick Access from the centered search control', async () => {
     const user = userEvent.setup()
     const onOpenQuickAccess = vi.fn()

@@ -7,8 +7,7 @@ import {
   type PaletteScope,
 } from '../domain/palette'
 import { getErrorMessage } from '../utils/errors'
-import type { Dispatch, SetStateAction } from 'react'
-import type { CommandReferenceEntry, MessageLevel } from '../domain/models'
+import type { CommandReferenceEntry } from '../domain/models'
 
 type BrowseReturnState = {
   scope: Exclude<PaletteScope, 'commands'>
@@ -193,8 +192,6 @@ export const quickAccessReducer = (
 type UseQuickAccessPaletteArgs = {
   commands: CommandReferenceEntry[]
   executeBackendCommand: (command: string) => Promise<void>
-  setStatusMessage: Dispatch<SetStateAction<string>>
-  setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
 }
 
 export type QuickAccessController = ReturnType<typeof useQuickAccessPalette>
@@ -202,8 +199,6 @@ export type QuickAccessController = ReturnType<typeof useQuickAccessPalette>
 export function useQuickAccessPalette({
   commands,
   executeBackendCommand,
-  setStatusMessage,
-  setStatusLevel,
 }: UseQuickAccessPaletteArgs) {
   const [state, dispatch] = useReducer(quickAccessReducer, initialQuickAccessState)
   const openerRef = useRef<HTMLElement | null>(null)
@@ -248,11 +243,9 @@ export function useQuickAccessPalette({
     } catch (error) {
       const message = getErrorMessage(error)
       dispatch({ type: 'patch', patch: { busy: false, error: `Command failed: ${message}` } })
-      setStatusMessage(`Command failed: ${message}`)
-      setStatusLevel('error')
       return false
     }
-  }, [close, executeBackendCommand, setStatusLevel, setStatusMessage])
+  }, [close, executeBackendCommand])
 
   const activateItem = useCallback(async (item: PaletteItem): Promise<void> => {
     if (item.kind === 'command') {

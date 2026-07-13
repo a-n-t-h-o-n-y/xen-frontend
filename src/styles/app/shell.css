@@ -7,19 +7,19 @@
 /* =========================================================
    Section 2: App Layout
    Purpose: Define the high-level vertical frame for the app.
-   Notes: Rows are header, workspace, then command/status bar.
+   Notes: The header owns global controls; the workspace consumes the remaining height.
    ========================================================= */
 
 .app {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-3);
 
   min-height: 300px;
   height: calc(100vh - 1rem);
   width: 100%;
   margin: 0;
-  padding: var(--space-3) var(--space-3) var(--space-1);
+  padding: var(--space-3);
 
   color: var(--text-primary);
   user-select: none;
@@ -102,6 +102,51 @@
   background: transparent;
 }
 
+.headerIdentity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  flex: 0 1 11rem;
+  min-width: 7rem;
+  padding: 0 var(--space-2);
+}
+
+.headerSequenceLabel,
+.modulationHeaderEyebrow {
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.headerSequenceName {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--font-md);
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerInputMode {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: inline-grid;
+  place-items: center;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-control);
+  font-size: var(--font-md);
+  font-weight: 700;
+}
+
 .headerSpacer {
   display: flex;
   align-items: center;
@@ -156,6 +201,139 @@
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+}
+
+.headerUtilityButton,
+.modulationDoneButton {
+  min-height: var(--control-height-md);
+  padding: 0 var(--space-2);
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-control);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  cursor: pointer;
+}
+
+.headerUtilityButton:hover:not(:disabled),
+.headerUtilityButton:focus-visible:not(:disabled),
+.modulationDoneButton:hover,
+.modulationDoneButton:focus-visible {
+  border-color: var(--border-strong-color);
+  background: var(--surface-control-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.headerUtilityButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.headerSettingsButton {
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+.headerSettingsButton:hover,
+.headerSettingsButton:focus-visible {
+  border-color: var(--border-subtle-color);
+  background: var(--surface-control-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.headerInspector {
+  position: relative;
+}
+
+.headerInspectorTrigger {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerInspectorPopover {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 90;
+  width: 15rem;
+  padding: var(--space-3);
+  border: var(--border-strong);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-lg);
+}
+
+.headerInspectorTitle {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-md);
+  font-weight: 700;
+}
+
+.headerInspectorList {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.headerInspectorItem {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.headerInspectorItem dt {
+  color: var(--text-tertiary);
+}
+
+.headerInspectorItem dd {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.headerInspectorEmpty {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-sm);
+}
+
+.modulationHeader {
+  border-color: var(--accent);
+}
+
+.modulationHeaderIdentity {
+  display: grid;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+  padding: 0 var(--space-2);
+}
+
+.modulationHeaderControls {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.modulationDoneButton {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
 }
 
 .headerField-timeSignature {
@@ -464,4 +642,46 @@
 
 .mono {
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1400px) {
+  .headerQuickAccessLabel {
+    display: none;
+  }
+
+  .headerQuickAccessTrigger {
+    width: var(--control-height-md);
+    justify-content: center;
+    padding: 0;
+  }
+
+  .headerField {
+    padding-inline: 0.3rem;
+  }
+}
+
+@media (max-width: 1100px) {
+  .header:not(.modulationHeader) {
+    flex-wrap: wrap;
+  }
+
+  .header:not(.modulationHeader) .headerIdentity {
+    order: 1;
+  }
+
+  .header:not(.modulationHeader) .headerSpacer {
+    order: 2;
+  }
+
+  .header:not(.modulationHeader) .headerActions {
+    order: 3;
+  }
+
+  .header:not(.modulationHeader) .headerField {
+    order: 4;
+  }
+
+  .headerField {
+    flex: 1 1 auto;
+  }
 }

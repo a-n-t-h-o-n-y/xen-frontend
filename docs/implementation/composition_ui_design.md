@@ -37,7 +37,7 @@ Composition and sequence navigation form one vertical hierarchy:
   whole-sequence state; one additional `Shift+Up` returns to the composition matrix.
 - `Shift+Down` retains its recursive descent behavior inside the sequencer.
 
-There is no dedicated workspace toggle in the status bar and the default keymap does
+There is no dedicated workspace toggle in the global header and the default keymap does
 not use `Tab` or composition `Enter` for workspace crossing. Legacy workspace and
 cell-entry action IDs remain valid so stored custom keymaps continue to load.
 

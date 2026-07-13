@@ -12,9 +12,10 @@ export type LeafCell = {
   path: number[]
 }
 
-export type StatusCellMetaItem = {
-  label: string
-  value: string
+export type SelectionInspectorModel = {
+  kind: 'cell' | 'note' | 'sequence'
+  summary: string
+  items: Array<{ label: string; value: string }>
 }
 
 export type TimeSignatureParts = {
@@ -171,34 +172,41 @@ export const formatMetaFixed2 = (value: number): string => {
   return value.toFixed(2)
 }
 
-export const getStatusCellMeta = (
+export const getSelectionInspector = (
   cell: Cell | null,
   selectedElement?: MusicElement | null
-): StatusCellMetaItem[] => {
-  if (!cell) {
-    return []
-  }
+): SelectionInspectorModel => {
+  if (!cell) return { kind: 'cell', summary: 'No selection', items: [] }
 
   const element = selectedElement ?? getPrimaryElement(cell)
-
   if (!element) {
-    return [{ label: 'w', value: formatMetaNumber(cell.weight) }]
+    return {
+      kind: 'cell',
+      summary: 'Cell',
+      items: [{ label: 'Weight', value: formatMetaNumber(cell.weight) }],
+    }
   }
-
   if (element.type === 'Sequence') {
-    return [
-      { label: 'n', value: `${element.cells.length}` },
-      { label: 'w', value: formatMetaNumber(cell.weight) },
-    ]
+    return {
+      kind: 'sequence',
+      summary: `Sequence · ${element.cells.length} cells`,
+      items: [
+        { label: 'Child cells', value: `${element.cells.length}` },
+        { label: 'Weight', value: formatMetaNumber(cell.weight) },
+      ],
+    }
   }
-
-  return [
-    { label: 'p', value: `${Math.trunc(element.pitch)}` },
-    { label: 'd', value: formatMetaFixed2(element.delay) },
-    { label: 'g', value: formatMetaFixed2(element.gate) },
-    { label: 'v', value: formatMetaFixed2(element.velocity) },
-    { label: 'w', value: formatMetaNumber(cell.weight) },
-  ]
+  return {
+    kind: 'note',
+    summary: `Note · P${Math.trunc(element.pitch)}`,
+    items: [
+      { label: 'Pitch', value: `${Math.trunc(element.pitch)}` },
+      { label: 'Delay', value: formatMetaFixed2(element.delay) },
+      { label: 'Gate', value: formatMetaFixed2(element.gate) },
+      { label: 'Velocity', value: formatMetaFixed2(element.velocity) },
+      { label: 'Weight', value: formatMetaNumber(cell.weight) },
+    ],
+  }
 }
 
 export const parseTimeSignatureInput = (value: string): TimeSignatureParts | null => {

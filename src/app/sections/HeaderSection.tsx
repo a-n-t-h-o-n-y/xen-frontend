@@ -1,6 +1,9 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { TranslateDirection } from '../domain/models'
+import type { InputMode, TranslateDirection } from '../domain/models'
+import type { SelectionInspectorModel } from '../presentation/viewModels'
 import { Icon } from '../ui/Icon'
+import { IconButton } from '../ui/IconButton'
 import { EditableHeaderField } from './header/EditableHeaderField'
 
 type HeaderSectionProps = {
@@ -45,7 +48,73 @@ type HeaderSectionProps = {
   scaleMode: number
   applyModeSelection: (modeIndex: number) => Promise<void>
   tuningName: string
+  sequenceName: string
+  currentInputMode: InputMode
+  selectionInspector: SelectionInspectorModel
+  showSelectionInspector: boolean
   onOpenQuickAccess: () => void
+  onOpenSettings: () => void
+  onEnterModulation: () => void
+  modulationDisabled: boolean
+}
+
+function SelectionInspector({ model }: { model: SelectionInspectorModel }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (restoreFocus: boolean): void => {
+      setOpen(false)
+      if (restoreFocus) window.requestAnimationFrame(() => triggerRef.current?.focus())
+    }
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (!rootRef.current?.contains(event.target as Node)) close(false)
+    }
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      close(true)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [open])
+
+  return (
+    <div className="headerInspector" ref={rootRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="headerUtilityButton headerInspectorTrigger"
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
+        {model.summary}
+      </button>
+      {open ? (
+        <section className="headerInspectorPopover" role="dialog" aria-label="Selection inspector">
+          <div className="headerInspectorTitle">{model.summary}</div>
+          {model.items.length > 0 ? (
+            <dl className="headerInspectorList mono">
+              {model.items.map((item) => (
+                <div key={item.label} className="headerInspectorItem">
+                  <dt>{item.label}</dt>
+                  <dd>{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : <p className="headerInspectorEmpty">No metadata available.</p>}
+        </section>
+      ) : null}
+    </div>
+  )
 }
 
 export function HeaderSection({
@@ -90,10 +159,24 @@ export function HeaderSection({
   scaleMode,
   applyModeSelection,
   tuningName,
+  sequenceName,
+  currentInputMode,
+  selectionInspector,
+  showSelectionInspector,
   onOpenQuickAccess,
+  onOpenSettings,
+  onEnterModulation,
+  modulationDisabled,
 }: HeaderSectionProps) {
   return (
     <header className="header">
+      <div className="headerIdentity">
+        <span className="headerSequenceLabel">Sequence</span>
+        <span className="headerSequenceName" title={sequenceName}>{sequenceName}</span>
+        <span className="headerInputMode mono" aria-label={`Input mode ${currentInputMode}`}>
+          {currentInputMode.charAt(0).toUpperCase()}
+        </span>
+      </div>
       <div className="headerField headerField-timeSignature">
         <span className="fieldLabel">Time</span>
         <div className="timeSignatureControl">
@@ -293,6 +376,25 @@ export function HeaderSection({
       <div className="headerField headerField-tuning">
         <span className="fieldLabel">Tuning</span>
         <span className="fieldValue mono">{tuningName}</span>
+      </div>
+      <div className="headerActions">
+        {showSelectionInspector ? <SelectionInspector model={selectionInspector} /> : null}
+        <button
+          type="button"
+          className="headerUtilityButton headerModulationButton"
+          onClick={onEnterModulation}
+          disabled={modulationDisabled}
+        >
+          Modulate
+        </button>
+        <IconButton
+          className="headerSettingsButton"
+          onClick={onOpenSettings}
+          label="Open settings"
+          title="Settings"
+        >
+          <Icon name="settings" size={15} />
+        </IconButton>
       </div>
     </header>
   )

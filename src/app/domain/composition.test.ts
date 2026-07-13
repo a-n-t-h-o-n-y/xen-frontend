@@ -4,6 +4,7 @@ import {
   MIN_COMPOSITION_COORDINATE,
   getActiveSequenceTarget,
   getCompositionPlacement,
+  getContextualSequenceName,
   getNextGeneratedSequenceName,
   isColumnInLoopRegion,
   moveCompositionSelection,
@@ -87,5 +88,26 @@ describe('sparse composition helpers', () => {
         { id: 7, name: 'S4', sequence: { cell: { weight: 1, elements: [] } } },
       ],
     })).toBe('S5')
+  })
+
+  it('names the sequence represented by the active workspace selection', () => {
+    expect(getContextualSequenceName(
+      project,
+      'composition',
+      { rowCoordinate: 3, columnCoordinate: 0 },
+      null
+    )).toBe('S1')
+    expect(getContextualSequenceName(
+      project,
+      'composition',
+      { rowCoordinate: 3, columnCoordinate: 1 },
+      null
+    )).toBe('Empty cell')
+    expect(getContextualSequenceName(
+      project,
+      'sequencer',
+      { rowCoordinate: 0, columnCoordinate: 0 },
+      { rowCoordinate: -2, columnCoordinate: 9, sequenceId: 2 }
+    )).toBe('S2')
   })
 })

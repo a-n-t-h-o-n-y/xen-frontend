@@ -13,9 +13,11 @@ import { useSessionResources } from './app/hooks/useSessionResources'
 import { useSettingsOverlayState } from './app/hooks/useSettingsOverlayState'
 import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
+import { useNotifications } from './app/hooks/useNotifications'
 import { CompositionSection } from './app/sections/CompositionSection'
 import { SequencerSection } from './app/sections/SequencerSection'
-import { StatusSection } from './app/sections/StatusSection'
+import { ModulationHeader } from './app/sections/ModulationHeader'
+import { NotificationToasts } from './app/sections/NotificationToasts'
 import { SettingsOverlay } from './app/sections/SettingsOverlay'
 import { QuickAccessPalette } from './app/sections/QuickAccessPalette'
 import { ModulatorsPanel } from './app/sections/bottom/ModulatorsPanel'
@@ -23,7 +25,10 @@ import {
   DEFAULT_TUNING_LENGTH,
   createTransportState,
 } from './app/constants'
-import { reconcileActiveSequenceTarget } from './app/domain/composition'
+import {
+  getContextualSequenceName,
+  reconcileActiveSequenceTarget,
+} from './app/domain/composition'
 import { clampNumber } from './app/domain/music'
 import type {
   Cell,
@@ -42,6 +47,7 @@ const INITIAL_COMPOSITION_SELECTION: CompositionSelection = {
 }
 
 function App() {
+  const { notifications, notify, dismissNotification } = useNotifications()
   const [editorState, setEditorState] = useState<EditorState>({
     selection: { path: [] },
     inputMode: 'pitch',
@@ -86,6 +92,7 @@ function App() {
     projectState,
     statusMessage,
     statusLevel,
+    statusRevision,
     setStatusMessage,
     setStatusLevel,
     bridgeUnavailableMessage,
@@ -106,19 +113,24 @@ function App() {
     setIsTransportActive,
     setPlayheadPhase,
   })
+  useEffect(() => {
+    if ((statusLevel === 'warning' || statusLevel === 'error') && statusMessage) {
+      notify(statusLevel, statusMessage)
+    }
+  }, [notify, statusLevel, statusMessage, statusRevision])
   const settingsOverlay = useSettingsOverlayState(keymapController.clearError)
   const quickAccess = useQuickAccessPalette({
     commands: sessionReference.commands,
     executeBackendCommand,
-    setStatusMessage,
-    setStatusLevel,
   })
   const openQuickAccess = quickAccess.open
   const openAllQuickAccess = useCallback((): void => {
+    setIsModulatorMode(false)
     setOpenScaleMenu(false)
     openQuickAccess('all')
   }, [openQuickAccess, setOpenScaleMenu])
   const openCommandPalette = useCallback((): void => {
+    setIsModulatorMode(false)
     setOpenScaleMenu(false)
     openQuickAccess('commands')
   }, [openQuickAccess, setOpenScaleMenu])
@@ -129,6 +141,7 @@ function App() {
   }, [])
 
   const isProjectReady = projectState.status === 'ready'
+  const modulationModeActive = isModulatorMode && isProjectReady && workspaceView === 'sequencer'
   const projectSnapshot = isProjectReady ? projectState.snapshot : null
   const disabledReason = isProjectReady
     ? null
@@ -144,11 +157,12 @@ function App() {
   const installWorkspaceView = useCallback((
     nextView: WorkspaceView | ((current: WorkspaceView) => WorkspaceView)
   ): void => {
-    setWorkspaceView((current) => {
-      const resolved = typeof nextView === 'function' ? nextView(current) : nextView
-      workspaceViewRef.current = resolved
-      return resolved
-    })
+    const resolved = typeof nextView === 'function'
+      ? nextView(workspaceViewRef.current)
+      : nextView
+    workspaceViewRef.current = resolved
+    setWorkspaceView(resolved)
+    if (resolved !== 'sequencer') setIsModulatorMode(false)
   }, [])
 
   const installActiveSequenceTarget = useCallback((nextTarget: ActiveSequenceTarget | null): void => {
@@ -191,11 +205,22 @@ function App() {
   const keyDisplay = projectViewModel?.keyDisplay ?? '--'
   const baseFrequency = projectViewModel?.baseFrequency ?? '--'
   const staffLineBandByPitch = projectViewModel?.staffLineBandByPitch ?? []
-  const selectedCellMeta = projectViewModel?.selectedCellMeta ?? []
+  const selectionInspector = projectViewModel?.selectionInspector ?? {
+    kind: 'cell' as const,
+    summary: 'No selection',
+    items: [],
+  }
   const rulerRatios = projectViewModel?.rulerRatios ?? []
   const highlightedPitches = projectViewModel?.highlightedPitches ?? new Set<number>()
   const metadataDisabledReason = disabledReason ?? (
     hasHeaderColumnMetadata ? null : 'Selected composition column has no metadata'
+  )
+
+  const headerSequenceName = getContextualSequenceName(
+    projectSnapshot,
+    workspaceView,
+    compositionSelection,
+    activeSequenceTarget
   )
 
   const {
@@ -288,8 +313,6 @@ function App() {
     tuningLength,
   })
 
-  const currentInputModeLetter = editorState.inputMode.charAt(0).toUpperCase()
-
   const {
     beginContinuousEdit,
     commitContinuousEdit,
@@ -348,6 +371,8 @@ function App() {
     beginCompositionColumnLengthEdit: beginTimeSignatureEdit,
     setLoopStart: () => setLoopBoundary('start'),
     setLoopEnd: () => setLoopBoundary('end'),
+    isModulatorMode: modulationModeActive,
+    exitModulatorMode: () => setIsModulatorMode(false),
     setIsModulatorMode,
     selectActiveModulatorTab,
     setOpenWaveMenu,
@@ -357,11 +382,11 @@ function App() {
   })
 
   useEffect(() => {
-    if (!isModulatorMode || workspaceView !== 'sequencer') {
+    if (!modulationModeActive) {
       setOpenWaveMenu(null)
       cancelContinuousEdit()
     }
-  }, [cancelContinuousEdit, isModulatorMode, setOpenWaveMenu, workspaceView])
+  }, [cancelContinuousEdit, modulationModeActive, setOpenWaveMenu])
 
   useEffect(() => {
     if (!hasHeaderColumnMetadata) setOpenScaleMenu(false)
@@ -378,7 +403,34 @@ function App() {
 
   return (
     <div className="app">
-      <HeaderSection
+      {modulationModeActive ? (
+        <ModulationHeader
+          onDone={() => setIsModulatorMode(false)}
+          controls={(
+            <ModulatorsPanel
+              activeModulatorTab={activeModulatorTab}
+              activeModulator={activeModulator}
+              selectActiveModulatorTab={(index) => {
+                cancelContinuousEdit()
+                selectActiveModulatorTab(index)
+              }}
+              selectWaveType={selectWaveType}
+              onWaveLerpChange={handleWaveLerpChange}
+              onWaveAPulseWidthChange={handleWaveAPulseWidthChange}
+              onWaveBPulseWidthChange={handleWaveBPulseWidthChange}
+              clampNumber={clampNumber}
+              setTargetEnabled={setTargetEnabled}
+              resetTargetControl={resetTargetControl}
+              padDragRef={padDragRef}
+              applyPadMotion={applyPadMotion}
+              tuningLength={tuningLength}
+              beginContinuousEdit={beginContinuousEdit}
+              commitContinuousEdit={commitContinuousEdit}
+              cancelContinuousEdit={cancelContinuousEdit}
+            />
+          )}
+        />
+      ) : <HeaderSection
         isTimeSignatureEditing={isTimeSignatureEditing}
         timeSignatureInputRef={timeSignatureInputRef}
         timeSignatureDraft={timeSignatureDraft}
@@ -420,8 +472,18 @@ function App() {
         scaleMode={scaleMode}
         applyModeSelection={applyModeSelection}
         tuningName={tuningName}
+        sequenceName={headerSequenceName}
+        currentInputMode={editorState.inputMode}
+        selectionInspector={selectionInspector}
+        showSelectionInspector={workspaceView === 'sequencer'}
         onOpenQuickAccess={openAllQuickAccess}
-      />
+        onOpenSettings={() => {
+          quickAccess.close(false)
+          settingsOverlay.openOverlay()
+        }}
+        onEnterModulation={() => setIsModulatorMode(true)}
+        modulationDisabled={!isProjectReady || workspaceView !== 'sequencer'}
+      />}
       <section className="workspaceSection" aria-label="Workspace">
         {!isProjectReady ? (
           <div className="workspaceNotice" role="status" aria-live="polite">
@@ -481,7 +543,7 @@ function App() {
                 ratioToBottom={ratioToBottom}
                 rulerRatios={rulerRatios}
                 highlightedPitches={highlightedPitches}
-                isModulatorMode={isModulatorMode}
+                isModulatorMode={modulationModeActive}
                 wavePadDragRef={wavePadDragRef}
                 clampNumber={clampNumber}
                 waveHandleA={waveHandleA}
@@ -508,42 +570,9 @@ function App() {
           </div>
         )}
       </section>
-      <StatusSection
-        currentInputMode={editorState.inputMode}
-        currentInputModeLetter={currentInputModeLetter}
-        isModulatorMode={isModulatorMode}
-        setIsModulatorMode={setIsModulatorMode}
-        statusLevel={statusLevel}
-        statusMessage={statusMessage}
-        selectedCellMeta={selectedCellMeta}
-        modulatorDisabled={!isProjectReady || workspaceView !== 'sequencer'}
-        onOpenSettings={() => {
-          quickAccess.close(false)
-          settingsOverlay.openOverlay()
-        }}
-        modulatorRail={isProjectReady && isModulatorMode && workspaceView === 'sequencer' ? (
-          <ModulatorsPanel
-            activeModulatorTab={activeModulatorTab}
-            activeModulator={activeModulator}
-            selectActiveModulatorTab={(index) => {
-              cancelContinuousEdit()
-              selectActiveModulatorTab(index)
-            }}
-            selectWaveType={selectWaveType}
-            onWaveLerpChange={handleWaveLerpChange}
-            onWaveAPulseWidthChange={handleWaveAPulseWidthChange}
-            onWaveBPulseWidthChange={handleWaveBPulseWidthChange}
-            clampNumber={clampNumber}
-            setTargetEnabled={setTargetEnabled}
-            resetTargetControl={resetTargetControl}
-            padDragRef={padDragRef}
-            applyPadMotion={applyPadMotion}
-            tuningLength={tuningLength}
-            beginContinuousEdit={beginContinuousEdit}
-            commitContinuousEdit={commitContinuousEdit}
-            cancelContinuousEdit={cancelContinuousEdit}
-          />
-        ) : null}
+      <NotificationToasts
+        notifications={notifications}
+        dismissNotification={dismissNotification}
       />
       <QuickAccessPalette
         controller={quickAccess}

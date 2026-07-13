@@ -49,6 +49,8 @@ type UseKeyboardControllerArgs = {
   beginCompositionColumnLengthEdit: () => void
   setLoopStart: () => void
   setLoopEnd: () => void
+  isModulatorMode: boolean
+  exitModulatorMode: () => void
   setIsModulatorMode: Dispatch<SetStateAction<boolean>>
   selectActiveModulatorTab: (index: number) => void
   setOpenWaveMenu: Dispatch<SetStateAction<'a' | 'b' | null>>
@@ -79,6 +81,8 @@ export function useKeyboardController({
   beginCompositionColumnLengthEdit,
   setLoopStart,
   setLoopEnd,
+  isModulatorMode,
+  exitModulatorMode,
   setIsModulatorMode,
   selectActiveModulatorTab,
   setOpenWaveMenu,
@@ -288,6 +292,12 @@ export function useKeyboardController({
         return
       }
 
+      if (isModulatorMode && event.key === 'Escape') {
+        event.preventDefault()
+        exitModulatorMode()
+        return
+      }
+
       if (editableTarget) {
         return
       }
@@ -310,6 +320,27 @@ export function useKeyboardController({
         event,
         editorStateRef.current.inputMode
       )
+
+      if (isModulatorMode) {
+        const action = matchedBinding?.target.type === 'ui_action'
+          ? matchedBinding.target.action
+          : null
+        if (action === 'command.open') {
+          event.preventDefault()
+          exitModulatorMode()
+          openCommandPalette()
+          return
+        }
+        if (
+          action !== 'modulator.mode.toggle' &&
+          action !== 'modulator.slot.select' &&
+          action !== 'modulator.target.toggle'
+        ) {
+          event.preventDefault()
+          pendingNumberRef.current = ''
+          return
+        }
+      }
 
       if (matchedBinding) {
         if (event.repeat && matchedBinding.repeat !== 'allow') {
@@ -493,6 +524,11 @@ export function useKeyboardController({
 
       pendingNumberRef.current = ''
 
+      if (isModulatorMode) {
+        event.preventDefault()
+        return
+      }
+
       if (isQuickAccessOpen) {
         return
       }
@@ -514,12 +550,14 @@ export function useKeyboardController({
     editorStateRef,
     activeSequenceTargetRef,
     executeBackendCommand,
+    exitModulatorMode,
     enterSelectedCompositionSequence,
     handleCompositionCellAction,
     handleCompositionCellPaste,
     compositionSelectionRef,
     installCompositionSelection,
     installEditorState,
+    isModulatorMode,
     isQuickAccessOpen,
     isProjectReady,
     keymapRef,
@@ -546,7 +584,7 @@ export function useKeyboardController({
 
       if (
         bridgeUnavailableMessage !== null || !isProjectReady || editableTarget ||
-        isQuickAccessOpen || settingsOpen
+        isQuickAccessOpen || isModulatorMode || settingsOpen
       ) {
         return
       }
@@ -619,6 +657,7 @@ export function useKeyboardController({
     handleCompositionCellPaste,
     editorStateRef,
     isQuickAccessOpen,
+    isModulatorMode,
     isProjectReady,
     keymapRef,
     setStatusLevel,

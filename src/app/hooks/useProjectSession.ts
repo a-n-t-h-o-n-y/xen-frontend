@@ -60,7 +60,8 @@ export function useProjectSession({
   const libraryRevisionRef = useRef(-1)
   const [projectState, setProjectState] = useState<ProjectSessionState>({ status: 'idle' })
   const [statusMessage, setStatusMessage] = useState('')
-  const [statusLevel, setStatusLevel] = useState<MessageLevel>('info')
+  const [statusLevel, setStatusLevelState] = useState<MessageLevel>('info')
+  const [statusRevision, setStatusRevision] = useState(0)
   const [bridgeUnavailableMessage, setBridgeUnavailableMessage] = useState<string | null>(null)
 
   const request = useCallback(<K extends keyof BridgeMethodMap>(
@@ -70,6 +71,11 @@ export function useProjectSession({
   ): Promise<BridgeMethodMap[K]['response']> =>
     bridgeClient.request(name, payload, options),
   [])
+
+  const setStatusLevel: Dispatch<SetStateAction<MessageLevel>> = useCallback((nextLevel) => {
+    setStatusLevelState(nextLevel)
+    setStatusRevision((current) => current + 1)
+  }, [])
 
   const keymapController = useKeymapController({ request })
   const { ingestKeymap } = keymapController
@@ -110,8 +116,6 @@ export function useProjectSession({
 
     const connect = async (): Promise<void> => {
       setProjectState({ status: 'loading' })
-      setStatusMessage('Connecting')
-      setStatusLevel('info')
 
       try {
         eventTokenRef.current = addXenBridgeListener((rawEvent) => {
@@ -159,7 +163,6 @@ export function useProjectSession({
         setBridgeUnavailableMessage(null)
         setSessionReference(sessionReferenceFromCatalogDto(hello.catalog))
         ingestKeymap(keymapFromDto(hello.keymap))
-        setStatusMessage('Connected')
 
         const [snapshot, librarySnapshot] = await Promise.all([
           request('state.get', {}, { signal: abortController.signal }),
@@ -169,17 +172,12 @@ export function useProjectSession({
         ingestLibrary(librarySnapshot)
         if (!isMounted) return
         setProjectState({ status: 'ready', snapshot: installedSnapshot })
-        setStatusMessage('Project loaded')
-        setStatusLevel('info')
       } catch (error) {
         if (!isMounted) return
         const message = getErrorMessage(error)
         const bridgeUnavailable = message.startsWith('JUCE bridge unavailable:')
         if (bridgeUnavailable) {
           setBridgeUnavailableMessage(message)
-        } else {
-          setStatusMessage(`Bridge error: ${message}`)
-          setStatusLevel('error')
         }
         setProjectState({ status: 'error', message, bridgeUnavailable })
       }
@@ -203,6 +201,7 @@ export function useProjectSession({
     setIsTransportActive,
     setPlayheadPhase,
     setSessionReference,
+    setStatusLevel,
     transportRef,
   ])
 
@@ -210,6 +209,7 @@ export function useProjectSession({
     projectState,
     statusMessage,
     statusLevel,
+    statusRevision,
     setStatusMessage,
     setStatusLevel,
     bridgeUnavailableMessage,

@@ -199,7 +199,7 @@ export function ModulatorsPanel({
   )
 
   return (
-    <section className="modulatorRail" aria-label="Modulator rail">
+    <section className="modulatorRail" aria-label="Modulation controls">
       <div className="modTabs" role="tablist" aria-label="Modulator slots">
         {Array.from({ length: 4 }, (_, index) => (
           <button

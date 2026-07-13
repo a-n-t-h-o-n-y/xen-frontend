@@ -135,7 +135,7 @@ export function useBridgeSession({
         })
       }
 
-      if (commandResponse.status.level !== 'debug') {
+      if (commandResponse.status.level === 'warning') {
         setStatusMessage(commandResponse.status.message)
         setStatusLevel(commandResponse.status.level)
       }
@@ -188,8 +188,10 @@ export function useBridgeSession({
         expected_project_revision: project.revision,
       })
       ingestProject(response.snapshot)
-      setStatusMessage(response.status.message)
-      setStatusLevel(response.status.level)
+      if (response.status.level === 'warning') {
+        setStatusMessage(response.status.message)
+        setStatusLevel(response.status.level)
+      }
       if (response.status.level === 'error') throw new Error(response.status.message)
     }
 
@@ -202,8 +204,10 @@ export function useBridgeSession({
           expected_project_revision: project.revision,
         })
         ingestProject(response.snapshot)
-        setStatusMessage(response.status.message)
-        setStatusLevel(response.status.level)
+        if (response.status.level === 'warning') {
+          setStatusMessage(response.status.message)
+          setStatusLevel(response.status.level)
+        }
         if (response.status.level === 'error' || !response.preview_id) {
           throw new Error(response.status.message || 'Unable to begin project preview')
         }

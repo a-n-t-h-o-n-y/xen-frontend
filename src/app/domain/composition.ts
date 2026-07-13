@@ -6,6 +6,7 @@ import type {
   CompositionSelection,
   Sequence,
   SequenceBank,
+  ProjectSnapshot,
 } from './models'
 
 export const MIN_COMPOSITION_COORDINATE = -2_147_483_648
@@ -100,6 +101,20 @@ export const getActiveSequenceTarget = (
     selection.columnCoordinate
   )
   return placement ? { ...selection, sequenceId: placement.sequenceId } : null
+}
+
+export const getContextualSequenceName = (
+  project: ProjectSnapshot | null,
+  workspaceView: 'composition' | 'sequencer',
+  compositionSelection: CompositionSelection,
+  activeSequenceTarget: ActiveSequenceTarget | null
+): string => {
+  const target = workspaceView === 'composition'
+    ? getActiveSequenceTarget(project?.composition ?? null, compositionSelection)
+    : activeSequenceTarget
+  if (!target) return workspaceView === 'composition' ? 'Empty cell' : 'Sequence unavailable'
+  return getSequenceById(project?.sequenceBank ?? null, target.sequenceId)?.name ??
+    'Sequence unavailable'
 }
 
 export const isActiveSequenceTargetValid = (

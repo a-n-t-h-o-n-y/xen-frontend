@@ -14,7 +14,7 @@ import { resolveSelection } from '../domain/selection'
 import {
   collectLeafCells,
   getCellAtPath,
-  getStatusCellMeta,
+  getSelectionInspector,
   isPathPrefix,
 } from '../presentation/viewModels'
 import type { ActiveSequenceTarget, ProjectSnapshot, Selection } from '../domain/models'
@@ -39,7 +39,7 @@ export type ProjectViewModel = {
   staffLineBandByPitch: number[]
   leafCells: ReturnType<typeof collectLeafCells>
   selectedLeafFlags: boolean[]
-  selectedCellMeta: ReturnType<typeof getStatusCellMeta>
+  selectionInspector: ReturnType<typeof getSelectionInspector>
   rulerRatios: ReturnType<typeof getTuningRatios>
   highlightedPitches: Set<number>
   selectedCellPath: number[]
@@ -167,7 +167,7 @@ export function useProjectViewModel(
       staffLineBandByPitch: staffLineBands,
       leafCells: directLeafCells,
       selectedLeafFlags: selectionFlags,
-      selectedCellMeta: getStatusCellMeta(resolvedSelectedCell, resolvedSelectedElement),
+      selectionInspector: getSelectionInspector(resolvedSelectedCell, resolvedSelectedElement),
       rulerRatios: tuningRatios,
       highlightedPitches: mappedHighlights,
       selectedCellPath,

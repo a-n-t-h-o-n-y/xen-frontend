@@ -44,6 +44,9 @@ const renderController = (
     installEditorState?: (nextState: EditorState) => void
     setWorkspaceView?: Parameters<typeof useKeyboardController>[0]['setWorkspaceView']
     enterSelectedCompositionSequence?: () => Promise<boolean>
+    isModulatorMode?: boolean
+    exitModulatorMode?: () => void
+    setIsModulatorMode?: Parameters<typeof useKeyboardController>[0]['setIsModulatorMode']
   } = {}
 ) => {
   const editorState: EditorState = { selection: { path: [] }, inputMode: 'pitch' }
@@ -74,7 +77,9 @@ const renderController = (
     beginCompositionColumnLengthEdit: options.beginCompositionColumnLengthEdit ?? vi.fn(),
     setLoopStart: vi.fn(),
     setLoopEnd: vi.fn(),
-    setIsModulatorMode: vi.fn(),
+    isModulatorMode: options.isModulatorMode ?? false,
+    exitModulatorMode: options.exitModulatorMode ?? vi.fn(),
+    setIsModulatorMode: options.setIsModulatorMode ?? vi.fn(),
     selectActiveModulatorTab: vi.fn(),
     setOpenWaveMenu: vi.fn(),
     toggleActiveModulatorTarget: vi.fn(),
@@ -85,6 +90,60 @@ const renderController = (
 }
 
 describe('useKeyboardController', () => {
+  it('makes modulation an exclusive mode with Escape and Quick Access exits', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined)
+    const exitModulatorMode = vi.fn()
+    const openCommandPalette = vi.fn()
+    const rendered = renderController(createResource(), openCommandPalette, execute, {
+      isModulatorMode: true,
+      exitModulatorMode,
+    })
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n' })))
+    expect(execute).not.toHaveBeenCalled()
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+    expect(exitModulatorMode).toHaveBeenCalledOnce()
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      key: ':',
+      code: 'Semicolon',
+      shiftKey: true,
+    })))
+    expect(exitModulatorMode).toHaveBeenCalledTimes(2)
+    expect(openCommandPalette).toHaveBeenCalledOnce()
+    rendered.unmount()
+  })
+
+  it('continues to dispatch configured modulator actions during modulation mode', () => {
+    const keymap = createResource()
+    const template = keymap.bindings.sequencer?.find((binding) =>
+      binding.target.type === 'ui_action' && binding.target.action === 'command.open'
+    )
+    if (!template) throw new Error('Expected command binding')
+    const binding = structuredClone(template)
+    binding.trigger.match.value = 'm'
+    binding.trigger.modifiers = {
+      shift: false,
+      alt: false,
+      primary: false,
+      control: false,
+      meta: false,
+    }
+    binding.target = { type: 'ui_action', action: 'modulator.mode.toggle', arguments: {} }
+    keymap.bindings.sequencer?.push(binding)
+    const setIsModulatorMode = vi.fn()
+    const rendered = renderController(keymap, vi.fn(), vi.fn(), {
+      isModulatorMode: true,
+      setIsModulatorMode,
+    })
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm' })))
+
+    expect(setIsModulatorMode).toHaveBeenCalledOnce()
+    rendered.unmount()
+  })
+
   it('uses hierarchical movement to cross between Composition and the Sequencer', async () => {
     const enterSelectedCompositionSequence = vi.fn().mockResolvedValue(true)
     const compositionController = renderController(createResource(), vi.fn(), vi.fn(), {

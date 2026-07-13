@@ -96,8 +96,6 @@ function PaletteHarness({
   const controller = useQuickAccessPalette({
     commands,
     executeBackendCommand: execute,
-    setStatusMessage: vi.fn(),
-    setStatusLevel: vi.fn(),
   })
   return (
     <>
@@ -157,6 +155,19 @@ describe('QuickAccessPalette', () => {
 
     await waitFor(() => expect(execute).toHaveBeenCalledWith('transport stop'))
     expect(screen.queryByRole('dialog', { name: 'Quick access' })).not.toBeInTheDocument()
+  })
+
+  it('keeps command failures inside the palette', async () => {
+    const execute = vi.fn().mockRejectedValue(new Error('Invalid command'))
+    const user = userEvent.setup()
+    render(<PaletteHarness execute={execute} />)
+
+    await user.click(screen.getByRole('button', { name: 'Open commands' }))
+    await user.type(screen.getByRole('combobox'), 'transport stop')
+    await user.keyboard('{Enter}')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Command failed: Invalid command')
+    expect(screen.getByRole('dialog', { name: 'Quick access' })).toBeInTheDocument()
   })
 
   it('offers exact successful command invocations on the empty home state', async () => {
