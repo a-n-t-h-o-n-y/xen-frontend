@@ -1,5 +1,5 @@
 import { createRef } from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { HeaderSection } from './HeaderSection'
@@ -7,7 +7,11 @@ import { HeaderSection } from './HeaderSection'
 const renderHeader = (
   onOpenQuickAccess: () => void,
   disabledReason: string | null = null,
-  metadataAvailable = true
+  metadataAvailable = true,
+  callbacks: {
+    applyScaleSelection?: (id: string) => Promise<void>
+    applyModeSelection?: (mode: number) => Promise<void>
+  } = {}
 ) =>
   render(
     <HeaderSection
@@ -41,27 +45,22 @@ const renderHeader = (
       cancelBaseFrequencyEdit={vi.fn()}
       beginBaseFrequencyEdit={vi.fn()}
       baseFrequency={metadataAvailable ? '440' : '--'}
-      scaleMenuRef={createRef<HTMLDivElement>()}
-      openScaleMenu={false}
-      setOpenScaleMenu={vi.fn()}
       isScaleUpdating={false}
-      scaleOptions={[{ id: 'chromatic', name: 'chromatic', command: 'set scale chromatic' }]}
+      scaleOptions={[
+        { id: 'chromatic', name: 'chromatic', command: 'set scale chromatic' },
+        { id: 'major', name: 'major', command: 'set scale major' },
+      ]}
       scaleName={metadataAvailable ? 'chromatic' : '--'}
-      applyScaleSelection={vi.fn().mockResolvedValue(undefined)}
+      scaleSourceId={metadataAvailable ? 'chromatic' : null}
+      applyScaleSelection={callbacks.applyScaleSelection ?? vi.fn().mockResolvedValue(undefined)}
       scaleTranslateDirection={metadataAvailable ? 'up' : null}
       toggleTranslateDirection={vi.fn().mockResolvedValue(undefined)}
-      modeOptions={[]}
-      scaleMode={0}
-      applyModeSelection={vi.fn().mockResolvedValue(undefined)}
+      modeOptions={metadataAvailable ? [1, 2, 3] : []}
+      scaleMode={1}
+      applyModeSelection={callbacks.applyModeSelection ?? vi.fn().mockResolvedValue(undefined)}
       tuningName={metadataAvailable ? '12EDO' : '--'}
       sequenceName="Lead"
       currentInputMode="velocity"
-      selectionInspector={{
-        kind: 'note',
-        summary: 'Note · P7',
-        items: [{ label: 'Pitch', value: '7' }],
-      }}
-      showSelectionInspector
       onOpenQuickAccess={onOpenQuickAccess}
       onOpenSettings={vi.fn()}
       onEnterModulation={vi.fn()}
@@ -70,20 +69,53 @@ const renderHeader = (
   )
 
 describe('HeaderSection quick access trigger', () => {
-  it('shows sequence identity, input mode, and selection metadata', async () => {
-    const user = userEvent.setup()
+  it('shows the sequence, global actions, and reorganized control groups', () => {
     renderHeader(vi.fn())
 
     expect(screen.getByText('Lead')).toBeInTheDocument()
-    expect(screen.getByLabelText('Input mode velocity')).toHaveTextContent('V')
+    expect(screen.getByLabelText('Input mode velocity')).toHaveTextContent('InputVelocity')
     expect(screen.getByRole('button', { name: 'Open settings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Modulate' })).toBeInTheDocument()
-    const inspectorTrigger = screen.getByRole('button', { name: 'Note · P7' })
-    await user.click(inspectorTrigger)
-    expect(screen.getByRole('dialog', { name: 'Selection inspector' })).toHaveTextContent('Pitch7')
-    await user.keyboard('{Escape}')
-    expect(screen.queryByRole('dialog', { name: 'Selection inspector' })).not.toBeInTheDocument()
-    expect(inspectorTrigger).toHaveFocus()
+    const timing = within(screen.getByRole('region', { name: 'Timing' }))
+    const pitch = within(screen.getByRole('region', { name: 'Pitch system' }))
+    const tuning = within(screen.getByRole('region', { name: 'Tuning' }))
+    expect(timing.getByText('Duration')).toBeInTheDocument()
+    expect(timing.getByRole('button', { name: 'Duration 4/4. Click to edit' })).toHaveTextContent('4/4')
+    expect(pitch.getByRole('button', { name: 'Key 0. Click to edit' })).toHaveTextContent('0')
+    expect(pitch.getByRole('button', { name: 'Select active scale' })).toHaveTextContent('chromatic')
+    expect(tuning.getByText('Reference')).toBeInTheDocument()
+    expect(tuning.getByText('Hz')).toBeInTheDocument()
+    expect(tuning.getByText('12EDO')).toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: 'Scale mode' })).toHaveValue('1')
+    expect(screen.getByRole('button', {
+      name: 'Reference frequency for pitch 0 440 hertz. Click to edit',
+    })).toBeInTheDocument()
+  })
+
+  it('applies changes through the custom scale picker and wrapping mode stepper', async () => {
+    const user = userEvent.setup()
+    const applyScaleSelection = vi.fn().mockResolvedValue(undefined)
+    const applyModeSelection = vi.fn().mockResolvedValue(undefined)
+    renderHeader(vi.fn(), null, true, { applyScaleSelection, applyModeSelection })
+
+    await user.click(screen.getByRole('button', { name: 'Select active scale' }))
+    await user.click(screen.getByRole('option', { name: 'major' }))
+    await user.click(screen.getByRole('button', { name: 'Previous scale mode' }))
+
+    expect(applyScaleSelection).toHaveBeenCalledWith('major')
+    expect(applyModeSelection).toHaveBeenCalledWith(3)
+  })
+
+  it('accepts a typed mode and wraps it into the available range', async () => {
+    const user = userEvent.setup()
+    const applyModeSelection = vi.fn().mockResolvedValue(undefined)
+    renderHeader(vi.fn(), null, true, { applyModeSelection })
+
+    const modeInput = screen.getByRole('spinbutton', { name: 'Scale mode' })
+    await user.clear(modeInput)
+    await user.type(modeInput, '5{Enter}')
+
+    expect(applyModeSelection).toHaveBeenCalledWith(2)
   })
 
   it('opens Quick Access from the centered search control', async () => {
@@ -104,11 +136,11 @@ describe('HeaderSection quick access trigger', () => {
     renderHeader(vi.fn(), null, false)
 
     expect(screen.getByRole('button', {
-      name: 'Time signature --. Click to edit',
+      name: 'Duration --. Click to edit',
     })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Key --. Click to edit' })).toBeDisabled()
     expect(screen.getByRole('button', {
-      name: 'Zero frequency -- hertz. Click to edit',
+      name: 'Reference frequency for pitch 0 -- hertz. Click to edit',
     })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Select active scale' })).toBeDisabled()
     expect(screen.getByRole('button', {

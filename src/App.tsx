@@ -8,7 +8,6 @@ import { useKeyboardController } from './app/hooks/useKeyboardController'
 import { useModulatorController } from './app/hooks/useModulatorController'
 import { useProjectViewModel } from './app/hooks/useProjectViewModel'
 import { useQuickAccessPalette } from './app/hooks/useQuickAccessPalette'
-import { useScaleMenu } from './app/hooks/useScaleMenu'
 import { useSessionResources } from './app/hooks/useSessionResources'
 import { useSettingsOverlayState } from './app/hooks/useSettingsOverlayState'
 import { useSequencerRollState } from './app/hooks/useSequencerRollState'
@@ -64,7 +63,6 @@ function App() {
   const timeSignatureInputRef = useRef<HTMLInputElement>(null)
   const keyInputRef = useRef<HTMLInputElement>(null)
   const baseFrequencyInputRef = useRef<HTMLInputElement>(null)
-  const { openScaleMenu, setOpenScaleMenu, scaleMenuRef } = useScaleMenu()
   const editorStateRef = useRef<EditorState>(editorState)
   const transportRef = useRef<TransportState>(createTransportState())
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
@@ -126,14 +124,12 @@ function App() {
   const openQuickAccess = quickAccess.open
   const openAllQuickAccess = useCallback((): void => {
     setIsModulatorMode(false)
-    setOpenScaleMenu(false)
     openQuickAccess('all')
-  }, [openQuickAccess, setOpenScaleMenu])
+  }, [openQuickAccess])
   const openCommandPalette = useCallback((): void => {
     setIsModulatorMode(false)
-    setOpenScaleMenu(false)
     openQuickAccess('commands')
-  }, [openQuickAccess, setOpenScaleMenu])
+  }, [openQuickAccess])
 
   const installEditorState = useCallback((nextState: EditorState): void => {
     editorStateRef.current = nextState
@@ -205,11 +201,6 @@ function App() {
   const keyDisplay = projectViewModel?.keyDisplay ?? '--'
   const baseFrequency = projectViewModel?.baseFrequency ?? '--'
   const staffLineBandByPitch = projectViewModel?.staffLineBandByPitch ?? []
-  const selectionInspector = projectViewModel?.selectionInspector ?? {
-    kind: 'cell' as const,
-    summary: 'No selection',
-    items: [],
-  }
   const rulerRatios = projectViewModel?.rulerRatios ?? []
   const highlightedPitches = projectViewModel?.highlightedPitches ?? new Set<number>()
   const metadataDisabledReason = disabledReason ?? (
@@ -389,10 +380,6 @@ function App() {
   }, [cancelContinuousEdit, modulationModeActive, setOpenWaveMenu])
 
   useEffect(() => {
-    if (!hasHeaderColumnMetadata) setOpenScaleMenu(false)
-  }, [hasHeaderColumnMetadata, setOpenScaleMenu])
-
-  useEffect(() => {
     const handleContextMenu = (event: MouseEvent): void => {
       event.preventDefault()
     }
@@ -459,12 +446,10 @@ function App() {
         cancelBaseFrequencyEdit={cancelBaseFrequencyEdit}
         beginBaseFrequencyEdit={beginBaseFrequencyEdit}
         baseFrequency={baseFrequency}
-        scaleMenuRef={scaleMenuRef}
-        openScaleMenu={openScaleMenu}
-        setOpenScaleMenu={setOpenScaleMenu}
         isScaleUpdating={isScaleUpdating}
         scaleOptions={scaleOptions}
         scaleName={scaleName}
+        scaleSourceId={scaleSourceId}
         applyScaleSelection={applyScaleSelection}
         scaleTranslateDirection={scaleTranslateDirection}
         toggleTranslateDirection={toggleTranslateDirection}
@@ -474,8 +459,6 @@ function App() {
         tuningName={tuningName}
         sequenceName={headerSequenceName}
         currentInputMode={editorState.inputMode}
-        selectionInspector={selectionInspector}
-        showSelectionInspector={workspaceView === 'sequencer'}
         onOpenQuickAccess={openAllQuickAccess}
         onOpenSettings={() => {
           quickAccess.close(false)

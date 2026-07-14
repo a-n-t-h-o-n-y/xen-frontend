@@ -1,5 +1,5 @@
-import { clampNumber, getChildCells, getPrimaryElement } from '../domain/music'
-import type { Cell, MusicElement, NoteSpanIR } from '../domain/music'
+import { clampNumber, getChildCells } from '../domain/music'
+import type { Cell, NoteSpanIR } from '../domain/music'
 import type { PatternPrefix } from '../domain/models'
 
 export type BgOverlayState = {
@@ -10,12 +10,6 @@ export type BgOverlayState = {
 
 export type LeafCell = {
   path: number[]
-}
-
-export type SelectionInspectorModel = {
-  kind: 'cell' | 'note' | 'sequence'
-  summary: string
-  items: Array<{ label: string; value: string }>
 }
 
 export type TimeSignatureParts = {
@@ -155,58 +149,6 @@ export const getCellAtPath = (rootCell: Cell, path: number[]): Cell | null => {
   }
 
   return currentCell
-}
-
-export const formatMetaNumber = (value: number, precision = 2): string => {
-  if (!Number.isFinite(value)) {
-    return '0'
-  }
-  const rounded = value.toFixed(precision)
-  return rounded.replace(/\.?0+$/, '')
-}
-
-export const formatMetaFixed2 = (value: number): string => {
-  if (!Number.isFinite(value)) {
-    return '0.00'
-  }
-  return value.toFixed(2)
-}
-
-export const getSelectionInspector = (
-  cell: Cell | null,
-  selectedElement?: MusicElement | null
-): SelectionInspectorModel => {
-  if (!cell) return { kind: 'cell', summary: 'No selection', items: [] }
-
-  const element = selectedElement ?? getPrimaryElement(cell)
-  if (!element) {
-    return {
-      kind: 'cell',
-      summary: 'Cell',
-      items: [{ label: 'Weight', value: formatMetaNumber(cell.weight) }],
-    }
-  }
-  if (element.type === 'Sequence') {
-    return {
-      kind: 'sequence',
-      summary: `Sequence · ${element.cells.length} cells`,
-      items: [
-        { label: 'Child cells', value: `${element.cells.length}` },
-        { label: 'Weight', value: formatMetaNumber(cell.weight) },
-      ],
-    }
-  }
-  return {
-    kind: 'note',
-    summary: `Note · P${Math.trunc(element.pitch)}`,
-    items: [
-      { label: 'Pitch', value: `${Math.trunc(element.pitch)}` },
-      { label: 'Delay', value: formatMetaFixed2(element.delay) },
-      { label: 'Gate', value: formatMetaFixed2(element.gate) },
-      { label: 'Velocity', value: formatMetaFixed2(element.velocity) },
-      { label: 'Weight', value: formatMetaNumber(cell.weight) },
-    ],
-  }
 }
 
 export const parseTimeSignatureInput = (value: string): TimeSignatureParts | null => {

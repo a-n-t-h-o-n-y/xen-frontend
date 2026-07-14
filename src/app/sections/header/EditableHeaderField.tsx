@@ -12,6 +12,7 @@ type EditableHeaderFieldProps = {
   begin: () => void
   disabled: boolean
   value: string | number
+  suffix?: string
   inputLabel: string
   displayLabel: string
 }
@@ -28,6 +29,7 @@ export function EditableHeaderField({
   begin,
   disabled,
   value,
+  suffix,
   inputLabel,
   displayLabel,
 }: EditableHeaderFieldProps) {
@@ -71,6 +73,7 @@ export function EditableHeaderField({
             {value}
           </button>
         )}
+        {suffix ? <span className="headerFieldSuffix">{suffix}</span> : null}
       </div>
     </div>
   )
