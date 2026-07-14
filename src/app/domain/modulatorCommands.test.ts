@@ -64,8 +64,25 @@ describe('modulator command builders', () => {
     })
   })
 
+  it('keeps weight modulation strictly above zero', () => {
+    const state = createInitialModulatorPanelState()
+    const command = buildModulatorTargetCommand(
+      'weights',
+      {
+        ...state.targetControls.weights,
+        center: 0,
+        amount: 0,
+      },
+      state,
+      12
+    )
+
+    const payload = JSON.parse(command.replace(/^set weights /, ''))
+    expect(payload.children[2]).toEqual({ type: 'bias', amount: 0.01 })
+    expect(payload.children[3]).toEqual({ type: 'clamp', min: 0.01, max: 1 })
+  })
+
   it('joins commands with backend command-chain separators', () => {
     expect(joinModulatorCommands(['set pitch {}', 'set gate {}'])).toBe('set pitch {}; set gate {}')
   })
 })
-

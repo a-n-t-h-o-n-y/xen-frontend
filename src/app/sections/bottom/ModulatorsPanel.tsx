@@ -198,23 +198,20 @@ export function ModulatorsPanel({
         className="headerControlGroup modulationControlGroup modulationControlGroup-mode"
         aria-label="Modulator slots"
       >
-        <h2 className="headerGroupLabel">Mode</h2>
-        <div className="modulationField">
-          <span className="fieldLabel">Modulator</span>
-          <div className="modTabs" role="tablist" aria-label="Modulator slots">
-            {Array.from({ length: 4 }, (_, index) => (
-              <button
-                key={`mod-tab-${index}`}
-                type="button"
-                className={`modTab${activeModulatorTab === index ? ' modTab-active' : ''}`}
-                onClick={() => selectActiveModulatorTab(index)}
-                role="tab"
-                aria-selected={activeModulatorTab === index}
-              >
-                {index + 1}
-              </button>
-            ))}
-          </div>
+        <h2 className="headerGroupLabel">Mods</h2>
+        <div className="modTabs" role="tablist" aria-label="Modulator slots">
+          {Array.from({ length: 4 }, (_, index) => (
+            <button
+              key={`mod-tab-${index}`}
+              type="button"
+              className={`modTab${activeModulatorTab === index ? ' modTab-active' : ''}`}
+              onClick={() => selectActiveModulatorTab(index)}
+              role="tab"
+              aria-selected={activeModulatorTab === index}
+            >
+              {index + 1}
+            </button>
+          ))}
         </div>
       </section>
       <section
@@ -274,9 +271,7 @@ export function ModulatorsPanel({
         aria-label="Modulation targets"
       >
         <h2 className="headerGroupLabel">Targets</h2>
-        <div className="modulationField modTargetField">
-          <span className="fieldLabel">Destinations</span>
-          <div className="modTargetChipList">
+        <div className="modTargetChipList">
             {MOD_TARGET_ORDER.map((target) => {
             const spec = getModTargetSpecForTuning(target, tuningLength)
             const control = activeModulator.targetControls[target]
@@ -288,93 +283,115 @@ export function ModulatorsPanel({
             const centerRatio = spec.max === spec.min
               ? 0.5
               : clampNumber((clampedCenter - spec.min) / (spec.max - spec.min), 0, 1)
+            const amplitude = Math.abs(displayAmount)
+            const rangeStartRatio = spec.max === spec.min
+              ? 0.5
+              : clampNumber(
+                  (clampedCenter - amplitude - spec.min) / (spec.max - spec.min),
+                  0,
+                  1
+                )
+            const rangeEndRatio = spec.max === spec.min
+              ? 0.5
+              : clampNumber(
+                  (clampedCenter + amplitude - spec.min) / (spec.max - spec.min),
+                  0,
+                  1
+                )
 
             return (
-              <div
-                key={`mod-target-${target}`}
-                className={`modTargetChip${control.enabled ? ' modTargetChip-enabled' : ''}`}
-                onDoubleClick={(event) => {
-                  event.preventDefault()
-                  resetTargetControl(target)
-                }}
-                onPointerDown={(event) => {
-                  if (!(event.currentTarget instanceof HTMLDivElement)) {
-                    return
-                  }
-                  if (event.target instanceof HTMLElement && event.target.closest('.modTargetChipLed')) {
-                    return
-                  }
-                  if (!beginContinuousEdit()) return
-                  const mode = event.metaKey || event.ctrlKey ? 'center' : 'amount'
-                  padDragRef.current = {
-                    pointerId: event.pointerId,
-                    target,
-                    mode,
-                    host: event.currentTarget,
-                    startClientX: event.clientX,
-                    startClientY: event.clientY,
-                    startAmount: control.amount,
-                    startCenter: control.center,
-                  }
-                  event.currentTarget.setPointerCapture(event.pointerId)
-                }}
-                onPointerMove={(event) => {
-                  const drag = padDragRef.current
-                  if (!drag || drag.pointerId !== event.pointerId || drag.target !== target) {
-                    return
-                  }
-                  applyPadMotion(
-                    target,
-                    drag.host,
-                    event.clientX,
-                    event.clientY,
-                    drag.mode,
-                    {
-                      startClientX: drag.startClientX,
-                      startClientY: drag.startClientY,
-                      startAmount: drag.startAmount,
-                      startCenter: drag.startCenter,
-                    },
-                    event.shiftKey ? 'fine' : 'coarse'
-                  )
-                }}
-                onPointerUp={(event) => {
-                  if (padDragRef.current?.pointerId === event.pointerId) {
-                    padDragRef.current = null
-                    commitContinuousEdit()
-                  }
-                }}
-                onPointerCancel={(event) => {
-                  if (padDragRef.current?.pointerId === event.pointerId) {
-                    padDragRef.current = null
-                    cancelContinuousEdit()
-                  }
-                }}
-                title="Drag up/down for amount. Shift=fine. Cmd/Ctrl+drag moves center."
-              >
-                <label className="modTargetChipLed" aria-label={`${spec.label} modulator enabled`}>
-                  <input
-                    className="modTargetLed"
-                    type="checkbox"
-                    checked={control.enabled}
-                    onChange={(event) => {
-                      setTargetEnabled(target, event.target.checked)
-                    }}
-                  />
-                </label>
-                <span className="modTargetChipLabel">{spec.label}</span>
-                <span
-                  className="modTargetChipCenter"
-                  aria-hidden="true"
-                  style={{ '--mod-center-ratio': centerRatio } as CSSProperties}
+              <div className="modTargetItem" key={`mod-target-${target}`}>
+                <span className="fieldLabel">{spec.label}</span>
+                <div
+                  className={`modTargetChip${control.enabled ? ' modTargetChip-enabled' : ''}`}
+                  onDoubleClick={(event) => {
+                    event.preventDefault()
+                    resetTargetControl(target)
+                  }}
+                  onPointerDown={(event) => {
+                    if (!(event.currentTarget instanceof HTMLDivElement)) {
+                      return
+                    }
+                    if (event.target instanceof HTMLElement && event.target.closest('.modTargetChipLed')) {
+                      return
+                    }
+                    if (!beginContinuousEdit()) return
+                    const mode = event.metaKey || event.ctrlKey ? 'center' : 'amount'
+                    padDragRef.current = {
+                      pointerId: event.pointerId,
+                      target,
+                      mode,
+                      host: event.currentTarget,
+                      startClientX: event.clientX,
+                      startClientY: event.clientY,
+                      startAmount: control.amount,
+                      startCenter: control.center,
+                    }
+                    event.currentTarget.setPointerCapture(event.pointerId)
+                  }}
+                  onPointerMove={(event) => {
+                    const drag = padDragRef.current
+                    if (!drag || drag.pointerId !== event.pointerId || drag.target !== target) {
+                      return
+                    }
+                    applyPadMotion(
+                      target,
+                      drag.host,
+                      event.clientX,
+                      event.clientY,
+                      drag.mode,
+                      {
+                        startClientX: drag.startClientX,
+                        startClientY: drag.startClientY,
+                        startAmount: drag.startAmount,
+                        startCenter: drag.startCenter,
+                      },
+                      event.shiftKey ? 'fine' : 'coarse'
+                    )
+                  }}
+                  onPointerUp={(event) => {
+                    if (padDragRef.current?.pointerId === event.pointerId) {
+                      padDragRef.current = null
+                      commitContinuousEdit()
+                    }
+                  }}
+                  onPointerCancel={(event) => {
+                    if (padDragRef.current?.pointerId === event.pointerId) {
+                      padDragRef.current = null
+                      cancelContinuousEdit()
+                    }
+                  }}
+                  title="Drag up/down for amount. Shift=fine. Cmd/Ctrl+drag moves center."
                 >
-                  <span className="modTargetChipCenterDot" />
-                </span>
-                <span className="modTargetChipAmount mono">{formatSignedAmount(displayAmount)}</span>
+                  <label className="modTargetChipLed" aria-label={`${spec.label} modulator enabled`}>
+                    <input
+                      className="modTargetLed"
+                      type="checkbox"
+                      checked={control.enabled}
+                      onChange={(event) => {
+                        setTargetEnabled(target, event.target.checked)
+                      }}
+                    />
+                  </label>
+                  <span
+                    className="modTargetChipCenter"
+                    aria-hidden="true"
+                    style={{
+                      '--mod-center-ratio': centerRatio,
+                      '--mod-range-start': `${rangeStartRatio * 100}%`,
+                      '--mod-range-width': `${(rangeEndRatio - rangeStartRatio) * 100}%`,
+                    } as CSSProperties}
+                  >
+                    <span className="modTargetChipRange" />
+                    <span className="modTargetChipCenterDot" />
+                  </span>
+                  <span className="modTargetChipAmount mono">
+                    {formatSignedAmount(displayAmount)}
+                  </span>
+                </div>
               </div>
             )
             })}
-          </div>
         </div>
       </section>
     </>

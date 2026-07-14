@@ -108,8 +108,8 @@ describe('HeaderSection quick access trigger', () => {
     expect(screen.getByText('Lead')).toBeInTheDocument()
     expect(screen.getByText('Modulation controls')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Timing' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Done' })).toHaveAttribute('aria-pressed', 'true')
-    await user.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.getByRole('button', { name: 'Modulate' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: 'Modulate' }))
     expect(onExitModulation).toHaveBeenCalledOnce()
   })
 

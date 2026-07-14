@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createInitialModulatorPanelState } from '../../domain/modulation'
 import { ModulatorsPanel } from './ModulatorsPanel'
 
-const renderPanel = () => {
+const renderPanel = (activeModulator = createInitialModulatorPanelState()) => {
   const beginContinuousEdit = vi.fn(() => true)
   const commitContinuousEdit = vi.fn()
   const cancelContinuousEdit = vi.fn()
@@ -14,7 +14,7 @@ const renderPanel = () => {
   render(
     <ModulatorsPanel
       activeModulatorTab={0}
-      activeModulator={createInitialModulatorPanelState()}
+      activeModulator={activeModulator}
       selectActiveModulatorTab={vi.fn()}
       selectWaveType={selectWaveType}
       onWaveLerpChange={onWaveLerpChange}
@@ -51,6 +51,19 @@ describe('modulator continuous controls', () => {
 
     expect(controls.selectWaveType).toHaveBeenCalledExactlyOnceWith('a', 'square')
     expect(screen.getByRole('button', { name: 'Wave B waveform' })).toHaveTextContent('Triangle')
+  })
+
+  it('shows a symmetric amplitude range clamped around the target center', () => {
+    const activeModulator = createInitialModulatorPanelState()
+    activeModulator.targetControls.velocity.center = 0.8
+    activeModulator.targetControls.velocity.amount = -0.5
+    renderPanel(activeModulator)
+
+    const target = screen.getByText('Velocity').closest('.modTargetItem')
+    const range = target?.querySelector<HTMLElement>('.modTargetChipCenter')
+
+    expect(Number.parseFloat(range?.style.getPropertyValue('--mod-range-start') ?? '')).toBeCloseTo(30)
+    expect(Number.parseFloat(range?.style.getPropertyValue('--mod-range-width') ?? '')).toBeCloseTo(70)
   })
 
   it('begins on pointer down, previews changes, and commits on pointer up', () => {

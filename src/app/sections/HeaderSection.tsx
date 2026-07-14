@@ -144,7 +144,7 @@ export function HeaderSection({
             disabled={!modulationControls && modulationDisabled}
             aria-pressed={modulationControls !== undefined}
           >
-            {modulationControls ? 'Done' : 'Modulate'}
+            Modulate
           </button>
           <IconButton
             className="headerSettingsButton"

@@ -180,9 +180,13 @@ export function useModulatorController({
         : executeBackendCommand(command)
       void operation.catch((error: unknown) => {
         if (gesture && activeGestureRef.current === gesture) {
-          activeGestureRef.current = null
+          gesture.finishing = true
           updateActiveModulator(gesture.baseline)
-          void gesture.preview.cancel().catch(() => undefined)
+          void gesture.preview.cancel()
+            .catch(() => undefined)
+            .finally(() => {
+              if (activeGestureRef.current === gesture) activeGestureRef.current = null
+            })
         }
         setStatusMessage(`Command failed: ${getErrorMessage(error)}`)
         setStatusLevel('error')

@@ -130,7 +130,7 @@ export const MOD_TARGET_SPECS: Record<ModTarget, ModTargetSpec> = {
   },
   weights: {
     label: 'Weights',
-    min: 0,
+    min: 0.01,
     max: 1,
     defaultCenter: 0.5,
     defaultScalar: 0.5,
