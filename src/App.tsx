@@ -390,34 +390,7 @@ function App() {
 
   return (
     <div className="app">
-      {modulationModeActive ? (
-        <ModulationHeader
-          onDone={() => setIsModulatorMode(false)}
-          controls={(
-            <ModulatorsPanel
-              activeModulatorTab={activeModulatorTab}
-              activeModulator={activeModulator}
-              selectActiveModulatorTab={(index) => {
-                cancelContinuousEdit()
-                selectActiveModulatorTab(index)
-              }}
-              selectWaveType={selectWaveType}
-              onWaveLerpChange={handleWaveLerpChange}
-              onWaveAPulseWidthChange={handleWaveAPulseWidthChange}
-              onWaveBPulseWidthChange={handleWaveBPulseWidthChange}
-              clampNumber={clampNumber}
-              setTargetEnabled={setTargetEnabled}
-              resetTargetControl={resetTargetControl}
-              padDragRef={padDragRef}
-              applyPadMotion={applyPadMotion}
-              tuningLength={tuningLength}
-              beginContinuousEdit={beginContinuousEdit}
-              commitContinuousEdit={commitContinuousEdit}
-              cancelContinuousEdit={cancelContinuousEdit}
-            />
-          )}
-        />
-      ) : <HeaderSection
+      <HeaderSection
         isTimeSignatureEditing={isTimeSignatureEditing}
         timeSignatureInputRef={timeSignatureInputRef}
         timeSignatureDraft={timeSignatureDraft}
@@ -465,8 +438,36 @@ function App() {
           settingsOverlay.openOverlay()
         }}
         onEnterModulation={() => setIsModulatorMode(true)}
+        onExitModulation={() => setIsModulatorMode(false)}
         modulationDisabled={!isProjectReady || workspaceView !== 'sequencer'}
-      />}
+        modulationControls={modulationModeActive ? (
+          <ModulationHeader
+            controls={(
+              <ModulatorsPanel
+                activeModulatorTab={activeModulatorTab}
+                activeModulator={activeModulator}
+                selectActiveModulatorTab={(index) => {
+                  cancelContinuousEdit()
+                  selectActiveModulatorTab(index)
+                }}
+                selectWaveType={selectWaveType}
+                onWaveLerpChange={handleWaveLerpChange}
+                onWaveAPulseWidthChange={handleWaveAPulseWidthChange}
+                onWaveBPulseWidthChange={handleWaveBPulseWidthChange}
+                clampNumber={clampNumber}
+                setTargetEnabled={setTargetEnabled}
+                resetTargetControl={resetTargetControl}
+                padDragRef={padDragRef}
+                applyPadMotion={applyPadMotion}
+                tuningLength={tuningLength}
+                beginContinuousEdit={beginContinuousEdit}
+                commitContinuousEdit={commitContinuousEdit}
+                cancelContinuousEdit={cancelContinuousEdit}
+              />
+            )}
+          />
+        ) : undefined}
+      />
       <section className="workspaceSection" aria-label="Workspace">
         {!isProjectReady ? (
           <div className="workspaceNotice" role="status" aria-live="polite">

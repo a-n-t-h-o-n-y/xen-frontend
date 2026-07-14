@@ -1,5 +1,6 @@
 import { createRef } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { createInitialModulatorPanelState } from '../../domain/modulation'
 import { ModulatorsPanel } from './ModulatorsPanel'
@@ -9,12 +10,13 @@ const renderPanel = () => {
   const commitContinuousEdit = vi.fn()
   const cancelContinuousEdit = vi.fn()
   const onWaveLerpChange = vi.fn()
+  const selectWaveType = vi.fn()
   render(
     <ModulatorsPanel
       activeModulatorTab={0}
       activeModulator={createInitialModulatorPanelState()}
       selectActiveModulatorTab={vi.fn()}
-      selectWaveType={vi.fn()}
+      selectWaveType={selectWaveType}
       onWaveLerpChange={onWaveLerpChange}
       onWaveAPulseWidthChange={vi.fn()}
       onWaveBPulseWidthChange={vi.fn()}
@@ -35,10 +37,22 @@ const renderPanel = () => {
     commitContinuousEdit,
     cancelContinuousEdit,
     onWaveLerpChange,
+    selectWaveType,
   }
 }
 
 describe('modulator continuous controls', () => {
+  it('uses compact waveform dropdowns', async () => {
+    const user = userEvent.setup()
+    const controls = renderPanel()
+
+    await user.click(screen.getByRole('button', { name: 'Wave A waveform' }))
+    await user.click(screen.getByRole('option', { name: 'Square' }))
+
+    expect(controls.selectWaveType).toHaveBeenCalledExactlyOnceWith('a', 'square')
+    expect(screen.getByRole('button', { name: 'Wave B waveform' })).toHaveTextContent('Triangle')
+  })
+
   it('begins on pointer down, previews changes, and commits on pointer up', () => {
     const controls = renderPanel()
 

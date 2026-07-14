@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
+import { ListboxPicker } from '../../ui/ListboxPicker'
 import {
   MOD_TARGET_ORDER,
   getModTargetSpecForTuning,
@@ -98,13 +99,10 @@ const formatSignedAmount = (value: number): string => {
   return value > 0 ? `+${formatted}` : formatted
 }
 
-const WAVE_OPTION_SHORT_LABELS: Record<WaveType, string> = {
-  sine: 'Sine',
-  triangle: 'Tri',
-  sawtooth_up: 'Saw+',
-  sawtooth_down: 'Saw-',
-  square: 'Sqr',
-}
+const WAVE_PICKER_OPTIONS = WAVE_OPTIONS.map((option) => ({
+  id: option,
+  name: WAVE_OPTION_LABELS[option],
+}))
 
 function WaveSelectControl({
   wave,
@@ -134,42 +132,38 @@ function WaveSelectControl({
   )
 
   return (
-    <div className="modRailWaveSelect" role="radiogroup" aria-label={`${label} type`}>
-      <span className="modRailWaveLabel">{label}</span>
-      <div className="modRailWaveSegmentList">
-        {WAVE_OPTIONS.map((option) => (
-          <button
-            key={`wave-${wave}-option-${option}`}
-            type="button"
-            className={`modRailWaveSegment mono${option === waveType ? ' modRailWaveSegment-active' : ''}`}
-            onClick={() => selectWaveType(wave, option)}
-            role="radio"
-            aria-checked={option === waveType}
-            title={WAVE_OPTION_LABELS[option]}
-          >
-            {WAVE_OPTION_SHORT_LABELS[option]}
-          </button>
-        ))}
+    <div className="modulationField modRailWaveSelect">
+      <span className="fieldLabel">{label}</span>
+      <div className="modRailWaveControl">
+        <ListboxPicker
+          className="modRailWavePickerControl"
+          options={WAVE_PICKER_OPTIONS}
+          selectedId={waveType}
+          selectedName={WAVE_OPTION_LABELS[waveType]}
+          triggerLabel={`${label} waveform`}
+          listLabel={`${label} waveforms`}
+          onSelect={(option) => selectWaveType(wave, option as WaveType)}
+        />
+        {waveType === 'square' ? (
+          <label className="modRailPulseControl">
+            <span className="modRailPulseLabel">PW</span>
+            <input
+              className="modulatorSlider modulatorTopLerp"
+              type="range"
+              min={0.05}
+              max={0.95}
+              step={0.01}
+              value={pulseWidth}
+              onChange={(event) => setPulseWidth(Number(event.target.value))}
+              onPointerDown={() => beginContinuousEdit()}
+              onPointerUp={commitContinuousEdit}
+              onPointerCancel={cancelContinuousEdit}
+              {...keyboardEditHandlers}
+            />
+            <span className="modRailPulseValue mono">{pulseWidth.toFixed(2)}</span>
+          </label>
+        ) : null}
       </div>
-      {waveType === 'square' ? (
-        <label className="modRailPulseControl">
-          <span className="modRailPulseLabel">PW</span>
-          <input
-            className="modulatorSlider modulatorTopLerp"
-            type="range"
-            min={0.05}
-            max={0.95}
-            step={0.01}
-            value={pulseWidth}
-            onChange={(event) => setPulseWidth(Number(event.target.value))}
-            onPointerDown={() => beginContinuousEdit()}
-            onPointerUp={commitContinuousEdit}
-            onPointerCancel={cancelContinuousEdit}
-            {...keyboardEditHandlers}
-          />
-          <span className="mono">{pulseWidth.toFixed(2)}</span>
-        </label>
-      ) : null}
     </div>
   )
 }
@@ -199,64 +193,91 @@ export function ModulatorsPanel({
   )
 
   return (
-    <section className="modulatorRail" aria-label="Modulation controls">
-      <div className="modTabs" role="tablist" aria-label="Modulator slots">
-        {Array.from({ length: 4 }, (_, index) => (
-          <button
-            key={`mod-tab-${index}`}
-            type="button"
-            className={`modTab${activeModulatorTab === index ? ' modTab-active' : ''}`}
-            onClick={() => selectActiveModulatorTab(index)}
-            role="tab"
-            aria-selected={activeModulatorTab === index}
-          >
-            {index + 1}
-          </button>
-        ))}
-      </div>
-      <div className="modulatorRailControls">
-        <WaveSelectControl
-          wave="a"
-          label="A"
-          waveType={activeModulator.waveAType}
-          pulseWidth={activeModulator.waveAPulseWidth}
-          setPulseWidth={onWaveAPulseWidthChange}
-          selectWaveType={selectWaveType}
-          beginContinuousEdit={beginContinuousEdit}
-          commitContinuousEdit={commitContinuousEdit}
-          cancelContinuousEdit={cancelContinuousEdit}
-        />
-        <label className="modRailLerp">
-          <span className="modRailLerpValue mono">{Math.round(activeModulator.waveLerp * 100)}%</span>
-          <input
-            className="modulatorSlider modulatorTopLerp"
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={activeModulator.waveLerp}
-            onChange={(event) => onWaveLerpChange(Number(event.target.value))}
-            onPointerDown={() => beginContinuousEdit()}
-            onPointerUp={commitContinuousEdit}
-            onPointerCancel={cancelContinuousEdit}
-            {...lerpKeyboardEditHandlers}
-            aria-label="Wave lerp"
+    <>
+      <section
+        className="headerControlGroup modulationControlGroup modulationControlGroup-mode"
+        aria-label="Modulator slots"
+      >
+        <h2 className="headerGroupLabel">Mode</h2>
+        <div className="modulationField">
+          <span className="fieldLabel">Modulator</span>
+          <div className="modTabs" role="tablist" aria-label="Modulator slots">
+            {Array.from({ length: 4 }, (_, index) => (
+              <button
+                key={`mod-tab-${index}`}
+                type="button"
+                className={`modTab${activeModulatorTab === index ? ' modTab-active' : ''}`}
+                onClick={() => selectActiveModulatorTab(index)}
+                role="tab"
+                aria-selected={activeModulatorTab === index}
+              >
+                {index + 1}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+      <section
+        className="headerControlGroup modulationControlGroup modulationControlGroup-source"
+        aria-label="Modulation source"
+      >
+        <h2 className="headerGroupLabel">Source</h2>
+        <div className="modulatorRailControls">
+          <WaveSelectControl
+            wave="a"
+            label="Wave A"
+            waveType={activeModulator.waveAType}
+            pulseWidth={activeModulator.waveAPulseWidth}
+            setPulseWidth={onWaveAPulseWidthChange}
+            selectWaveType={selectWaveType}
+            beginContinuousEdit={beginContinuousEdit}
+            commitContinuousEdit={commitContinuousEdit}
+            cancelContinuousEdit={cancelContinuousEdit}
           />
-        </label>
-        <WaveSelectControl
-          wave="b"
-          label="B"
-          waveType={activeModulator.waveBType}
-          pulseWidth={activeModulator.waveBPulseWidth}
-          setPulseWidth={onWaveBPulseWidthChange}
-          selectWaveType={selectWaveType}
-          beginContinuousEdit={beginContinuousEdit}
-          commitContinuousEdit={commitContinuousEdit}
-          cancelContinuousEdit={cancelContinuousEdit}
-        />
-      </div>
-      <div className="modTargetChipList">
-          {MOD_TARGET_ORDER.map((target) => {
+          <label className="modulationField modRailLerp">
+            <span className="fieldLabel modRailLerpLabel">
+              <span>Blend</span>
+              <span className="modRailLerpValue mono">
+                {Math.round(activeModulator.waveLerp * 100)}%
+              </span>
+            </span>
+            <input
+              className="modulatorSlider modulatorTopLerp"
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={activeModulator.waveLerp}
+              onChange={(event) => onWaveLerpChange(Number(event.target.value))}
+              onPointerDown={() => beginContinuousEdit()}
+              onPointerUp={commitContinuousEdit}
+              onPointerCancel={cancelContinuousEdit}
+              {...lerpKeyboardEditHandlers}
+              aria-label="Wave lerp"
+            />
+          </label>
+          <WaveSelectControl
+            wave="b"
+            label="Wave B"
+            waveType={activeModulator.waveBType}
+            pulseWidth={activeModulator.waveBPulseWidth}
+            setPulseWidth={onWaveBPulseWidthChange}
+            selectWaveType={selectWaveType}
+            beginContinuousEdit={beginContinuousEdit}
+            commitContinuousEdit={commitContinuousEdit}
+            cancelContinuousEdit={cancelContinuousEdit}
+          />
+        </div>
+      </section>
+      <section
+        className="headerControlGroup modulationControlGroup modulationControlGroup-targets"
+        aria-label="Modulation targets"
+      >
+        <h2 className="headerGroupLabel">Targets</h2>
+        <div className="modulationField modTargetField">
+          <span className="fieldLabel">Destinations</span>
+          <div className="modTargetChipList">
+            {MOD_TARGET_ORDER.map((target) => {
             const spec = getModTargetSpecForTuning(target, tuningLength)
             const control = activeModulator.targetControls[target]
             const clampedCenter = clampNumber(control.center, spec.min, spec.max)
@@ -352,8 +373,10 @@ export function ModulatorsPanel({
                 <span className="modTargetChipAmount mono">{formatSignedAmount(displayAmount)}</span>
               </div>
             )
-          })}
-      </div>
-    </section>
+            })}
+          </div>
+        </div>
+      </section>
+    </>
   )
 }

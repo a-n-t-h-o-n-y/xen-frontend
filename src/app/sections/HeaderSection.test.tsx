@@ -1,4 +1,5 @@
 import { createRef } from 'react'
+import type { ReactNode } from 'react'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -11,6 +12,8 @@ const renderHeader = (
   callbacks: {
     applyScaleSelection?: (id: string) => Promise<void>
     applyModeSelection?: (mode: number) => Promise<void>
+    modulationControls?: ReactNode
+    onExitModulation?: () => void
   } = {}
 ) =>
   render(
@@ -64,7 +67,9 @@ const renderHeader = (
       onOpenQuickAccess={onOpenQuickAccess}
       onOpenSettings={vi.fn()}
       onEnterModulation={vi.fn()}
+      onExitModulation={callbacks.onExitModulation ?? vi.fn()}
       modulationDisabled={false}
+      modulationControls={callbacks.modulationControls}
     />
   )
 
@@ -90,6 +95,22 @@ describe('HeaderSection quick access trigger', () => {
     expect(screen.getByRole('button', {
       name: 'Reference frequency for pitch 0 440 hertz. Click to edit',
     })).toBeInTheDocument()
+  })
+
+  it('keeps the primary row while modulation replaces the secondary row', async () => {
+    const user = userEvent.setup()
+    const onExitModulation = vi.fn()
+    renderHeader(vi.fn(), null, true, {
+      modulationControls: <div>Modulation controls</div>,
+      onExitModulation,
+    })
+
+    expect(screen.getByText('Lead')).toBeInTheDocument()
+    expect(screen.getByText('Modulation controls')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Timing' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Done' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    expect(onExitModulation).toHaveBeenCalledOnce()
   })
 
   it('applies changes through the custom scale picker and wrapping mode stepper', async () => {

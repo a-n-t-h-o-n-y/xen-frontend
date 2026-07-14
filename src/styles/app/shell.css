@@ -91,6 +91,10 @@
   padding: 0;
 }
 
+.header-modulation {
+  border-color: var(--accent);
+}
+
 .headerPrimaryRow {
   display: grid;
   grid-template-columns: minmax(10rem, 1fr) minmax(20rem, 42rem) minmax(10rem, 1fr);
@@ -122,8 +126,7 @@
   min-width: 7rem;
 }
 
-.headerSequenceLabel,
-.modulationHeaderEyebrow {
+.headerSequenceLabel {
   color: var(--text-tertiary);
   font-size: 0.62rem;
   line-height: 1;
@@ -233,8 +236,7 @@
   text-transform: capitalize;
 }
 
-.headerUtilityButton,
-.modulationDoneButton {
+.headerUtilityButton {
   min-height: 2.25rem;
   padding: 0 var(--space-3);
   border: var(--border-subtle);
@@ -246,9 +248,7 @@
 }
 
 .headerUtilityButton:hover:not(:disabled),
-.headerUtilityButton:focus-visible:not(:disabled),
-.modulationDoneButton:hover,
-.modulationDoneButton:focus-visible {
+.headerUtilityButton:focus-visible:not(:disabled) {
   border-color: var(--border-strong-color);
   background: var(--surface-control-hover);
   color: var(--text-primary);
@@ -265,6 +265,12 @@
   background: var(--surface-control);
   color: var(--text-primary);
   font-weight: 700;
+}
+
+.headerModulationButton-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .headerSettingsButton {
@@ -334,31 +340,7 @@
 }
 
 .modulationHeader {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 2.65rem;
-  padding: var(--space-1);
-  border-color: var(--accent);
-}
-
-.modulationHeaderIdentity {
-  display: grid;
-  gap: 0.15rem;
-  flex: 0 0 auto;
-  padding: 0 var(--space-2);
-}
-
-.modulationHeaderControls {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.modulationDoneButton {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-weight: 700;
+  grid-template-columns: minmax(10rem, 0.55fr) minmax(24rem, 1.1fr) minmax(30rem, 1.5fr);
 }
 
 .headerField-timeSignature {
@@ -462,8 +444,8 @@
 .timeSignatureDisplay:focus-visible:not(:disabled),
 .headerEditableDisplay:focus-visible:not(:disabled),
 .headerQuickAccessTrigger:focus-visible:not(:disabled),
-.scalePickerTrigger:focus-visible:not(:disabled),
-.scalePickerOption:focus-visible,
+.listboxPickerTrigger:focus-visible:not(:disabled),
+.listboxPickerOption:focus-visible,
 .modeStepperInput:focus-visible,
 .modeStepperButton:focus-visible,
 .scaleDirectionGlyph:focus-visible,
@@ -557,13 +539,13 @@
   min-width: 0;
 }
 
-.scalePicker {
+.listboxPicker {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.scalePickerTrigger {
+.listboxPickerTrigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -586,24 +568,24 @@
     border-color 170ms ease;
 }
 
-.scalePickerTrigger:hover:not(:disabled),
-.scalePickerTrigger[aria-expanded='true'] {
+.listboxPickerTrigger:hover:not(:disabled),
+.listboxPickerTrigger[aria-expanded='true'] {
   border-color: var(--border-strong-color);
   background: var(--surface-control-hover);
 }
 
-.scalePickerTrigger:disabled {
+.listboxPickerTrigger:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-.scalePickerValue {
+.listboxPickerValue {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.scalePickerChevron {
+.listboxPickerChevron {
   flex: 0 0 auto;
   width: 0.42rem;
   height: 0.42rem;
@@ -614,11 +596,11 @@
   transition: transform 170ms ease;
 }
 
-.scalePickerTrigger[aria-expanded='true'] .scalePickerChevron {
+.listboxPickerTrigger[aria-expanded='true'] .listboxPickerChevron {
   transform: translateY(0.12rem) rotate(225deg);
 }
 
-.scalePickerMenu {
+.listboxPickerMenu {
   position: absolute;
   top: calc(100% + var(--space-1));
   left: 0;
@@ -635,7 +617,7 @@
   box-shadow: var(--shadow-lg);
 }
 
-.scalePickerOption {
+.listboxPickerOption {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -653,18 +635,18 @@
   cursor: pointer;
 }
 
-.scalePickerOption:hover,
-.scalePickerOption:focus-visible {
+.listboxPickerOption:hover,
+.listboxPickerOption:focus-visible {
   background: var(--surface-control-hover);
   color: var(--text-primary);
 }
 
-.scalePickerOption[aria-selected='true'] {
+.listboxPickerOption[aria-selected='true'] {
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
 
-.scalePickerCheck {
+.listboxPickerCheck {
   flex: 0 0 1rem;
   color: var(--accent-strong);
   text-align: center;

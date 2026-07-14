@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react'
+import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import type { InputMode, TranslateDirection } from '../domain/models'
 import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
@@ -51,7 +51,9 @@ type HeaderSectionProps = {
   onOpenQuickAccess: () => void
   onOpenSettings: () => void
   onEnterModulation: () => void
+  onExitModulation: () => void
   modulationDisabled: boolean
+  modulationControls?: ReactNode
 }
 
 export function HeaderSection({
@@ -99,10 +101,12 @@ export function HeaderSection({
   onOpenQuickAccess,
   onOpenSettings,
   onEnterModulation,
+  onExitModulation,
   modulationDisabled,
+  modulationControls,
 }: HeaderSectionProps) {
   return (
-    <header className="header">
+    <header className={`header${modulationControls ? ' header-modulation' : ''}`}>
       <div className="headerPrimaryRow">
         <div className="headerIdentity">
           <span className="headerSequenceLabel">Sequence</span>
@@ -133,11 +137,14 @@ export function HeaderSection({
           </div>
           <button
             type="button"
-            className="headerUtilityButton headerModulationButton"
-            onClick={onEnterModulation}
-            disabled={modulationDisabled}
+            className={`headerUtilityButton headerModulationButton${
+              modulationControls ? ' headerModulationButton-active' : ''
+            }`}
+            onClick={modulationControls ? onExitModulation : onEnterModulation}
+            disabled={!modulationControls && modulationDisabled}
+            aria-pressed={modulationControls !== undefined}
           >
-            Modulate
+            {modulationControls ? 'Done' : 'Modulate'}
           </button>
           <IconButton
             className="headerSettingsButton"
@@ -149,7 +156,8 @@ export function HeaderSection({
           </IconButton>
         </div>
       </div>
-      <div className="headerControlRow">
+      {modulationControls ?? (
+        <div className="headerControlRow">
         <section className="headerControlGroup headerControlGroup-time" aria-label="Timing">
           <h2 className="headerGroupLabel">Timing</h2>
           <div className="headerGroupFields">
@@ -313,7 +321,8 @@ export function HeaderSection({
             </div>
           </div>
         </section>
-      </div>
+        </div>
+      )}
     </header>
   )
 }

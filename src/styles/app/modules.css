@@ -142,7 +142,7 @@
   min-width: 0;
   border: var(--border-strong);
   border-radius: var(--radius-1);
-  background: var(--surface-control);
+  background: var(--surface-sunken);
   color: var(--text-primary);
   font-size: var(--font-sm);
   padding: 0.3rem 0.4rem;
@@ -335,91 +335,57 @@
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-.modulatorRail {
-  display: flex;
-  align-items: center;
+.modulationField {
+  display: grid;
+  grid-template-rows: auto var(--header-control-height);
+  align-items: end;
   gap: var(--space-1);
-  min-height: 1.55rem;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  overflow: visible;
+  min-width: 0;
 }
 
 .modulatorRailControls {
   display: grid;
-  grid-template-columns: minmax(15rem, 1fr) minmax(8rem, 0.75fr) minmax(15rem, 1fr);
-  align-items: center;
-  gap: var(--space-1);
-  flex: 1 1 auto;
+  grid-template-columns: minmax(7rem, 1fr) minmax(6rem, 0.8fr) minmax(7rem, 1fr);
+  align-items: end;
+  gap: var(--space-3);
   min-width: 0;
 }
 
 .modRailWaveSelect {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  position: relative;
+}
+
+.modRailWaveControl {
+  display: flex;
   align-items: center;
-  gap: 0.22rem;
+  gap: var(--space-1);
   min-width: 0;
 }
 
-.modRailWaveLabel {
-  color: var(--text-secondary);
+.modRailWavePickerControl {
+  width: 100%;
+}
+
+.modRailWavePickerControl .listboxPickerTrigger {
+  height: var(--header-control-height);
+  padding-inline: var(--space-2);
+  background: var(--surface-sunken);
   font-size: var(--font-xs);
-  line-height: 1;
+  font-weight: 600;
 }
 
-.modRailWaveSegmentList {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  min-width: 0;
-  border: var(--border-subtle);
-  border-radius: var(--radius-1);
-  background: var(--surface-control);
-  overflow: hidden;
-}
-
-.modRailWaveSegment {
-  min-width: 0;
-  height: var(--control-height-sm);
-  padding: 0 0.22rem;
-  border: 0;
-  border-right: 1px solid var(--divider-color);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.68rem;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background-color 150ms ease,
-    color 150ms ease;
-}
-
-.modRailWaveSegment:last-child {
-  border-right: 0;
-}
-
-.modRailWaveSegment:hover {
-  background: var(--surface-control-hover);
-  color: var(--text-primary);
-}
-
-.modRailWaveSegment-active {
-  background: var(--accent-soft);
-  color: var(--text-primary);
+.modRailWavePickerControl .listboxPickerMenu {
+  width: max(100%, 8rem);
 }
 
 .modRailPulseControl {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 2.45rem;
+  grid-template-columns: auto minmax(2rem, 1fr) auto;
   align-items: center;
-  grid-column: 2;
   gap: 0.3rem;
+  width: 6.5rem;
   min-width: 0;
-  padding: 0 0.1rem;
+  height: var(--header-control-height);
   color: var(--text-secondary);
   font-size: var(--font-xs);
 }
@@ -428,12 +394,18 @@
   color: var(--text-secondary);
 }
 
+.modRailPulseValue {
+  font-size: var(--font-xs);
+}
+
 .modRailLerp {
-  display: grid;
-  grid-template-columns: 2.15rem minmax(0, 1fr);
-  align-items: center;
+  cursor: ew-resize;
+}
+
+.modRailLerpLabel {
+  display: flex;
+  justify-content: space-between;
   gap: var(--space-1);
-  min-width: 0;
 }
 
 .modRailLerpValue {
@@ -442,15 +414,17 @@
   text-align: right;
 }
 
+.modTargetField {
+  width: 100%;
+}
+
 .modTargetChipList {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.18rem;
-  flex: 0 1 auto;
+  gap: var(--space-1);
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow: hidden;
 }
 
 .modTargetChip {
@@ -458,15 +432,16 @@
   grid-template-columns: auto minmax(2.25rem, auto) 1rem 2rem;
   align-items: center;
   gap: 0.22rem;
-  min-height: var(--control-height-md);
+  min-height: var(--header-control-height);
   padding: 0 0.32rem;
   border: var(--border-subtle);
   border-radius: var(--radius-1);
-  background: var(--surface-control);
+  background: var(--surface-sunken);
   color: var(--text-secondary);
   cursor: ns-resize;
   touch-action: none;
-  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
@@ -490,8 +465,11 @@
 }
 
 .modTargetChipLabel {
+  overflow: hidden;
+  min-width: 0;
   font-size: var(--font-xs);
   line-height: 1;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -600,7 +578,8 @@
 
 .modTabs {
   display: inline-flex;
-  gap: 0.25rem;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .modTab {
@@ -616,6 +595,28 @@
   line-height: 1;
   padding: 0;
   text-align: center;
+}
+
+.modulationControlGroup .modTab {
+  width: var(--header-control-height);
+  height: var(--header-control-height);
+  border-color: var(--border-subtle-color);
+  border-radius: var(--radius-1);
+  background: var(--surface-sunken);
+}
+
+.modulationControlGroup .modTab:hover,
+.modulationControlGroup .modTab:focus-visible {
+  border-color: var(--border-strong-color);
+  background: var(--surface-control-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.modulationControlGroup .modTab-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .modTab-active {
@@ -702,17 +703,17 @@
    Purpose: Collapse multi-column controls for narrow layouts.
    ========================================================= */
 
+@media (max-width: 1400px) {
+  .modTargetChip {
+    grid-template-columns: auto minmax(0, 1fr) 2rem;
+  }
+
+  .modTargetChipCenter {
+    display: none;
+  }
+}
+
 @media (max-width: 860px) {
-  .modulatorRail {
-    flex-wrap: wrap;
-  }
-
-  .modTargetChipList {
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 1px;
-  }
-
   .modulatorRow {
     grid-template-columns: 1fr;
   }
