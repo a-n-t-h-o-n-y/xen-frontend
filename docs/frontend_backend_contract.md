@@ -1,37 +1,13 @@
 # Frontend/Backend Contract
 
-This document describes the breaking document-service contract consumed by this
-frontend. There are no compatibility aliases or mixed old/new payloads.
+This document is the authoritative handoff for the native backend. The persistence
+cutover is intentionally breaking: there are no compatibility aliases or mixed old
+and new payloads.
 
-## Versions
+## Transport and schemas
 
-- WebView bridge: `xen.bridge.v6`
-- coordinator IPC: `xen.ipc.v3`
-- project snapshot schema: `6`
-- library schema: `2`
-- command catalog schema: `4`
-
-Revision and history values crossing the WebView boundary are decimal strings. Do
-not coerce them to JavaScript numbers; they can exceed the safe integer range.
-
-## User document formats
-
-| Extension | Purpose | Serialized identity |
-| --- | --- | --- |
-| `.xencell` | Reusable recursive cell/sequence asset | `kind: "xen_cell"`, schema `1` |
-| `.xenproj` | Complete authoritative project | `kind: "xen_project"`, schema `1` |
-
-Processor state and autosave recovery are internal persistence payloads. The
-frontend must not discover or accept `.xencomp`, `xen_composition`, or composition
-serializer aliases.
-
-All document paths are nested, content-directory-relative paths and include the
-exact `.xenproj` or `.xencell` extension. Absolute paths are not exposed.
-
-## Transport
-
-JUCE exposes the `xenBridgeRequest` native function and the `xenBridgeEvent` native
-event. Messages use this envelope:
+JUCE exposes the native function `xenBridgeRequest` and event `xenBridgeEvent`. The
+WebView bridge uses `xen.bridge.v6`, and coordinator IPC uses `xen.ipc.v3`.
 
 ```ts
 type Envelope = {
@@ -43,55 +19,81 @@ type Envelope = {
 };
 ```
 
-Error responses are normal response envelopes:
+`session.hello` reports:
 
 ```ts
-type ErrorPayload = {
-  error: {
-    code: string;
-    message: string;
-    details?: Record<string, unknown>;
-  };
+type CatalogCommand = {
+  path: string[];
+  keywords: string[];
+  accepts_pattern_prefix: boolean;
+  target_requirement: "none" | "cell" | "element" | "cell_or_element";
+  arguments: unknown[];
+  description: string;
 };
-```
 
-Document operations can return `stale_project`, `unsaved_changes`, `invalid_path`,
-`not_found`, `file_exists`, `file_conflict`, `project_path_required`,
-`file_too_large`, `invalid_document`, `preview_active`, `recovery_conflict`, and
-`io_error`. Existing bridge, keymap, and preferences errors remain valid.
-
-For `file_exists`, `details.file_revision` is the optimistic-concurrency token for a
-confirmed retry.
-
-## Session startup
-
-`session.hello` validates bridge, project, library, and catalog versions and returns
-the immutable command catalog plus revisioned keymap and preferences resources.
-After hello succeeds, request `state.get` and `library.get` concurrently. Do not wait
-for change events for the initial state.
-
-```ts
 type SessionHello = {
   protocol: "xen.bridge.v6";
   plugin_version: string;
   project_schema_version: 6;
   library_schema_version: 2;
-  catalog: {
-    schema_version: 4;
-    commands: CatalogCommand[];
-  };
-  keymap: { revision: string; document: unknown | null };
-  preferences: { revision: string; document: Record<string, unknown> | null };
+  catalog: { schema_version: 4; commands: CatalogCommand[] };
+  binding: { session_id: string; instance_id: string; channel_id: string };
+  keymap: KeymapResource;
+  preferences: PreferencesResource;
 };
 ```
 
-## Project snapshot
+All history, state, project, library, keymap, and preferences revisions crossing the
+WebView boundary are decimal strings. Preserve them losslessly and parse numeric
+revisions as `BigInt`. Order project snapshots only by `state_revision`;
+`project_revision` is an optimistic-edit token and can jump when persisted history is
+restored. File and recovery revisions are opaque strings compared only for equality.
 
-`state.get`, `state.changed`, command responses, preview responses, and document
-responses publish the same snapshot shape:
+Errors use normal response envelopes:
 
 ```ts
-type FileRevision = string; // "sha256:<hex>", opaque to the frontend
+type ErrorPayload = {
+  error: {
+    code:
+      | "invalid_request"
+      | "unsupported_protocol"
+      | "internal_error"
+      | "stale_project"
+      | "unsaved_changes"
+      | "invalid_path"
+      | "not_found"
+      | "file_exists"
+      | "file_conflict"
+      | "project_path_required"
+      | "file_too_large"
+      | "invalid_document"
+      | "preview_active"
+      | "recovery_conflict"
+      | "io_error"
+      | string;
+    message: string;
+    details?: { current_file_revision?: string | null };
+  };
+};
+```
+
+## Project state and document lifecycle
+
+```ts
+type FileRevision = string; // opaque "sha256:<hex>" token
+
+type Selection = {
+  path: Array<
+    | { kind: "element"; index: number }
+    | { kind: "cell"; index: number }
+  >;
+};
+
+type Cursor = {
+  row_coordinate: number;
+  column_coordinate: number;
+  sequence_id: number | null;
+};
 
 type ProjectSnapshot = {
   schema_version: 6;
@@ -113,115 +115,217 @@ type ProjectSnapshot = {
   };
   project: Project;
 };
+
+type DocumentFile = {
+  name: string;
+  relative_path: string;
+  stem: string; // content-relative path without the extension
+  file_revision: FileRevision;
+};
+
+type DocumentOperationResult = {
+  snapshot: ProjectSnapshot;
+  file: DocumentFile | null;
+  suggested_selection: Selection | null;
+};
 ```
 
-`state_revision` determines snapshot freshness. It advances for saves, recovery
-changes, preview transitions, and content changes. `project_revision` is the
-optimistic-concurrency token for project content operations. `history_entry_id`
-identifies the undo/redo entry.
+`state.get`, `state.changed`, document responses, preview responses, and
+`command.execute.payload.snapshot` all carry this shape. Ingest snapshots by
+`state_revision`; use `project_revision` for optimistic project edits. A document save
+can advance `state_revision` without changing `project_revision`.
 
-The coordinator owns document path, clean baseline, dirty state, file revision,
-recovery candidate, and all revisions. Frontends display this state and must not
-maintain competing lifecycle state.
+The backend owns current path, clean baseline, dirty state, file-conflict token,
+recovery state, and unsaved-change enforcement for the shared multi-instance session.
+The frontend owns selection, input mode, and confirmation dialogs, and sends an
+explicit confirmation on retry. The nested `Project` retains the sequence bank, sparse
+composition arrangement, timing, tuning, scales, channels, and loop contract.
 
-The nested `Project` retains the sequence bank, sparse composition arrangement,
-timing, tuning, scales, channels, and loop contract from the previous project
-resource. Selection and input mode remain frontend-owned.
+### Project requests
 
-## Library snapshot
+```ts
+type ProjectNewRequest = {
+  expected_project_revision: string;
+  discard_unsaved: boolean;
+};
+
+type ProjectOpenRequest = ProjectNewRequest & {
+  relative_path: string; // exact content-relative .xenproj path
+};
+
+type ProjectSaveRequest = {
+  expected_project_revision: string;
+};
+
+type ProjectSaveAsRequest = ProjectSaveRequest & {
+  relative_path: string;
+  expected_file_revision: FileRevision | null;
+};
+
+type RecoveryRestoreRequest = ProjectNewRequest & {
+  recovery_revision: string;
+};
+
+type RecoveryDiscardRequest = { recovery_revision: string };
+```
+
+Request names are `project.new`, `project.open`, `project.save`, `project.save_as`,
+`project.recovery.restore`, and `project.recovery.discard`. New/open with
+`discard_unsaved: false` also protect a pending recovery. Recovery restore requires
+discard confirmation only when the current document itself is dirty.
+Every successful response payload is a `DocumentOperationResult`; project saves and
+opens populate `file`.
+
+For Save As, `expected_file_revision: null` is create-only. If the target exists, the
+backend returns `file_exists` and the current token in error details. After confirmation,
+retry with that token. A later mismatch returns `file_conflict`. `project.save` uses the
+backend-owned current path and token; an untitled project returns
+`project_path_required`. To confirm an external change reported by `project.save`, retry
+as `project.save_as` with the same `relative_path` and the returned current token (or
+`null` when the file was deleted).
+
+### Cell requests
+
+```ts
+type CellImportRequest = {
+  relative_path: string; // exact content-relative .xencell path
+  expected_project_revision: string;
+  cursor: Cursor;
+};
+
+type CellSaveRequest = CellImportRequest & {
+  selection: Selection; // must resolve to a Cell
+  expected_file_revision: FileRevision | null;
+};
+```
+
+Request names are `cell.import` and `cell.save`. Import creates and arranges a new
+sequence named from the file stem. Save exports the selected recursive cell. Both use
+`DocumentOperationResult`; import populates `file` and `suggested_selection`, while
+save populates `file` and echoes the resolved selection. Cell saves use the same
+create-only/CAS overwrite protocol as Project Save As: send `null` first, then retry
+with the backend's current file token only after user confirmation.
+Cell files are reusable assets and never become the current project document.
+
+All document paths are nested relative paths under the configured content directory.
+Absolute paths, traversal, symlink escapes, non-portable names, and wrong extensions
+are rejected by the backend.
+
+## Commands and previews
+
+`command.execute` remains the general editing API:
+
+```ts
+type CommandExecuteRequest = {
+  command: string;
+  context?: {
+    expected_project_revision?: string;
+    selection?: Selection;
+    preview_id?: string;
+    cursor: Cursor;
+  };
+};
+```
+
+The response contains status, nullable `suggested_selection`, and the current
+`snapshot`. Project-aware commands require a current project revision. The command
+catalog remains immutable per hello response and drives frontend completion.
+
+Document commands are retained for the keyboard command line and use the same backend
+service:
+
+```text
+project new
+project open <relative-path.xenproj>
+project save
+project save as <relative-path.xenproj>
+load cell <relative-path.xencell>
+save cell <relative-path.xencell>
+load tuning <relative-path.scl>
+```
+
+Commands never discard dirty work or overwrite an existing file. When confirmation is
+needed, the frontend retries through the structured API.
+
+Preview requests are `preview.begin`, `preview.commit`, and `preview.cancel`; every
+`expected_project_revision` is a decimal string. Document operations are rejected while
+a preview is active, and the frontend disables document controls during preview for
+immediate feedback. Processor/DAW persistence always saves the persistent baseline, not
+transient preview state.
+
+## Library resource
 
 ```ts
 type ContentFile = {
   name: string;
   relative_path: string;
-  stem: string;
+  stem: string; // content-relative path without the extension
   file_revision: FileRevision;
+  command: string;
 };
 
 type LibrarySnapshot = {
   schema_version: 2;
   library_revision: string;
+  paths: { library: string; content: string; tunings: string };
   cells: ContentFile[];
   projects: ContentFile[];
-  tunings: TuningEntry[];
-  scales: ScaleEntry[];
-  chords: ChordEntry[];
-  commands: LibraryCommands;
+  tunings: Array<ContentFile & {
+    description: string;
+    intervals: number[];
+    octave: number;
+    note_count: number;
+  }>;
+  scales: unknown[];
+  chords: unknown[];
+  commands: Record<string, string>;
 };
 ```
 
-The library discovers only `.xencell` cells and `.xenproj` projects. It exposes
-`projects`, not `compositions`, publishes no absolute paths, and includes file
-revision tokens. File palette activation uses the dedicated document requests below,
-not stored command strings.
+`library.get` and `library.changed` use this schema. Project discovery recognizes only
+`.xenproj`; the old `compositions` key and absolute per-entry `path` fields are gone.
+Successful project saves and cell exports advance `library_revision` and publish a
+library event to every instance. `library_revision` is an independent decimal-string
+freshness domain.
 
-`library_revision` is an independent decimal-string freshness domain. Continue to
-consume `library.changed` events.
+## Persistence formats and limits
 
-## Dedicated document requests
+- `.xencell`: reusable cell, `{ "kind": "xen_cell", "schema": 1, ... }`, 16 MiB.
+- `.xenproj`: complete project, `{ "kind": "xen_project", "schema": 1, ... }`,
+  64 MiB.
+- DAW state: internal `{ "kind": "xen_processor_state", "schema": 5, ... }`,
+  65 MiB including its envelope.
+- Recovery: internal `{ "kind": "xen_recovery", "schema": 1, ... }`, 65 MiB
+  including its envelope.
 
-Every success payload includes the newly published project snapshot.
+`.xencomp` and `xen_composition` are unsupported. Project files embed their complete
+tuning and active-scale definitions. JSON structural depth and event counts are bounded;
+cell recursion above 64, cell assets above 100,000 musical nodes, and projects above
+250,000 aggregate nodes are rejected.
 
-| Request | Required payload | Success payload |
-| --- | --- | --- |
-| `project.new` | `expected_project_revision`, `discard_unsaved` | `{ snapshot }` |
-| `project.open` | `relative_path`, `expected_project_revision`, `discard_unsaved` | `{ snapshot }` |
-| `project.save` | `expected_project_revision` | `{ snapshot, file }` |
-| `project.save_as` | `relative_path`, `expected_project_revision`, `expected_file_revision` | `{ snapshot, file }` |
-| `project.recovery.restore` | `recovery_revision`, `expected_project_revision`, `discard_unsaved` | `{ snapshot }` |
-| `project.recovery.discard` | `recovery_revision` | `{ snapshot }` |
-| `cell.import` | `relative_path`, `expected_project_revision`, `cursor` | `{ snapshot, suggested_selection }` |
-| `cell.save` | `relative_path`, `expected_project_revision`, `cursor`, `selection`, `expected_file_revision` | `{ snapshot, file }` |
-
-`project.save` uses the coordinator-owned current path and tracked file revision. It
-returns `project_path_required` for an unnamed project, after which the frontend can
-collect a relative `.xenproj` path and call `project.save_as`.
-
-For Save As and cell save, `expected_file_revision: null` means create only. If the
-target exists, the backend returns `file_exists` with its current revision. After
-explicit user confirmation, retry with that exact revision. If the file changes
-between prompt and retry, the backend returns `file_conflict`.
-
-New, open, and recovery restore first use `discard_unsaved: false`. On
-`unsaved_changes`, an explicit confirmation may retry with `true`. The retry must
-retain the project revision captured before the prompt so edits made while the prompt
-was visible cannot be silently discarded.
-
-Document requests are rejected while a preview is active. The frontend also disables
-its document controls during preview as immediate feedback.
-
-## Command and preview requests
-
-`command.execute`, `preview.begin`, `preview.commit`, and `preview.cancel` send
-`expected_project_revision` as a decimal string. Command cursor and selection remain:
-
-```ts
-type CommandContext = {
-  expected_project_revision: string;
-  preview_id?: string;
-  selection: Selection;
-  cursor: {
-    row_coordinate: number;
-    column_coordinate: number;
-    sequence_id: number | null;
-  };
-};
-```
-
-The command-line surface still supports `project new`, `project open
-<relative-path.xenproj>`, `project save`, `project save as
-<relative-path.xenproj>`, `load cell <relative-path.xencell>`, and `save cell
-<relative-path.xencell>`. Those commands route through the same document service and
-never discard dirty work or overwrite a file without the frontend confirmation API.
+Dirty persistent projects are atomically autosaved within two seconds after recovery
+work becomes pending, even during continuous editing.
+The active run's autosave is internal and does not populate `snapshot.recovery`. After
+restart, that field is populated only when the autosave is newer than and differs from
+the restored DAW state. If no DAW state is supplied, any valid recovery for the session
+is offered. A pending candidate blocks edits, previews, binding changes, project saves,
+imports, and forced autosave until the frontend explicitly restores or discards it.
+Manual project save, opening/new-project replacement, or undoing exactly to the saved
+content clears the active recovery file.
 
 ## Events
 
-Continue consuming:
+The native `xenBridgeEvent` emits:
 
-- `state.changed` with a schema-6 project snapshot;
-- `library.changed` with a schema-2 library snapshot;
-- `keymap.changed` and `preferences.changed` resources;
-- transport synchronization events.
+```ts
+type BridgeEvent =
+  | (Envelope & { name: "state.changed"; payload: ProjectSnapshot })
+  | (Envelope & { name: "library.changed"; payload: LibrarySnapshot })
+  | (Envelope & { name: "keymap.changed"; payload: KeymapResource })
+  | (Envelope & { name: "preferences.changed"; payload: PreferencesResource })
+  | (Envelope & { name: "phase.sync" | "transport.stopped"; payload: object });
+```
 
-The native host tracks `state_revision`, not only project content revision, so every
-frontend instance receives save, recovery, and preview lifecycle changes.
+After `session.hello`, request `state.get` and `library.get` concurrently; initial
+events are not guaranteed. Always ingest snapshots returned directly by a request as
+well as events, treating equal revisions as idempotent duplicates.
