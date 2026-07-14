@@ -46,4 +46,29 @@ describe('useProjectViewModel active-column metadata', () => {
     expect(result.current?.tuningName).toBe('--')
     expect(result.current?.rootCell).toBe(activeSequence.sequence.cell)
   })
+
+  it('updates sequence content when the presented composition target changes', () => {
+    const project = projectFromDto(arrangedProjectFixture())
+    const sequenceOne = project.sequenceBank?.sequences.find((entry) => entry.id === 1)
+    const sequenceTwo = project.sequenceBank?.sequences.find((entry) => entry.id === 2)
+    if (!sequenceOne || !sequenceTwo) throw new Error('Expected sequence fixtures')
+
+    const { result, rerender } = renderHook(
+      ({ target }: { target: { rowCoordinate: number; columnCoordinate: number; sequenceId: number } }) =>
+        useProjectViewModel(project, { path: [] }, target, target.columnCoordinate),
+      {
+        initialProps: {
+          target: { rowCoordinate: 3, columnCoordinate: 0, sequenceId: 1 },
+        },
+      }
+    )
+
+    expect(result.current?.rootCell).toBe(sequenceOne.sequence.cell)
+
+    rerender({ target: { rowCoordinate: -2, columnCoordinate: 9, sequenceId: 2 } })
+
+    expect(result.current?.rootCell).toBe(sequenceTwo.sequence.cell)
+    expect(result.current?.sequenceNumerator).toBe(5)
+    expect(result.current?.sequenceDenominator).toBe(16)
+  })
 })

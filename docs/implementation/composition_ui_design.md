@@ -12,9 +12,11 @@ The app has two primary musical workspaces:
 - `sequencer`: edits the contents of one sequence.
 - `composition`: arranges sequence references across rows and columns.
 
-Only one is active at a time. The composition matrix decides which sequence the
-sequencer edits. The sequencer does not show the sequence bank as a separate panel;
-the bank is inferred from the sequence names used in the matrix.
+Only one is active for keyboard input at a time. A workspace preference may show
+both editors when enough vertical space is available, but the composition matrix
+still decides which sequence the sequencer edits. The sequencer does not show the
+sequence bank as a separate panel; the bank is inferred from the sequence names used
+in the matrix.
 
 The matrix starts with:
 
@@ -44,6 +46,15 @@ cell-entry action IDs remain valid so stored custom keymaps continue to load.
 These remain custom keymap actions rather than hard-coded keyboard behavior. The
 composition context uses `selection.move` for hierarchical entry and its own
 `composition.selection.move` action for movement across matrix coordinates.
+
+The optional `Dual editor view` preference presents the sequencer above the
+composition matrix with a sequence-dominant split. The active editor receives a
+subtle focus outline. If the remaining workspace cannot preserve a 352px sequencer,
+a 224px composition, and their 12px gap, the layout falls back to showing only the
+active editor. While the composition matrix is active, its selected populated cell
+is previewed at the root of the sequencer without changing the stored active target;
+empty cells show an explicit empty preview. Resizing does not change the active
+editor or either selection.
 
 Suggested UI actions:
 

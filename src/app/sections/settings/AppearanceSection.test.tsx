@@ -31,7 +31,10 @@ describe('AppearanceSection', () => {
     const user = userEvent.setup()
     render(
       <ThemeProvider>
-        <AppearanceSection />
+        <AppearanceSection
+          workspaceLayoutPreference="single"
+          onWorkspaceLayoutPreferenceChange={vi.fn()}
+        />
       </ThemeProvider>
     )
 
@@ -42,5 +45,25 @@ describe('AppearanceSection', () => {
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
     await waitFor(() => expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark'))
+  })
+
+  it('toggles the dual editor preference', async () => {
+    const user = userEvent.setup()
+    const onWorkspaceLayoutPreferenceChange = vi.fn()
+    render(
+      <ThemeProvider>
+        <AppearanceSection
+          workspaceLayoutPreference="single"
+          onWorkspaceLayoutPreferenceChange={onWorkspaceLayoutPreferenceChange}
+        />
+      </ThemeProvider>
+    )
+
+    const layoutSwitch = screen.getByRole('switch', { name: 'Dual editor view' })
+    expect(layoutSwitch).toHaveAttribute('aria-checked', 'false')
+
+    await user.click(layoutSwitch)
+
+    expect(onWorkspaceLayoutPreferenceChange).toHaveBeenCalledWith('dual')
   })
 })

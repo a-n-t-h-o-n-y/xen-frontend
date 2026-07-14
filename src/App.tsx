@@ -12,12 +12,14 @@ import { useSessionResources } from './app/hooks/useSessionResources'
 import { useSettingsOverlayState } from './app/hooks/useSettingsOverlayState'
 import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
+import { useWorkspaceLayout } from './app/hooks/useWorkspaceLayout'
 import { useNotifications } from './app/hooks/useNotifications'
 import { CompositionSection } from './app/sections/CompositionSection'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { ModulationHeader } from './app/sections/ModulationHeader'
 import { NotificationToasts } from './app/sections/NotificationToasts'
 import { SettingsOverlay } from './app/sections/SettingsOverlay'
+import { WorkspaceEditors } from './app/sections/WorkspaceEditors'
 import { QuickAccessPalette } from './app/sections/QuickAccessPalette'
 import { ModulatorsPanel } from './app/sections/bottom/ModulatorsPanel'
 import {
@@ -36,8 +38,10 @@ import type {
   EditorState,
   TransportState,
 } from './app/domain/models'
-
-type WorkspaceView = 'composition' | 'sequencer'
+import {
+  resolveSequenceEditorPresentation,
+  type WorkspaceView,
+} from './app/workspace/workspaceLayout'
 
 const EMPTY_ROOT_CELL: Cell = { weight: 1, elements: [] }
 const INITIAL_COMPOSITION_SELECTION: CompositionSelection = {
@@ -139,6 +143,12 @@ function App() {
   const isProjectReady = projectState.status === 'ready'
   const modulationModeActive = isModulatorMode && isProjectReady && workspaceView === 'sequencer'
   const projectSnapshot = isProjectReady ? projectState.snapshot : null
+  const {
+    workspaceRef,
+    preference: workspaceLayoutPreference,
+    setPreference: setWorkspaceLayoutPreference,
+    showDualEditors,
+  } = useWorkspaceLayout(Boolean(projectSnapshot?.composition))
   const disabledReason = isProjectReady
     ? null
     : projectState.status === 'error'
@@ -179,10 +189,19 @@ function App() {
     }
   }, [installActiveSequenceTarget, projectSnapshot])
 
+  const sequenceEditorPresentation = resolveSequenceEditorPresentation(
+    showDualEditors,
+    workspaceView,
+    projectSnapshot?.composition ?? null,
+    compositionSelection,
+    activeSequenceTarget,
+    editorState.selection
+  )
+
   const projectViewModel = useProjectViewModel(
     projectSnapshot,
-    editorState.selection,
-    activeSequenceTarget,
+    sequenceEditorPresentation.selection,
+    sequenceEditorPresentation.target,
     compositionSelection.columnCoordinate
   )
 
@@ -468,7 +487,11 @@ function App() {
           />
         ) : undefined}
       />
-      <section className="workspaceSection" aria-label="Workspace">
+      <section
+        className="workspaceSection"
+        aria-label="Workspace"
+        ref={workspaceRef}
+      >
         {!isProjectReady ? (
           <div className="workspaceNotice" role="status" aria-live="polite">
             <h1 className="workspaceNoticeTitle">
@@ -481,38 +504,17 @@ function App() {
             </p>
           </div>
         ) : projectSnapshot ? (
-          <>
-            <div
-              className="workspacePane"
-              hidden={workspaceView !== 'composition'}
-              aria-hidden={workspaceView !== 'composition'}
-            >
-              {projectSnapshot.composition ? (
-                <CompositionSection
-                  composition={projectSnapshot.composition}
-                  sequenceBank={projectSnapshot.sequenceBank}
-                  selection={compositionSelection}
-                  tuningLength={tuningLength}
-                  editTarget={compositionEditTarget}
-                  onCancelEdit={() => setCompositionEditTarget(null)}
-                  onCommitCellName={commitCompositionCellName}
-                  onCommitRowName={commitCompositionRowName}
-                  onCommitRowChannel={commitCompositionRowChannel}
-                />
-              ) : (
-                <div className="workspaceNotice" role="status" aria-live="polite">
-                  <h1 className="workspaceNoticeTitle">Composition unavailable</h1>
-                  <p className="workspaceNoticeBody">
-                    This project snapshot does not include arrangement data.
-                  </p>
-                </div>
-              )}
-            </div>
-            <div
-              className="workspacePane"
-              hidden={workspaceView !== 'sequencer'}
-              aria-hidden={workspaceView !== 'sequencer'}
-            >
+          <WorkspaceEditors
+            activeView={workspaceView}
+            dual={showDualEditors}
+            sequencer={sequenceEditorPresentation.emptyCompositionCell ? (
+              <div className="workspaceNotice" role="status" aria-live="polite">
+                <h1 className="workspaceNoticeTitle">Empty composition cell</h1>
+                <p className="workspaceNoticeBody">
+                  Enter this cell to create and edit a sequence.
+                </p>
+              </div>
+            ) : (
               <SequencerSection
                 bridgeUnavailableMessage={bridgeUnavailableMessage}
                 pitchRows={pitchRows}
@@ -545,8 +547,28 @@ function App() {
                 commitContinuousEdit={commitContinuousEdit}
                 cancelContinuousEdit={cancelContinuousEdit}
               />
-            </div>
-          </>
+            )}
+            composition={projectSnapshot.composition ? (
+              <CompositionSection
+                composition={projectSnapshot.composition}
+                sequenceBank={projectSnapshot.sequenceBank}
+                selection={compositionSelection}
+                tuningLength={tuningLength}
+                editTarget={compositionEditTarget}
+                onCancelEdit={() => setCompositionEditTarget(null)}
+                onCommitCellName={commitCompositionCellName}
+                onCommitRowName={commitCompositionRowName}
+                onCommitRowChannel={commitCompositionRowChannel}
+              />
+            ) : (
+              <div className="workspaceNotice" role="status" aria-live="polite">
+                <h1 className="workspaceNoticeTitle">Composition unavailable</h1>
+                <p className="workspaceNoticeBody">
+                  This project snapshot does not include arrangement data.
+                </p>
+              </div>
+            )}
+          />
         ) : (
           <div className="workspaceNotice" role="status" aria-live="polite">
             <h1 className="workspaceNoticeTitle">Project unavailable</h1>
@@ -574,7 +596,9 @@ function App() {
         commands={sessionReference.commands}
         busy={keymapController.busy}
         error={keymapController.error}
+        workspaceLayoutPreference={workspaceLayoutPreference}
         onClose={settingsOverlay.closeOverlay}
+        onWorkspaceLayoutPreferenceChange={setWorkspaceLayoutPreference}
         onSetBinding={keymapController.setBinding}
         onDelete={keymapController.deleteBinding}
         onReset={keymapController.reset}

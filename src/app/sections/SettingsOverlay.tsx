@@ -28,6 +28,7 @@ import type {
 } from '../domain/models'
 import type { CommandReferenceEntry } from '../domain/models'
 import type { ModTarget } from '../domain/modulation'
+import type { WorkspaceLayoutPreference } from '../workspace/workspaceLayout'
 
 type SettingsOverlayProps = {
   open: boolean
@@ -35,7 +36,9 @@ type SettingsOverlayProps = {
   commands: CommandReferenceEntry[]
   busy: boolean
   error: string | null
+  workspaceLayoutPreference: WorkspaceLayoutPreference
   onClose: () => void
+  onWorkspaceLayoutPreferenceChange: (preference: WorkspaceLayoutPreference) => void
   onSetBinding: (
     context: string,
     trigger: KeymapTrigger,
@@ -162,7 +165,9 @@ export function SettingsOverlay({
   commands,
   busy,
   error,
+  workspaceLayoutPreference,
   onClose,
+  onWorkspaceLayoutPreferenceChange,
   onSetBinding,
   onDelete,
   onReset,
@@ -291,7 +296,7 @@ export function SettingsOverlay({
               onClick={() => setActiveSection('appearance')}
             >
               <span>Appearance</span>
-              <small>Light and dark</small>
+              <small>Theme and layout</small>
             </button>
             <button
               type="button"
@@ -314,7 +319,10 @@ export function SettingsOverlay({
           </nav>
           <main className="settingsContent">
             {activeSection === 'appearance' ? (
-              <AppearanceSection />
+              <AppearanceSection
+                workspaceLayoutPreference={workspaceLayoutPreference}
+                onWorkspaceLayoutPreferenceChange={onWorkspaceLayoutPreferenceChange}
+              />
             ) : activeSection === 'shortcuts' ? (
               <>
                 <div className="settingsSectionIntro">

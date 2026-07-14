@@ -204,6 +204,10 @@
   background: var(--surface-control);
 }
 
+.appearanceCard + .appearanceCard {
+  margin-top: var(--space-3);
+}
+
 .appearanceCardHeader {
   display: flex;
   align-items: center;
@@ -236,6 +240,7 @@
 }
 
 .appearanceThemeControl { justify-self: start; }
+.appearanceLayoutSwitch { align-self: center; }
 .appearanceNote { max-width: 38rem; margin-top: var(--space-3); }
 
 /* Command catalog */

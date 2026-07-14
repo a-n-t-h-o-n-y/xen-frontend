@@ -1,7 +1,14 @@
 import { Icon } from '../../ui/Icon'
 import { SegmentedControl } from '../../ui/SegmentedControl'
+import { Switch } from '../../ui/Switch'
 import { useTheme } from '../../theme/useTheme'
 import type { ThemePreference } from '../../theme/theme'
+import type { WorkspaceLayoutPreference } from '../../workspace/workspaceLayout'
+
+type AppearanceSectionProps = {
+  workspaceLayoutPreference: WorkspaceLayoutPreference
+  onWorkspaceLayoutPreferenceChange: (preference: WorkspaceLayoutPreference) => void
+}
 
 const themeOptions = [
   { value: 'light', label: 'Light', description: 'Always use the light appearance' },
@@ -13,7 +20,10 @@ const themeOptions = [
   description: string
 }[]
 
-export function AppearanceSection() {
+export function AppearanceSection({
+  workspaceLayoutPreference,
+  onWorkspaceLayoutPreferenceChange,
+}: AppearanceSectionProps) {
   const { preference, resolvedTheme, setPreference } = useTheme()
 
   return (
@@ -45,6 +55,25 @@ export function AppearanceSection() {
           options={themeOptions}
           onChange={setPreference}
         />
+      </div>
+      <div className="appearanceCard">
+        <div className="appearanceCardHeader">
+          <div>
+            <h4>Dual editor view</h4>
+            <p>
+              Show Sequence above Composition when enough vertical space is available.
+              Smaller windows show only the active editor.
+            </p>
+          </div>
+          <Switch
+            className="appearanceLayoutSwitch"
+            label="Dual editor view"
+            checked={workspaceLayoutPreference === 'dual'}
+            onChange={(checked) => onWorkspaceLayoutPreferenceChange(
+              checked ? 'dual' : 'single'
+            )}
+          />
+        </div>
       </div>
       <p className="appearanceNote">
         System mode updates automatically when your operating system appearance changes.

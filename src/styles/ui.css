@@ -1,6 +1,7 @@
 .uiButton,
 .uiIconButton,
-.uiSegmentedOption {
+.uiSegmentedOption,
+.uiSwitch {
   border: 1px solid transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -14,6 +15,7 @@
 .uiButton:focus-visible,
 .uiIconButton:focus-visible,
 .uiSegmentedOption:focus-visible,
+.uiSwitch:focus-visible,
 .uiFormField :is(input, select, textarea):focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);
@@ -21,7 +23,8 @@
 
 .uiButton:disabled,
 .uiIconButton:disabled,
-.uiSegmentedOption:disabled {
+.uiSegmentedOption:disabled,
+.uiSwitch:disabled {
   color: var(--text-disabled);
   cursor: not-allowed;
   opacity: 0.62;
@@ -91,6 +94,48 @@
   box-shadow: var(--shadow-sm);
 }
 
+.uiSwitch {
+  position: relative;
+  width: 2.75rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  padding: 2px;
+  border-color: var(--border-strong-color);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.uiSwitch[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.uiSwitch:hover:not(:disabled):not([aria-checked='true']) {
+  background: var(--surface-control-hover);
+}
+
+.uiSwitch[aria-checked='true']:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.uiSwitchThumb {
+  display: block;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(0);
+  transition:
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.uiSwitch[aria-checked='true'] .uiSwitchThumb {
+  background: var(--accent-contrast);
+  transform: translateX(1.2rem);
+}
+
 .uiFormField {
   display: grid;
   gap: var(--space-2);
@@ -117,5 +162,7 @@
 @media (prefers-reduced-motion: reduce) {
   .uiButton,
   .uiIconButton,
-  .uiSegmentedOption { transition: none; }
+  .uiSegmentedOption,
+  .uiSwitch,
+  .uiSwitchThumb { transition: none; }
 }
