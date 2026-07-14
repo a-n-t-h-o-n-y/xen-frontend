@@ -7,7 +7,7 @@ import {
 import { useWorkspaceLayout } from './useWorkspaceLayout'
 
 function LayoutHarness() {
-  const { workspaceRef, showDualEditors } = useWorkspaceLayout(true)
+  const { workspaceRef, showDualEditors } = useWorkspaceLayout(true, 'dual')
 
   return (
     <section ref={workspaceRef}>

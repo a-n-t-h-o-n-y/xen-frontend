@@ -14,6 +14,7 @@ import { useSequencerRollState } from './app/hooks/useSequencerRollState'
 import { useTransportPlayhead } from './app/hooks/useTransportPlayhead'
 import { useWorkspaceLayout } from './app/hooks/useWorkspaceLayout'
 import { useNotifications } from './app/hooks/useNotifications'
+import { usePreferences } from './app/preferences/usePreferences'
 import { CompositionSection } from './app/sections/CompositionSection'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { ModulationHeader } from './app/sections/ModulationHeader'
@@ -51,6 +52,7 @@ const INITIAL_COMPOSITION_SELECTION: CompositionSelection = {
 
 function App() {
   const { notifications, notify, dismissNotification } = useNotifications()
+  const { workspaceLayout } = usePreferences()
   const [editorState, setEditorState] = useState<EditorState>({
     selection: { path: [] },
     inputMode: 'pitch',
@@ -145,10 +147,8 @@ function App() {
   const projectSnapshot = isProjectReady ? projectState.snapshot : null
   const {
     workspaceRef,
-    preference: workspaceLayoutPreference,
-    setPreference: setWorkspaceLayoutPreference,
     showDualEditors,
-  } = useWorkspaceLayout(Boolean(projectSnapshot?.composition))
+  } = useWorkspaceLayout(Boolean(projectSnapshot?.composition), workspaceLayout)
   const disabledReason = isProjectReady
     ? null
     : projectState.status === 'error'
@@ -596,9 +596,7 @@ function App() {
         commands={sessionReference.commands}
         busy={keymapController.busy}
         error={keymapController.error}
-        workspaceLayoutPreference={workspaceLayoutPreference}
         onClose={settingsOverlay.closeOverlay}
-        onWorkspaceLayoutPreferenceChange={setWorkspaceLayoutPreference}
         onSetBinding={keymapController.setBinding}
         onDelete={keymapController.deleteBinding}
         onReset={keymapController.reset}

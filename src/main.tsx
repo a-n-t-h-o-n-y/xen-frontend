@@ -4,6 +4,7 @@ import './styles/app.css'
 import App from './App.tsx'
 import { ThemeProvider } from './app/theme/ThemeProvider'
 import { initializeTheme } from './app/theme/theme'
+import { PreferencesProvider } from './app/preferences/PreferencesProvider'
 
 initializeTheme()
 
@@ -14,8 +15,10 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
+    <PreferencesProvider>
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
+    </PreferencesProvider>
   </StrictMode>,
 )

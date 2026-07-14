@@ -7,6 +7,8 @@ import {
   keymapStorageResourceSchema,
   keymapRevisionSchema,
   librarySnapshotSchema,
+  preferencesResourceSchema,
+  preferencesRevisionSchema,
   projectSnapshotSchema,
   previewBeginResponseSchema,
   previewEndResponseSchema,
@@ -18,6 +20,7 @@ import type {
   CommandExecuteResponseDto,
   KeymapStorageResourceDto,
   LibrarySnapshotDto,
+  PreferencesResourceDto,
   ProjectSnapshotDto,
   SelectionDto,
   SessionHelloDto,
@@ -61,6 +64,15 @@ export type KeymapWriteRequest = {
 }
 
 export type KeymapDeleteRequest = {
+  expected_revision: string
+}
+
+export type PreferencesWriteRequest = {
+  expected_revision: string
+  document: Record<string, unknown>
+}
+
+export type PreferencesDeleteRequest = {
   expected_revision: string
 }
 
@@ -113,6 +125,18 @@ export type BridgeMethodMap = {
     request: KeymapDeleteRequest
     response: KeymapStorageResourceDto
   }
+  'preferences.read': {
+    request: EmptyRequest
+    response: PreferencesResourceDto
+  }
+  'preferences.write': {
+    request: PreferencesWriteRequest
+    response: PreferencesResourceDto
+  }
+  'preferences.delete': {
+    request: PreferencesDeleteRequest
+    response: PreferencesResourceDto
+  }
 }
 
 export type BridgeMethod = keyof BridgeMethodMap
@@ -141,6 +165,13 @@ const keymapWriteRequestSchema = z.object({
 const keymapDeleteRequestSchema = z.object({
   expected_revision: keymapRevisionSchema,
 })
+const preferencesWriteRequestSchema = z.object({
+  expected_revision: preferencesRevisionSchema,
+  document: z.record(z.string(), z.unknown()),
+})
+const preferencesDeleteRequestSchema = z.object({
+  expected_revision: preferencesRevisionSchema,
+})
 
 const responseSchemas = {
   'session.hello': sessionHelloSchema,
@@ -154,6 +185,9 @@ const responseSchemas = {
   'keymap.read': keymapStorageResourceSchema,
   'keymap.write': keymapStorageResourceSchema,
   'keymap.delete': keymapStorageResourceSchema,
+  'preferences.read': preferencesResourceSchema,
+  'preferences.write': preferencesResourceSchema,
+  'preferences.delete': preferencesResourceSchema,
 } satisfies { [K in BridgeMethod]: z.ZodType<BridgeMethodMap[K]['response']> }
 
 const requestSchemas = {
@@ -194,6 +228,9 @@ const requestSchemas = {
   'keymap.read': z.object({}).strict(),
   'keymap.write': keymapWriteRequestSchema,
   'keymap.delete': keymapDeleteRequestSchema,
+  'preferences.read': z.object({}).strict(),
+  'preferences.write': preferencesWriteRequestSchema,
+  'preferences.delete': preferencesDeleteRequestSchema,
 } satisfies { [K in BridgeMethod]: z.ZodType<BridgeMethodMap[K]['request']> }
 
 const defaultTimeouts = {
@@ -208,6 +245,9 @@ const defaultTimeouts = {
   'keymap.read': 5_000,
   'keymap.write': 15_000,
   'keymap.delete': 15_000,
+  'preferences.read': 5_000,
+  'preferences.write': 15_000,
+  'preferences.delete': 15_000,
 } satisfies Record<BridgeMethod, number>
 
 export class BridgeTimeoutError extends Error {

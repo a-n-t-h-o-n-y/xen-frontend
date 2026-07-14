@@ -2,13 +2,8 @@ import { Icon } from '../../ui/Icon'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Switch } from '../../ui/Switch'
 import { useTheme } from '../../theme/useTheme'
+import { usePreferences } from '../../preferences/usePreferences'
 import type { ThemePreference } from '../../theme/theme'
-import type { WorkspaceLayoutPreference } from '../../workspace/workspaceLayout'
-
-type AppearanceSectionProps = {
-  workspaceLayoutPreference: WorkspaceLayoutPreference
-  onWorkspaceLayoutPreferenceChange: (preference: WorkspaceLayoutPreference) => void
-}
 
 const themeOptions = [
   { value: 'light', label: 'Light', description: 'Always use the light appearance' },
@@ -20,11 +15,9 @@ const themeOptions = [
   description: string
 }[]
 
-export function AppearanceSection({
-  workspaceLayoutPreference,
-  onWorkspaceLayoutPreferenceChange,
-}: AppearanceSectionProps) {
+export function AppearanceSection() {
   const { preference, resolvedTheme, setPreference } = useTheme()
+  const { workspaceLayout, setWorkspaceLayout, busy, error } = usePreferences()
 
   return (
     <section className="appearanceSection" aria-labelledby="appearance-title">
@@ -54,6 +47,7 @@ export function AppearanceSection({
           value={preference}
           options={themeOptions}
           onChange={setPreference}
+          disabled={busy}
         />
       </div>
       <div className="appearanceCard">
@@ -68,13 +62,15 @@ export function AppearanceSection({
           <Switch
             className="appearanceLayoutSwitch"
             label="Dual editor view"
-            checked={workspaceLayoutPreference === 'dual'}
-            onChange={(checked) => onWorkspaceLayoutPreferenceChange(
+            checked={workspaceLayout === 'dual'}
+            disabled={busy}
+            onChange={(checked) => setWorkspaceLayout(
               checked ? 'dual' : 'single'
             )}
           />
         </div>
       </div>
+      {error ? <p className="settingsError" role="alert">{error}</p> : null}
       <p className="appearanceNote">
         System mode updates automatically when your operating system appearance changes.
       </p>

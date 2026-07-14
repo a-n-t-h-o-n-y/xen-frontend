@@ -13,6 +13,7 @@ import { getErrorMessage } from '../utils/errors'
 import { bridgeClient } from '../bridge/BridgeClient'
 import { useBridgeSession } from './useBridgeSession'
 import { useKeymapController } from './useKeymapController'
+import { usePreferences } from '../preferences/usePreferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   BridgeMethodMap,
@@ -79,6 +80,7 @@ export function useProjectSession({
 
   const keymapController = useKeymapController({ request })
   const { ingestKeymap } = keymapController
+  const { ingestPreferences } = usePreferences()
 
   const setProjectSnapshot = useCallback((nextSnapshot: SetStateAction<ProjectSnapshot | null>): void => {
     setProjectState((current) => {
@@ -133,6 +135,10 @@ export function useProjectSession({
               ingestKeymap(keymapFromDto(event.payload))
               return
             }
+            if (event.name === 'preferences.changed') {
+              ingestPreferences(event.payload)
+              return
+            }
             if (event.name === 'transport.phase.sync') {
               if (event.payload.bpm > 0) {
                 transportRef.current.bpm = event.payload.bpm
@@ -163,6 +169,7 @@ export function useProjectSession({
         setBridgeUnavailableMessage(null)
         setSessionReference(sessionReferenceFromCatalogDto(hello.catalog))
         ingestKeymap(keymapFromDto(hello.keymap))
+        ingestPreferences(hello.preferences)
 
         const [snapshot, librarySnapshot] = await Promise.all([
           request('state.get', {}, { signal: abortController.signal }),
@@ -194,6 +201,7 @@ export function useProjectSession({
     }
   }, [
     ingestKeymap,
+    ingestPreferences,
     ingestLibrary,
     ingestProject,
     request,

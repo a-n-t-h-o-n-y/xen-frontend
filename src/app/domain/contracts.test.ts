@@ -116,8 +116,18 @@ describe('schema contract validation', () => {
           }],
         },
       },
+      preferences: {
+        revision: '340282366920938463463374607431768211455',
+        document: {
+          schema_version: 1,
+          theme: 'dark',
+          workspace_layout: 'dual',
+          future_preference: true,
+        },
+      },
     })
     expect(hello.keymap.revision).toBe('18446744073709551615')
+    expect(hello.preferences.revision).toBe('340282366920938463463374607431768211455')
     expect(() => parseSessionHello({
       ...hello,
       keymap: { revision: 9_223_372_036_854_776_000, document: null },
@@ -170,6 +180,15 @@ describe('schema contract validation', () => {
       name: 'library.changed',
       payload: libraryFixture(),
     }).name).toBe('library.changed')
+    expect(parseBridgeEvent({
+      protocol: 'xen.bridge.v5',
+      type: 'event',
+      name: 'preferences.changed',
+      payload: {
+        revision: 'opaque-revision',
+        document: { schema_version: 1, theme: 'light', unknown: true },
+      },
+    }).name).toBe('preferences.changed')
     expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 4 })).toThrow()
     const dense = structuredClone(projectFixture()) as unknown as Record<string, unknown>
     const denseProject = dense.project as { composition: Record<string, unknown> }

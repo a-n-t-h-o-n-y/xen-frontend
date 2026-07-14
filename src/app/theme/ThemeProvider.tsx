@@ -1,12 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { ThemeContext } from './ThemeContext'
+import { usePreferences } from '../preferences/usePreferences'
 import {
   SYSTEM_THEME_QUERY,
   applyResolvedTheme,
-  readThemePreference,
   resolveTheme,
-  writeThemePreference,
-  type ThemePreference,
 } from './theme'
 
 type ThemeProviderProps = {
@@ -17,7 +15,7 @@ const getSystemPreference = (): boolean =>
   typeof window.matchMedia === 'function' && window.matchMedia(SYSTEM_THEME_QUERY).matches
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const [preference, setPreference] = useState<ThemePreference>(readThemePreference)
+  const { theme: preference, setTheme: setPreference } = usePreferences()
   const [systemDark, setSystemDark] = useState(getSystemPreference)
   const resolvedTheme = resolveTheme(preference, systemDark)
 
@@ -33,13 +31,10 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     applyResolvedTheme(resolvedTheme)
   }, [resolvedTheme])
 
-  useEffect(() => {
-    writeThemePreference(preference)
-  }, [preference])
-
   const value = useMemo(() => ({ preference, resolvedTheme, setPreference }), [
     preference,
     resolvedTheme,
+    setPreference,
   ])
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

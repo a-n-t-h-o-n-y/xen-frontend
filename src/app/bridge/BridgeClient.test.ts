@@ -162,6 +162,46 @@ describe('BridgeClient', () => {
     expect(result.document).toMatchObject({ future_setting: true })
   })
 
+  it('writes opaque preferences objects using the storage revision', async () => {
+    let rawRequest = ''
+    const client = createClient(async (requestJson) => {
+      rawRequest = requestJson
+      return responseEnvelope('preferences.write', 'req-test', {
+        revision: 'revision-after-write',
+        document: { schema_version: 912, theme: 'dark', future_setting: true },
+      })
+    })
+
+    const result = await client.request('preferences.write', {
+      expected_revision: 'opaque-revision-before-write',
+      document: { schema_version: 912, theme: 'dark', future_setting: true },
+    })
+
+    expect(JSON.parse(rawRequest).payload.expected_revision)
+      .toBe('opaque-revision-before-write')
+    expect(result.document).toMatchObject({ future_setting: true })
+  })
+
+  it('deletes preferences using the opaque storage revision', async () => {
+    let rawRequest = ''
+    const client = createClient(async (requestJson) => {
+      rawRequest = requestJson
+      return responseEnvelope('preferences.delete', 'req-test', {
+        revision: 'empty-resource-revision',
+        document: null,
+      })
+    })
+
+    const result = await client.request('preferences.delete', {
+      expected_revision: 'revision-before-delete',
+    })
+
+    expect(JSON.parse(rawRequest).payload).toEqual({
+      expected_revision: 'revision-before-delete',
+    })
+    expect(result.document).toBeNull()
+  })
+
   it('rejects mismatched response method names', async () => {
     const client = createClient(async () =>
       responseEnvelope('library.get', 'req-test', projectFixture())

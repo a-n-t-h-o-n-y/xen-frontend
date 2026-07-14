@@ -12,6 +12,7 @@ export const compositionCoordinateSchema = z.number().int()
   .min(-2_147_483_648)
   .max(2_147_483_647)
 export const keymapRevisionSchema = z.string().regex(/^\d+$/, 'Expected a decimal revision string')
+export const preferencesRevisionSchema = z.string().min(1)
 const modTargetIdSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'weights'])
 
 export const selectionStepSchema = z.object({
@@ -469,6 +470,11 @@ export const keymapStorageResourceSchema = z.object({
   document: z.unknown().nullable(),
 })
 
+export const preferencesResourceSchema = z.object({
+  revision: preferencesRevisionSchema,
+  document: z.record(z.string(), z.unknown()).nullable(),
+})
+
 export const sessionHelloSchema = z.object({
   protocol: z.literal(BRIDGE_PROTOCOL),
   plugin_version: z.string(),
@@ -476,6 +482,7 @@ export const sessionHelloSchema = z.object({
   library_schema_version: z.literal(LIBRARY_SCHEMA_VERSION),
   catalog: catalogSchema,
   keymap: keymapStorageResourceSchema,
+  preferences: preferencesResourceSchema,
 })
 
 export const envelopeSchema = z.object({
@@ -526,6 +533,11 @@ export const bridgeEventSchema = z.discriminatedUnion('name', [
   }),
   envelopeSchema.extend({
     type: z.literal('event'),
+    name: z.literal('preferences.changed'),
+    payload: preferencesResourceSchema,
+  }),
+  envelopeSchema.extend({
+    type: z.literal('event'),
     name: z.literal('transport.phase.sync'),
     payload: z.object({
       bpm: finiteNumber,
@@ -558,6 +570,7 @@ export type KeymapTargetDto = z.infer<typeof keymapTargetSchema>
 export type KeymapBindingDto = z.infer<typeof keymapBindingSchema>
 export type KeymapDocumentDto = z.infer<typeof keymapDocumentSchema>
 export type KeymapStorageResourceDto = z.infer<typeof keymapStorageResourceSchema>
+export type PreferencesResourceDto = z.infer<typeof preferencesResourceSchema>
 
 export const parseEnvelope = (value: unknown): EnvelopeDto => envelopeSchema.parse(value)
 export const parseSessionHello = (value: unknown): SessionHelloDto => sessionHelloSchema.parse(value)
@@ -575,3 +588,5 @@ export const parseKeymapDocument = (value: unknown): KeymapDocumentDto =>
   keymapDocumentSchema.parse(value)
 export const parseKeymapStorageResource = (value: unknown): KeymapStorageResourceDto =>
   keymapStorageResourceSchema.parse(value)
+export const parsePreferencesResource = (value: unknown): PreferencesResourceDto =>
+  preferencesResourceSchema.parse(value)

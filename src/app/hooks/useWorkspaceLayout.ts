@@ -1,16 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import {
   canShowDualEditorLayout,
-  readWorkspaceLayoutPreference,
-  writeWorkspaceLayoutPreference,
   type WorkspaceLayoutPreference,
 } from '../workspace/workspaceLayout'
 
-export function useWorkspaceLayout(compositionAvailable: boolean) {
+export function useWorkspaceLayout(
+  compositionAvailable: boolean,
+  preference: WorkspaceLayoutPreference
+) {
   const workspaceRef = useRef<HTMLElement | null>(null)
-  const [preference, setPreference] = useState<WorkspaceLayoutPreference>(
-    readWorkspaceLayoutPreference
-  )
   const [availableHeight, setAvailableHeight] = useState(0)
 
   useLayoutEffect(() => {
@@ -37,14 +35,8 @@ export function useWorkspaceLayout(compositionAvailable: boolean) {
     }
   }, [])
 
-  useEffect(() => {
-    writeWorkspaceLayoutPreference(preference)
-  }, [preference])
-
   return {
     workspaceRef,
-    preference,
-    setPreference,
     showDualEditors: canShowDualEditorLayout(
       preference,
       compositionAvailable,

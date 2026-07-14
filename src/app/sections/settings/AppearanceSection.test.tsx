@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '../../theme/ThemeProvider'
-import { THEME_STORAGE_KEY } from '../../theme/theme'
+import { PreferencesContext } from '../../preferences/PreferencesContext'
 import { AppearanceSection } from './AppearanceSection'
+import type { ThemePreference } from '../../theme/theme'
+import type { WorkspaceLayoutPreference } from '../../workspace/workspaceLayout'
 
 const installMatchMedia = (matches: boolean): void => {
   Object.defineProperty(window, 'matchMedia', {
@@ -27,16 +30,38 @@ describe('AppearanceSection', () => {
     installMatchMedia(false)
   })
 
-  it('switches and persists the explicit theme', async () => {
+  const renderAppearance = (onLayoutChange = vi.fn()) => {
+    function Harness() {
+      const [theme, setTheme] = useState<ThemePreference>('system')
+      const [workspaceLayout, setWorkspaceLayoutState] =
+        useState<WorkspaceLayoutPreference>('single')
+      const setWorkspaceLayout = (preference: WorkspaceLayoutPreference): void => {
+        setWorkspaceLayoutState(preference)
+        onLayoutChange(preference)
+      }
+      return (
+        <PreferencesContext.Provider value={{
+          theme,
+          workspaceLayout,
+          busy: false,
+          error: null,
+          ingestPreferences: vi.fn(),
+          setTheme,
+          setWorkspaceLayout,
+          reset: vi.fn().mockResolvedValue(undefined),
+        }}>
+          <ThemeProvider>
+            <AppearanceSection />
+          </ThemeProvider>
+        </PreferencesContext.Provider>
+      )
+    }
+    render(<Harness />)
+  }
+
+  it('switches the explicit theme', async () => {
     const user = userEvent.setup()
-    render(
-      <ThemeProvider>
-        <AppearanceSection
-          workspaceLayoutPreference="single"
-          onWorkspaceLayoutPreferenceChange={vi.fn()}
-        />
-      </ThemeProvider>
-    )
+    renderAppearance()
 
     expect(screen.getByRole('button', { name: 'System' })).toHaveAttribute('aria-pressed', 'true')
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
@@ -44,20 +69,12 @@ describe('AppearanceSection', () => {
     await user.click(screen.getByRole('button', { name: 'Dark' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
-    await waitFor(() => expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark'))
   })
 
   it('toggles the dual editor preference', async () => {
     const user = userEvent.setup()
     const onWorkspaceLayoutPreferenceChange = vi.fn()
-    render(
-      <ThemeProvider>
-        <AppearanceSection
-          workspaceLayoutPreference="single"
-          onWorkspaceLayoutPreferenceChange={onWorkspaceLayoutPreferenceChange}
-        />
-      </ThemeProvider>
-    )
+    renderAppearance(onWorkspaceLayoutPreferenceChange)
 
     const layoutSwitch = screen.getByRole('switch', { name: 'Dual editor view' })
     expect(layoutSwitch).toHaveAttribute('aria-checked', 'false')
