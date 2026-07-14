@@ -324,16 +324,18 @@ const dynamicCandidateSeeds = (
         active: tuning.name === resources.activeTuningName || tuning.stem === resources.activeTuningName,
       }))
     case 'cell_name':
+    case 'cell_path':
       return resources.library.cells.map((cell) => ({
-        value: cell.stem,
+        value: cell.relativePath,
         label: cell.stem,
         detail: cell.relativePath,
       }))
     case 'project_name':
-      return resources.library.compositions.map((composition) => ({
-        value: composition.stem,
-        label: composition.stem,
-        detail: composition.relativePath,
+    case 'project_path':
+      return resources.library.projects.map((project) => ({
+        value: project.relativePath,
+        label: project.stem,
+        detail: project.relativePath,
       }))
     case 'sequence_name':
       return resources.sequenceBank?.sequences.map((sequence) => ({
@@ -350,7 +352,9 @@ const dynamicArgumentKinds = new Set([
   'scale_id',
   'tuning_name',
   'cell_name',
+  'cell_path',
   'project_name',
+  'project_path',
   'sequence_name',
 ])
 

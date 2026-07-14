@@ -2,26 +2,37 @@ import { z } from 'zod'
 import { getXenBridgeRequest } from './juceBridge'
 import {
   BRIDGE_PROTOCOL,
+  cellRelativePathSchema,
+  cellImportResponseSchema,
+  cellFileResponseSchema,
   commandResponseSchema,
+  decimalRevisionSchema,
   envelopeSchema,
+  fileRevisionSchema,
   keymapStorageResourceSchema,
   keymapRevisionSchema,
   librarySnapshotSchema,
   preferencesResourceSchema,
   preferencesRevisionSchema,
   projectSnapshotSchema,
+  projectRelativePathSchema,
+  projectFileResponseSchema,
   previewBeginResponseSchema,
   previewEndResponseSchema,
+  projectSnapshotResponseSchema,
   selectionSchema,
   sessionHelloSchema,
 } from '../domain/contracts'
 import { createRequestId } from '../utils/requestId'
 import type {
   CommandExecuteResponseDto,
+  CellImportResponseDto,
+  ContentFileResponseDto,
   KeymapStorageResourceDto,
   LibrarySnapshotDto,
   PreferencesResourceDto,
   ProjectSnapshotDto,
+  ProjectSnapshotResponseDto,
   SelectionDto,
   SessionHelloDto,
 } from '../domain/contracts'
@@ -39,7 +50,7 @@ type EmptyRequest = Record<string, never>
 export type CommandExecuteRequest = {
   command: string
   context: {
-    expected_project_revision: number
+    expected_project_revision: string
     preview_id?: string | undefined
     selection: SelectionDto
     cursor: {
@@ -51,7 +62,7 @@ export type CommandExecuteRequest = {
 }
 
 export type PreviewBeginRequest = {
-  expected_project_revision: number
+  expected_project_revision: string
 }
 
 export type PreviewEndRequest = PreviewBeginRequest & {
@@ -80,6 +91,42 @@ export type SessionBindingSetRequest = {
   channel_id: string
 }
 
+export type ProjectNewRequest = {
+  expected_project_revision: string
+  discard_unsaved: boolean
+}
+
+export type ProjectOpenRequest = ProjectNewRequest & {
+  relative_path: string
+}
+
+export type ProjectSaveRequest = {
+  expected_project_revision: string
+}
+
+export type ProjectSaveAsRequest = ProjectSaveRequest & {
+  relative_path: string
+  expected_file_revision: string | null
+}
+
+export type RecoveryRestoreRequest = ProjectNewRequest & {
+  recovery_revision: string
+}
+
+export type RecoveryDiscardRequest = {
+  recovery_revision: string
+}
+
+export type CellImportRequest = ProjectSaveRequest & {
+  relative_path: string
+  cursor: CommandExecuteRequest['context']['cursor']
+}
+
+export type CellSaveRequest = CellImportRequest & {
+  selection: SelectionDto
+  expected_file_revision: string | null
+}
+
 export type BridgeMethodMap = {
   'session.hello': {
     request: SessionHelloRequest
@@ -96,6 +143,38 @@ export type BridgeMethodMap = {
   'library.get': {
     request: EmptyRequest
     response: LibrarySnapshotDto
+  }
+  'project.new': {
+    request: ProjectNewRequest
+    response: ProjectSnapshotResponseDto
+  }
+  'project.open': {
+    request: ProjectOpenRequest
+    response: ProjectSnapshotResponseDto
+  }
+  'project.save': {
+    request: ProjectSaveRequest
+    response: ContentFileResponseDto
+  }
+  'project.save_as': {
+    request: ProjectSaveAsRequest
+    response: ContentFileResponseDto
+  }
+  'project.recovery.restore': {
+    request: RecoveryRestoreRequest
+    response: ProjectSnapshotResponseDto
+  }
+  'project.recovery.discard': {
+    request: RecoveryDiscardRequest
+    response: ProjectSnapshotResponseDto
+  }
+  'cell.import': {
+    request: CellImportRequest
+    response: CellImportResponseDto
+  }
+  'cell.save': {
+    request: CellSaveRequest
+    response: ContentFileResponseDto
   }
   'command.execute': {
     request: CommandExecuteRequest
@@ -155,7 +234,18 @@ const backendErrorSchema = z.object({
   error: z.object({
     code: z.string(),
     message: z.string(),
+    details: z.record(z.string(), z.unknown()).optional(),
   }),
+})
+
+const projectRevisionRequestSchema = z.object({
+  expected_project_revision: decimalRevisionSchema,
+})
+
+const cursorSchema = z.object({
+  row_coordinate: z.number().int().min(-2_147_483_648).max(2_147_483_647),
+  column_coordinate: z.number().int().min(-2_147_483_648).max(2_147_483_647),
+  sequence_id: z.number().int().nonnegative().nullable(),
 })
 
 const keymapWriteRequestSchema = z.object({
@@ -178,6 +268,14 @@ const responseSchemas = {
   'session.binding.set': z.object({}).strict(),
   'state.get': projectSnapshotSchema,
   'library.get': librarySnapshotSchema,
+  'project.new': projectSnapshotResponseSchema,
+  'project.open': projectSnapshotResponseSchema,
+  'project.save': projectFileResponseSchema,
+  'project.save_as': projectFileResponseSchema,
+  'project.recovery.restore': projectSnapshotResponseSchema,
+  'project.recovery.discard': projectSnapshotResponseSchema,
+  'cell.import': cellImportResponseSchema,
+  'cell.save': cellFileResponseSchema,
   'command.execute': commandResponseSchema,
   'preview.begin': previewBeginResponseSchema,
   'preview.commit': previewEndResponseSchema,
@@ -204,26 +302,49 @@ const requestSchemas = {
   'command.execute': z.object({
     command: z.string(),
     context: z.object({
-      expected_project_revision: z.number().int().nonnegative(),
+      expected_project_revision: decimalRevisionSchema,
       preview_id: z.string().min(1).optional(),
       selection: selectionSchema,
-      cursor: z.object({
-        row_coordinate: z.number().int().min(-2_147_483_648).max(2_147_483_647),
-        column_coordinate: z.number().int().min(-2_147_483_648).max(2_147_483_647),
-        sequence_id: z.number().int().nonnegative().nullable(),
-      }),
+      cursor: cursorSchema,
     }),
   }),
-  'preview.begin': z.object({
-    expected_project_revision: z.number().int().nonnegative(),
+  'project.new': projectRevisionRequestSchema.extend({
+    discard_unsaved: z.boolean(),
   }),
+  'project.open': projectRevisionRequestSchema.extend({
+    relative_path: projectRelativePathSchema,
+    discard_unsaved: z.boolean(),
+  }),
+  'project.save': projectRevisionRequestSchema,
+  'project.save_as': projectRevisionRequestSchema.extend({
+    relative_path: projectRelativePathSchema,
+    expected_file_revision: fileRevisionSchema.nullable(),
+  }),
+  'project.recovery.restore': projectRevisionRequestSchema.extend({
+    recovery_revision: decimalRevisionSchema,
+    discard_unsaved: z.boolean(),
+  }),
+  'project.recovery.discard': z.object({
+    recovery_revision: decimalRevisionSchema,
+  }),
+  'cell.import': projectRevisionRequestSchema.extend({
+    relative_path: cellRelativePathSchema,
+    cursor: cursorSchema,
+  }),
+  'cell.save': projectRevisionRequestSchema.extend({
+    relative_path: cellRelativePathSchema,
+    cursor: cursorSchema,
+    selection: selectionSchema,
+    expected_file_revision: fileRevisionSchema.nullable(),
+  }),
+  'preview.begin': projectRevisionRequestSchema,
   'preview.commit': z.object({
     preview_id: z.string().min(1),
-    expected_project_revision: z.number().int().nonnegative(),
+    expected_project_revision: decimalRevisionSchema,
   }),
   'preview.cancel': z.object({
     preview_id: z.string().min(1),
-    expected_project_revision: z.number().int().nonnegative(),
+    expected_project_revision: decimalRevisionSchema,
   }),
   'keymap.read': z.object({}).strict(),
   'keymap.write': keymapWriteRequestSchema,
@@ -238,6 +359,14 @@ const defaultTimeouts = {
   'session.binding.set': 15_000,
   'state.get': 5_000,
   'library.get': 5_000,
+  'project.new': 15_000,
+  'project.open': 15_000,
+  'project.save': 15_000,
+  'project.save_as': 15_000,
+  'project.recovery.restore': 15_000,
+  'project.recovery.discard': 15_000,
+  'cell.import': 15_000,
+  'cell.save': 15_000,
   'command.execute': 15_000,
   'preview.begin': 15_000,
   'preview.commit': 15_000,
@@ -280,11 +409,13 @@ export class BridgePayloadValidationError extends Error {
 
 export class BridgePayloadError extends Error {
   readonly code: string
+  readonly details: Record<string, unknown> | undefined
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, details?: Record<string, unknown>) {
     super(message)
     this.name = 'BridgePayloadError'
     this.code = code
+    this.details = details
   }
 }
 
@@ -405,7 +536,8 @@ export class BridgeClient {
       if (backendError.success) {
         throw new BridgePayloadError(
           backendError.data.error.code,
-          backendError.data.error.message
+          backendError.data.error.message,
+          backendError.data.error.details
         )
       }
 

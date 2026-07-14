@@ -2,14 +2,9 @@ import { useState } from 'react'
 import type { LibrarySnapshot, SessionReference } from '../domain/models'
 
 const createInitialLibrarySnapshot = (): LibrarySnapshot => ({
-  revision: 0,
-  paths: {
-    library: '',
-    content: '',
-    tunings: '',
-  },
+  revision: '0',
   cells: [],
-  compositions: [],
+  projects: [],
   tunings: [],
   scales: [],
   chords: [],

@@ -58,7 +58,6 @@ export function useProjectSession({
 }: UseProjectSessionArgs) {
   const eventTokenRef = useRef<unknown>(null)
   const projectRef = useRef<ProjectSnapshot | null>(null)
-  const libraryRevisionRef = useRef(-1)
   const [projectState, setProjectState] = useState<ProjectSessionState>({ status: 'idle' })
   const [statusMessage, setStatusMessage] = useState('')
   const [statusLevel, setStatusLevelState] = useState<MessageLevel>('info')
@@ -97,6 +96,15 @@ export function useProjectSession({
     ingestLibrary,
     executeBackendCommand,
     beginBackendPreview,
+    documentBusy,
+    newProject,
+    openProject,
+    saveProject,
+    saveProjectAs,
+    importCell,
+    saveCell,
+    restoreRecovery,
+    discardRecovery,
   } = useBridgeSession({
     request,
     projectRef,
@@ -104,7 +112,6 @@ export function useProjectSession({
     activeSequenceTargetRef,
     compositionSelectionRef,
     workspaceViewRef,
-    libraryRevisionRef,
     setProject: setProjectSnapshot,
     setEditorState,
     setStatusMessage,
@@ -227,5 +234,14 @@ export function useProjectSession({
     request,
     executeBackendCommand,
     beginBackendPreview,
+    documentBusy,
+    newProject,
+    openProject,
+    saveProject,
+    saveProjectAs,
+    importCell,
+    saveCell,
+    restoreRecovery,
+    discardRecovery,
   }
 }

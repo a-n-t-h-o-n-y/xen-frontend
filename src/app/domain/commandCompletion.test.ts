@@ -14,7 +14,7 @@ import type { ActiveArgument } from './commandCompletion'
 
 describe('command completion', () => {
   const commands = buildSessionReference({
-    schema_version: 3,
+    schema_version: 4,
     commands: [
       {
         path: ['set', 'velocity'],
@@ -320,7 +320,6 @@ describe('command completion', () => {
     library.tunings = [{
       name: '12EDO.scl',
       stem: '12EDO',
-      path: '/library/tunings/12EDO.scl',
       relativePath: '12EDO.scl',
       command: 'load tuning "12EDO"',
       description: 'Equal temperament',
@@ -362,8 +361,12 @@ describe('command completion', () => {
     expect(getArgumentCompletionCandidates(active('tuning_name'), resources)[0]).toMatchObject({
       label: '12EDO', isActive: true,
     })
-    expect(getArgumentCompletionCandidates(active('cell_name'), resources)[0]?.label).toBe('sequence')
-    expect(getArgumentCompletionCandidates(active('project_name'), resources)[0]?.label).toBe('song')
+    expect(getArgumentCompletionCandidates(active('cell_name'), resources)[0]).toMatchObject({
+      label: 'sequence', insertionText: 'sequence.xencell',
+    })
+    expect(getArgumentCompletionCandidates(active('project_name'), resources)[0]).toMatchObject({
+      label: 'song', insertionText: 'song.xenproj',
+    })
     expect(getArgumentCompletionCandidates(active('sequence_name'), resources)[0]?.label).toBe('S1')
   })
 })

@@ -14,7 +14,7 @@ const responseEnvelope = (
   requestId: string,
   payload: Record<string, unknown>
 ) => ({
-  protocol: 'xen.bridge.v5',
+  protocol: 'xen.bridge.v6',
   type: 'response',
   name,
   request_id: requestId,
@@ -43,9 +43,9 @@ describe('BridgeClient', () => {
 
     const payload = await client.request('state.get', {})
 
-    expect(payload.project_revision).toBe(3)
+    expect(payload.project_revision).toBe('3')
     expect(JSON.parse(rawRequest)).toEqual({
-      protocol: 'xen.bridge.v5',
+      protocol: 'xen.bridge.v6',
       type: 'request',
       name: 'state.get',
       request_id: 'req-test',
@@ -67,7 +67,7 @@ describe('BridgeClient', () => {
     await client.request('command.execute', {
       command: 'transport stop',
       context: {
-        expected_project_revision: 3,
+        expected_project_revision: '3',
         selection: { path: [] },
         cursor: { row_coordinate: -8, column_coordinate: 13, sequence_id: null },
       },
@@ -105,11 +105,11 @@ describe('BridgeClient', () => {
       })
     })
 
-    await client.request('preview.begin', { expected_project_revision: 3 })
+    await client.request('preview.begin', { expected_project_revision: '3' })
     await client.request('command.execute', {
       command: 'set key 4',
       context: {
-        expected_project_revision: 3,
+        expected_project_revision: '3',
         preview_id: 'preview-1',
         selection: { path: [] },
         cursor: { row_coordinate: 0, column_coordinate: 0, sequence_id: null },
@@ -117,7 +117,7 @@ describe('BridgeClient', () => {
     })
     await client.request('preview.commit', {
       preview_id: 'preview-1',
-      expected_project_revision: 4,
+      expected_project_revision: '4',
     })
 
     expect(requests.map((request) => request.name)).toEqual([
@@ -141,6 +141,118 @@ describe('BridgeClient', () => {
     })
 
     expect(JSON.parse(rawRequest).payload).toEqual({ channel_id: 'drums' })
+  })
+
+  it('serializes every dedicated project, recovery, and cell document request', async () => {
+    const requests: Array<{ name: string; payload: Record<string, unknown> }> = []
+    const file = {
+      name: 'song.xenproj',
+      relative_path: 'sets/song.xenproj',
+      stem: 'song',
+      file_revision: 'sha256:updated',
+    }
+    const client = createClient(async (requestJson) => {
+      const request = JSON.parse(requestJson) as {
+        name: string
+        payload: Record<string, unknown>
+      }
+      requests.push(request)
+      if (request.name === 'project.save' || request.name === 'project.save_as' ||
+          request.name === 'cell.save') {
+        return responseEnvelope(request.name, 'req-test', {
+          snapshot: projectFixture('4'),
+          file: request.name === 'cell.save' ? {
+            name: 'bass.xencell',
+            relative_path: 'cells/bass.xencell',
+            stem: 'bass',
+            file_revision: 'sha256:updated-cell',
+          } : file,
+        })
+      }
+      if (request.name === 'cell.import') {
+        return responseEnvelope(request.name, 'req-test', {
+          snapshot: projectFixture('4'),
+          suggested_selection: { path: [] },
+        })
+      }
+      return responseEnvelope(request.name, 'req-test', { snapshot: projectFixture('4') })
+    })
+
+    await client.request('project.new', {
+      expected_project_revision: '3',
+      discard_unsaved: false,
+    })
+    await client.request('project.open', {
+      relative_path: 'sets/song.xenproj',
+      expected_project_revision: '3',
+      discard_unsaved: true,
+    })
+    await client.request('project.save', { expected_project_revision: '3' })
+    await client.request('project.save_as', {
+      relative_path: 'sets/song.xenproj',
+      expected_project_revision: '3',
+      expected_file_revision: null,
+    })
+    await client.request('project.recovery.restore', {
+      recovery_revision: '17',
+      expected_project_revision: '3',
+      discard_unsaved: true,
+    })
+    await client.request('project.recovery.discard', { recovery_revision: '17' })
+    await client.request('cell.import', {
+      relative_path: 'cells/bass.xencell',
+      expected_project_revision: '3',
+      cursor: { row_coordinate: -2, column_coordinate: 9, sequence_id: 2 },
+    })
+    await client.request('cell.save', {
+      relative_path: 'cells/bass.xencell',
+      expected_project_revision: '3',
+      cursor: { row_coordinate: -2, column_coordinate: 9, sequence_id: 2 },
+      selection: { path: [{ kind: 'element', index: 0 }] },
+      expected_file_revision: 'sha256:before',
+    })
+
+    expect(requests.map((request) => request.name)).toEqual([
+      'project.new',
+      'project.open',
+      'project.save',
+      'project.save_as',
+      'project.recovery.restore',
+      'project.recovery.discard',
+      'cell.import',
+      'cell.save',
+    ])
+    expect(requests[3]?.payload).toMatchObject({
+      relative_path: 'sets/song.xenproj',
+      expected_project_revision: '3',
+      expected_file_revision: null,
+    })
+    expect(requests[7]?.payload).toMatchObject({
+      relative_path: 'cells/bass.xencell',
+      expected_file_revision: 'sha256:before',
+    })
+  })
+
+  it('rejects legacy and absolute document paths before invoking the backend', async () => {
+    const requestFn = vi.fn()
+    const client = createClient(requestFn)
+
+    await expect(client.request('project.open', {
+      relative_path: 'legacy.xencomp',
+      expected_project_revision: '3',
+      discard_unsaved: false,
+    })).rejects.toThrow('Expected a .xenproj path')
+    await expect(client.request('cell.import', {
+      relative_path: '/outside.xencell',
+      expected_project_revision: '3',
+      cursor: { row_coordinate: 0, column_coordinate: 0, sequence_id: null },
+    })).rejects.toThrow('Expected a content-relative path')
+    await expect(client.request('project.open', {
+      relative_path: '../outside.xenproj',
+      expected_project_revision: '3',
+      discard_unsaved: false,
+    })).rejects.toThrow('Expected a content-relative path')
+    expect(requestFn).not.toHaveBeenCalled()
   })
 
   it('writes opaque keymap documents using the storage revision', async () => {
@@ -167,18 +279,17 @@ describe('BridgeClient', () => {
     const client = createClient(async (requestJson) => {
       rawRequest = requestJson
       return responseEnvelope('preferences.write', 'req-test', {
-        revision: 'revision-after-write',
+        revision: '21',
         document: { schema_version: 912, theme: 'dark', future_setting: true },
       })
     })
 
     const result = await client.request('preferences.write', {
-      expected_revision: 'opaque-revision-before-write',
+      expected_revision: '20',
       document: { schema_version: 912, theme: 'dark', future_setting: true },
     })
 
-    expect(JSON.parse(rawRequest).payload.expected_revision)
-      .toBe('opaque-revision-before-write')
+    expect(JSON.parse(rawRequest).payload.expected_revision).toBe('20')
     expect(result.document).toMatchObject({ future_setting: true })
   })
 
@@ -187,17 +298,17 @@ describe('BridgeClient', () => {
     const client = createClient(async (requestJson) => {
       rawRequest = requestJson
       return responseEnvelope('preferences.delete', 'req-test', {
-        revision: 'empty-resource-revision',
+        revision: '22',
         document: null,
       })
     })
 
     const result = await client.request('preferences.delete', {
-      expected_revision: 'revision-before-delete',
+      expected_revision: '21',
     })
 
     expect(JSON.parse(rawRequest).payload).toEqual({
-      expected_revision: 'revision-before-delete',
+      expected_revision: '21',
     })
     expect(result.document).toBeNull()
   })
@@ -225,14 +336,19 @@ describe('BridgeClient', () => {
   it('converts backend error payloads into BridgePayloadError', async () => {
     const client = createClient(async () =>
       responseEnvelope('state.get', 'req-test', {
-        error: { code: 'invalid_request', message: 'stale revision' },
+        error: {
+          code: 'file_exists',
+          message: 'target exists',
+          details: { file_revision: 'sha256:on-disk' },
+        },
       })
     )
 
     await expect(client.request('state.get', {})).rejects.toMatchObject({
       name: 'BridgePayloadError',
-      code: 'invalid_request',
-      message: 'stale revision',
+      code: 'file_exists',
+      message: 'target exists',
+      details: { file_revision: 'sha256:on-disk' },
     } satisfies Partial<BridgePayloadError>)
   })
 

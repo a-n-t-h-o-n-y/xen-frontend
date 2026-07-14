@@ -7,6 +7,16 @@ import type {
 } from './models'
 import { projectRootCell, reconcileSelection } from './selection'
 
+export const compareDecimalRevisions = (left: string, right: string): number => {
+  const normalizedLeft = left.replace(/^0+(?=\d)/, '')
+  const normalizedRight = right.replace(/^0+(?=\d)/, '')
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return normalizedLeft.length < normalizedRight.length ? -1 : 1
+  }
+  if (normalizedLeft === normalizedRight) return 0
+  return normalizedLeft < normalizedRight ? -1 : 1
+}
+
 export type ProjectIngestion = {
   snapshot: ProjectSnapshot
   selection: Selection
@@ -21,8 +31,7 @@ export const ingestProjectSnapshot = (
 ): ProjectIngestion => {
   if (
     current &&
-    (incoming.revision < current.revision ||
-      (incoming.revision === current.revision && incoming.previewActive === current.previewActive))
+    compareDecimalRevisions(incoming.stateRevision, current.stateRevision) <= 0
   ) {
     return { snapshot: current, selection, installed: false }
   }
@@ -37,7 +46,7 @@ export const ingestLibrarySnapshot = (
   current: LibrarySnapshot | null,
   incoming: LibrarySnapshot
 ): { snapshot: LibrarySnapshot; installed: boolean } => {
-  if (current && incoming.revision <= current.revision) {
+  if (current && compareDecimalRevisions(incoming.revision, current.revision) <= 0) {
     return { snapshot: current, installed: false }
   }
   return { snapshot: incoming, installed: true }

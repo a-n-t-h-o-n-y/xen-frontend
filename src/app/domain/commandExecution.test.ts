@@ -8,14 +8,14 @@ describe('command execution primitives', () => {
     expect(buildCommandContext(projectFromDto(projectFixture(12)), {
       path: [{ kind: 'element', index: 99 }],
     })).toEqual({
-      expectedProjectRevision: 12,
+      expectedProjectRevision: '12',
       selection: { path: [] },
       cursor: { rowCoordinate: 0, columnCoordinate: 0, sequenceId: 1 },
     })
     expect(commandContextToDto(buildCommandContext(projectFromDto(projectFixture(12)), {
       path: [{ kind: 'element', index: 99 }],
     }))).toEqual({
-      expected_project_revision: 12,
+      expected_project_revision: '12',
       selection: { path: [] },
       cursor: { row_coordinate: 0, column_coordinate: 0, sequence_id: 1 },
     })

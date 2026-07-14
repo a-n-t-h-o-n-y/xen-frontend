@@ -54,11 +54,19 @@ const pitchFixture = () => ({
   base_frequency: 440,
 })
 
-export const projectFixture = (revision = 3): ProjectSnapshotDto => ({
-  schema_version: 5,
-  history_entry_id: 2,
-  project_revision: revision,
+export const projectFixture = (revision: string | number = '3'): ProjectSnapshotDto => ({
+  schema_version: 6,
+  state_revision: String(revision),
+  history_entry_id: '2',
+  project_revision: String(revision),
   preview_active: false,
+  document: {
+    relative_path: 'song.xenproj',
+    display_name: 'song',
+    dirty: false,
+    file_revision: 'sha256:project',
+  },
+  recovery: null,
   project: {
     sequence_bank: {
       next_id: 2,
@@ -101,11 +109,19 @@ export const projectFixture = (revision = 3): ProjectSnapshotDto => ({
   },
 })
 
-export const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
-  schema_version: 5,
-  history_entry_id: 2,
-  project_revision: revision,
+export const arrangedProjectFixture = (revision: string | number = '3'): ProjectSnapshotDto => ({
+  schema_version: 6,
+  state_revision: String(revision),
+  history_entry_id: '2',
+  project_revision: String(revision),
   preview_active: false,
+  document: {
+    relative_path: 'arranged.xenproj',
+    display_name: 'arranged',
+    dirty: true,
+    file_revision: 'sha256:arranged',
+  },
+  recovery: null,
   project: {
     sequence_bank: {
       next_id: 3,
@@ -154,26 +170,23 @@ export const arrangedProjectFixture = (revision = 3): ProjectSnapshotDto => ({
   },
 })
 
-export const libraryFixture = (revision = 4): LibrarySnapshotDto => ({
-  schema_version: 1,
-  library_revision: revision,
-  paths: { library: '/library', content: '/library/content', tunings: '/library/tunings' },
+export const libraryFixture = (revision: string | number = '4'): LibrarySnapshotDto => ({
+  schema_version: 2,
+  library_revision: String(revision),
   cells: [
     {
-      name: 'sequence.xen',
-      relative_path: 'sequence.xen',
+      name: 'sequence.xencell',
+      relative_path: 'sequence.xencell',
       stem: 'sequence',
-      path: '/library/sequences/sequence.xen',
-      command: 'load cell "sequence.xen"',
+      file_revision: 'sha256:cell',
     },
   ],
-  compositions: [
+  projects: [
     {
-      name: 'song.xencomp',
-      relative_path: 'song.xencomp',
+      name: 'song.xenproj',
+      relative_path: 'song.xenproj',
       stem: 'song',
-      path: '/library/content/song.xencomp',
-      command: 'project open "song"',
+      file_revision: 'sha256:project',
     },
   ],
   tunings: [],

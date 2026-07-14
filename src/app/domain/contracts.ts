@@ -1,9 +1,10 @@
 import { z } from 'zod'
 
-export const BRIDGE_PROTOCOL = 'xen.bridge.v5'
-export const PROJECT_SCHEMA_VERSION = 5
-export const LIBRARY_SCHEMA_VERSION = 1
-export const CATALOG_SCHEMA_VERSION = 3
+export const BRIDGE_PROTOCOL = 'xen.bridge.v6'
+export const IPC_PROTOCOL = 'xen.ipc.v3'
+export const PROJECT_SCHEMA_VERSION = 6
+export const LIBRARY_SCHEMA_VERSION = 2
+export const CATALOG_SCHEMA_VERSION = 4
 export const KEYMAP_SCHEMA_VERSION = 2
 
 const finiteNumber = z.number().finite()
@@ -11,8 +12,25 @@ const nonNegativeInteger = z.number().int().nonnegative()
 export const compositionCoordinateSchema = z.number().int()
   .min(-2_147_483_648)
   .max(2_147_483_647)
-export const keymapRevisionSchema = z.string().regex(/^\d+$/, 'Expected a decimal revision string')
-export const preferencesRevisionSchema = z.string().min(1)
+export const decimalRevisionSchema = z.string().regex(/^\d+$/, 'Expected a decimal revision string')
+export const keymapRevisionSchema = decimalRevisionSchema
+export const preferencesRevisionSchema = decimalRevisionSchema
+export const fileRevisionSchema = z.string().min(1)
+const contentRelativePathSchema = z.string().min(1).refine(
+  (path) => {
+    if (path.startsWith('/') || path.includes('\\') || /^[a-zA-Z]:/.test(path)) return false
+    return path.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..')
+  },
+  'Expected a content-relative path'
+)
+export const projectRelativePathSchema = contentRelativePathSchema.refine(
+  (path) => path.endsWith('.xenproj'),
+  'Expected a .xenproj path'
+)
+export const cellRelativePathSchema = contentRelativePathSchema.refine(
+  (path) => path.endsWith('.xencell'),
+  'Expected a .xencell path'
+)
 const modTargetIdSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'weights'])
 
 export const selectionStepSchema = z.object({
@@ -199,14 +217,27 @@ export const pitchStateSchema = z.object({
 
 export const arrangementProjectSnapshotSchema = z.object({
   schema_version: z.literal(PROJECT_SCHEMA_VERSION),
-  history_entry_id: nonNegativeInteger,
-  project_revision: nonNegativeInteger,
+  state_revision: decimalRevisionSchema,
+  project_revision: decimalRevisionSchema,
+  history_entry_id: decimalRevisionSchema,
   preview_active: z.boolean(),
+  document: z.object({
+    relative_path: projectRelativePathSchema.nullable(),
+    display_name: z.string(),
+    dirty: z.boolean(),
+    file_revision: fileRevisionSchema.nullable(),
+  }).strict(),
+  recovery: z.object({
+    revision: decimalRevisionSchema,
+    saved_at_unix_ms: decimalRevisionSchema,
+    relative_path: projectRelativePathSchema.nullable(),
+    project_revision: decimalRevisionSchema,
+  }).strict().nullable(),
   project: z.object({
     sequence_bank: sequenceBankSchema,
     composition: compositionSchema,
-  }),
-}).superRefine((snapshot, context) => {
+  }).strict(),
+}).strict().superRefine((snapshot, context) => {
   const sequenceIds = new Set(snapshot.project.sequence_bank.sequences.map((entry) => entry.id))
   snapshot.project.composition.placements.forEach((placement, placementIndex) => {
     if (!sequenceIds.has(placement.sequence_id)) {
@@ -221,20 +252,29 @@ export const arrangementProjectSnapshotSchema = z.object({
 
 export const projectSnapshotSchema = arrangementProjectSnapshotSchema
 
-const libraryCommandEntrySchema = z.object({
+export const contentFileSchema = z.object({
   name: z.string(),
-  relative_path: z.string(),
+  relative_path: contentRelativePathSchema,
   stem: z.string(),
-  path: z.string(),
-  command: z.string(),
+  file_revision: fileRevisionSchema,
+}).strict()
+export const cellContentFileSchema = contentFileSchema.extend({
+  relative_path: cellRelativePathSchema,
+})
+export const projectContentFileSchema = contentFileSchema.extend({
+  relative_path: projectRelativePathSchema,
 })
 
-const tuningEntrySchema = libraryCommandEntrySchema.extend({
+const tuningEntrySchema = z.object({
+  name: z.string(),
+  relative_path: contentRelativePathSchema,
+  stem: z.string(),
+  command: z.string(),
   description: z.string(),
   intervals: z.array(finiteNumber),
   octave: finiteNumber,
   note_count: finiteNumber,
-})
+}).strict()
 
 const chromaticScaleSchema = z.object({
   id: z.literal('chromatic'),
@@ -252,14 +292,9 @@ const definedScaleSchema = z.object({
 
 export const librarySnapshotSchema = z.object({
   schema_version: z.literal(LIBRARY_SCHEMA_VERSION),
-  library_revision: nonNegativeInteger,
-  paths: z.object({
-    library: z.string(),
-    content: z.string(),
-    tunings: z.string(),
-  }),
-  cells: z.array(libraryCommandEntrySchema),
-  compositions: z.array(libraryCommandEntrySchema),
+  library_revision: decimalRevisionSchema,
+  cells: z.array(cellContentFileSchema),
+  projects: z.array(projectContentFileSchema),
   tunings: z.array(tuningEntrySchema),
   scales: z.array(z.union([chromaticScaleSchema, definedScaleSchema])),
   chords: z.array(z.object({
@@ -272,7 +307,7 @@ export const librarySnapshotSchema = z.object({
     reload_chords: z.string(),
     library_directory: z.string(),
   }),
-})
+}).strict()
 
 export const catalogConstraintSchema = z.object({
   kind: z.string(),
@@ -504,6 +539,26 @@ export const commandResponseSchema = z.object({
   snapshot: projectSnapshotSchema,
 })
 
+export const projectSnapshotResponseSchema = z.object({
+  snapshot: projectSnapshotSchema,
+})
+
+export const contentFileResponseSchema = projectSnapshotResponseSchema.extend({
+  file: contentFileSchema,
+})
+
+export const projectFileResponseSchema = projectSnapshotResponseSchema.extend({
+  file: projectContentFileSchema,
+})
+
+export const cellFileResponseSchema = projectSnapshotResponseSchema.extend({
+  file: cellContentFileSchema,
+})
+
+export const cellImportResponseSchema = projectSnapshotResponseSchema.extend({
+  suggested_selection: selectionSchema.nullable(),
+})
+
 export const previewBeginResponseSchema = z.object({
   status: commandStatusSchema,
   preview_id: z.string().min(1).nullable(),
@@ -559,11 +614,15 @@ export type SelectionPathDto = SelectionDto['path']
 export type SequenceEntryDto = z.infer<typeof sequenceEntrySchema>
 export type ScaleDefinitionDto = z.infer<typeof scaleDefinitionSchema>
 export type ProjectSnapshotDto = z.infer<typeof projectSnapshotSchema>
+export type ContentFileDto = z.infer<typeof contentFileSchema>
 export type LibrarySnapshotDto = z.infer<typeof librarySnapshotSchema>
 export type CatalogDto = z.infer<typeof catalogSchema>
 export type CatalogCommandDto = z.infer<typeof catalogCommandSchema>
 export type SessionHelloDto = z.infer<typeof sessionHelloSchema>
 export type CommandExecuteResponseDto = z.infer<typeof commandResponseSchema>
+export type ProjectSnapshotResponseDto = z.infer<typeof projectSnapshotResponseSchema>
+export type ContentFileResponseDto = z.infer<typeof contentFileResponseSchema>
+export type CellImportResponseDto = z.infer<typeof cellImportResponseSchema>
 export type InputModeDto = z.infer<typeof inputModeSchema>
 export type KeymapTriggerDto = z.infer<typeof keymapTriggerSchema>
 export type KeymapTargetDto = z.infer<typeof keymapTargetSchema>

@@ -3,6 +3,7 @@ import type { InputMode, KeymapBinding, KeymapDocument, KeymapTarget, KeymapTrig
 
 export type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
 export type TranslateDirection = 'up' | 'down'
+export type FileRevision = string
 
 export type EditorState = {
   selection: Selection
@@ -134,19 +135,42 @@ export type ActiveSequenceTarget = CompositionSelection & {
 }
 
 export type ProjectSnapshot = {
-  revision: number
-  historyEntryId: number
+  stateRevision: string
+  projectRevision: string
+  historyEntryId: string
   previewActive: boolean
+  document: ProjectDocument
+  recovery: ProjectRecovery | null
   sequence: Sequence
   sequenceBank: SequenceBank | null
   composition: Composition | null
   pitch: PitchState
 }
 
+export type ProjectDocument = {
+  relativePath: string | null
+  displayName: string
+  dirty: boolean
+  fileRevision: FileRevision | null
+}
+
+export type ProjectRecovery = {
+  revision: string
+  savedAtUnixMs: string
+  relativePath: string | null
+  projectRevision: string
+}
+
+export type ContentFile = {
+  name: string
+  stem: string
+  relativePath: string
+  fileRevision: FileRevision
+}
+
 export type LibraryCommandEntry = {
   name: string
   stem: string
-  path: string
   command: string
   relativePath: string
   description: string
@@ -185,14 +209,9 @@ export type LibraryChordEntry = {
 }
 
 export type LibrarySnapshot = {
-  revision: number
-  paths: {
-    library: string
-    content: string
-    tunings: string
-  }
-  cells: LibraryCommandEntry[]
-  compositions: LibraryCommandEntry[]
+  revision: string
+  cells: ContentFile[]
+  projects: ContentFile[]
   tunings: LibraryTuningEntry[]
   scales: LibraryScaleEntry[]
   chords: LibraryChordEntry[]
@@ -230,7 +249,7 @@ export type KeymapResource = {
 }
 
 export type CommandContext = {
-  expectedProjectRevision: number
+  expectedProjectRevision: string
   selection: Selection
   cursor: CompositionSelection & {
     sequenceId: number | null

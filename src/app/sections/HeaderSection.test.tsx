@@ -64,6 +64,7 @@ const renderHeader = (
       tuningName={metadataAvailable ? '12EDO' : '--'}
       sequenceName="Lead"
       currentInputMode="velocity"
+      documentControls={null}
       onOpenQuickAccess={onOpenQuickAccess}
       onOpenSettings={vi.fn()}
       onEnterModulation={vi.fn()}

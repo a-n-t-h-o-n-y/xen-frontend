@@ -302,8 +302,11 @@ shown in the sequencer from the active composition target:
 
 ```ts
 type ProjectSnapshot = {
-  revision: number
-  historyEntryId: number
+  stateRevision: string
+  projectRevision: string
+  historyEntryId: string
+  document: ProjectDocument
+  recovery: ProjectRecovery | null
   sequenceBank: SequenceBank
   composition: Composition
   sequence: Sequence

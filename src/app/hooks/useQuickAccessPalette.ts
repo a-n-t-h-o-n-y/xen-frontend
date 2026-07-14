@@ -3,6 +3,7 @@ import { MAX_COMMAND_HISTORY } from '../constants'
 import {
   commandInvocationItemId,
   consumePaletteScopePrefix,
+  type FilePaletteItem,
   type PaletteItem,
   type PaletteScope,
 } from '../domain/palette'
@@ -192,6 +193,7 @@ export const quickAccessReducer = (
 type UseQuickAccessPaletteArgs = {
   commands: CommandReferenceEntry[]
   executeBackendCommand: (command: string) => Promise<void>
+  activateFile: (file: FilePaletteItem) => Promise<void>
 }
 
 export type QuickAccessController = ReturnType<typeof useQuickAccessPalette>
@@ -199,6 +201,7 @@ export type QuickAccessController = ReturnType<typeof useQuickAccessPalette>
 export function useQuickAccessPalette({
   commands,
   executeBackendCommand,
+  activateFile,
 }: UseQuickAccessPaletteArgs) {
   const [state, dispatch] = useReducer(quickAccessReducer, initialQuickAccessState)
   const openerRef = useRef<HTMLElement | null>(null)
@@ -256,8 +259,23 @@ export function useQuickAccessPalette({
       await runBackendCommand(item.command.id, [item.id])
       return
     }
+    if (item.kind === 'file') {
+      dispatch({ type: 'patch', patch: { busy: true, error: null } })
+      try {
+        await activateFile(item)
+        dispatch({ type: 'record_recent', itemIds: [item.id] })
+        dispatch({ type: 'patch', patch: { busy: false } })
+        close()
+      } catch (error) {
+        dispatch({
+          type: 'patch',
+          patch: { busy: false, error: `File operation failed: ${getErrorMessage(error)}` },
+        })
+      }
+      return
+    }
     await runBackendCommand(item.backendCommand, [item.id])
-  }, [runBackendCommand])
+  }, [activateFile, close, runBackendCommand])
 
   const submitCommand = useCallback(async (commandOverride?: string): Promise<void> => {
     const command = (commandOverride ?? state.query).trim()

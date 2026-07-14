@@ -56,7 +56,7 @@ describe('schema contract validation', () => {
 
   it('accepts envelopes and rejects invalid payloads', () => {
     expect(parseEnvelope({
-      protocol: 'xen.bridge.v5',
+      protocol: 'xen.bridge.v6',
       type: 'response',
       name: 'state.get',
       request_id: '1',
@@ -72,12 +72,12 @@ describe('schema contract validation', () => {
 
   it('validates hello catalog and opaque keymap storage', () => {
     const hello = parseSessionHello({
-      protocol: 'xen.bridge.v5',
+      protocol: 'xen.bridge.v6',
       plugin_version: '1.0.0',
-      project_schema_version: 5,
-      library_schema_version: 1,
+      project_schema_version: 6,
+      library_schema_version: 2,
       catalog: {
-        schema_version: 3,
+        schema_version: 4,
         commands: [{
           path: ['set', 'pitch'],
           keywords: ['note'],
@@ -132,6 +132,10 @@ describe('schema contract validation', () => {
       ...hello,
       keymap: { revision: 9_223_372_036_854_776_000, document: null },
     })).toThrow()
+    expect(() => parseSessionHello({
+      ...hello,
+      preferences: { revision: 'opaque', document: null },
+    })).toThrow('Expected a decimal revision string')
     expect(hello.catalog.commands[0]?.arguments[0]?.constraints[0]?.maximum).toBe(1)
     expect(() => parseSessionHello({
       ...hello,
@@ -161,7 +165,7 @@ describe('schema contract validation', () => {
     expect(parseProjectSnapshot(projectFixture()).project.composition.columns[0]?.pitch.transposition)
       .toBe(2)
     const arrangedProject = parseProjectSnapshot(arrangedProjectFixture())
-    expect(arrangedProject.schema_version).toBe(5)
+    expect(arrangedProject.schema_version).toBe(6)
     expect(arrangedProject.project.composition.placements[2]).toEqual({
       row: 3,
       column: -4,
@@ -169,27 +173,53 @@ describe('schema contract validation', () => {
     })
     expect(arrangedProject.project.composition.loop_region.start_column).toBe(-2)
     expect(parseLibrarySnapshot(libraryFixture()).scales[0]?.id).toBe('chromatic')
+    expect(() => parseLibrarySnapshot({
+      ...libraryFixture(),
+      projects: [{
+        name: 'legacy.xencomp',
+        relative_path: 'legacy.xencomp',
+        stem: 'legacy',
+        file_revision: 'sha256:legacy',
+      }],
+    })).toThrow('Expected a .xenproj path')
+    expect(() => parseLibrarySnapshot({
+      ...libraryFixture(),
+      cells: [{
+        name: 'outside.xencell',
+        relative_path: '/outside.xencell',
+        stem: 'outside',
+        file_revision: 'sha256:outside',
+      }],
+    })).toThrow('Expected a content-relative path')
+    expect(() => parseLibrarySnapshot({
+      ...libraryFixture(),
+      compositions: [],
+    })).toThrow()
     expect(parseCommandResponse({
       status: { level: 'info', message: 'ok' },
       suggested_selection: { path: [{ kind: 'element', index: 0 }] },
       snapshot: projectFixture(),
     }).status.message).toBe('ok')
     expect(parseBridgeEvent({
-      protocol: 'xen.bridge.v5',
+      protocol: 'xen.bridge.v6',
       type: 'event',
       name: 'library.changed',
       payload: libraryFixture(),
     }).name).toBe('library.changed')
     expect(parseBridgeEvent({
-      protocol: 'xen.bridge.v5',
+      protocol: 'xen.bridge.v6',
       type: 'event',
       name: 'preferences.changed',
       payload: {
-        revision: 'opaque-revision',
+        revision: '340282366920938463463374607431768211456',
         document: { schema_version: 1, theme: 'light', unknown: true },
       },
     }).name).toBe('preferences.changed')
-    expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 4 })).toThrow()
+    expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 5 })).toThrow()
+    expect(() => parseProjectSnapshot({
+      ...projectFixture(),
+      state_revision: 9_223_372_036_854_776_000,
+    })).toThrow('expected string')
     const dense = structuredClone(projectFixture()) as unknown as Record<string, unknown>
     const denseProject = dense.project as { composition: Record<string, unknown> }
     denseProject.composition = {

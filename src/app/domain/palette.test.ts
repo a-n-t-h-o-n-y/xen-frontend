@@ -12,7 +12,7 @@ import { buildSessionReference } from './reference'
 import { libraryFixture } from './testFixtures'
 
 const commands = buildSessionReference({
-  schema_version: 3,
+  schema_version: 4,
   commands: [
     {
       path: ['transport', 'stop'],
@@ -45,7 +45,6 @@ const createItems = () => {
     name: 'systems/19edo.scl',
     stem: 'systems/19edo',
     relative_path: 'systems/19edo.scl',
-    path: '/library/tunings/systems/19edo.scl',
     command: 'set tuning "systems/19edo.scl"',
     description: 'Nineteen equal divisions',
     intervals: Array.from({ length: 19 }, (_, index) => index * 1200 / 19),
@@ -69,10 +68,10 @@ describe('quick access palette domain', () => {
       fileKind: 'cell',
       label: 'sequence',
     })
-    expect(items.find((item) => item.kind === 'file' && item.fileKind === 'composition'))
+    expect(items.find((item) => item.kind === 'file' && item.fileKind === 'project'))
       .toMatchObject({
         label: 'song',
-        backendCommand: 'project open "song"',
+        relativePath: 'song.xenproj',
       })
     expect(items.find((item) => item.kind === 'tuning')).toMatchObject({
       label: '19edo',

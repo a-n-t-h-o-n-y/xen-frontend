@@ -88,7 +88,7 @@ export const buildCommandContext = (
     : validTarget ?? originTarget ?? { rowCoordinate: 0, columnCoordinate: 0, sequenceId: null }
 
   return {
-    expectedProjectRevision: project.revision,
+    expectedProjectRevision: project.projectRevision,
     selection: reconcileSelection(projectRootCell(project, validTarget), selection),
     cursor: cursorTarget,
   }

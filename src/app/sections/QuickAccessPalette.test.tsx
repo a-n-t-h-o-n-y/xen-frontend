@@ -8,9 +8,10 @@ import { buildSessionReference } from '../domain/reference'
 import { libraryFixture } from '../domain/testFixtures'
 import { defaultKeymapDocument } from '../domain/defaultKeymap'
 import type { KeymapResource } from '../domain/models'
+import type { FilePaletteItem } from '../domain/palette'
 
 const commands = buildSessionReference({
-  schema_version: 3,
+  schema_version: 4,
   commands: [
     {
       path: ['transport', 'stop'],
@@ -88,14 +89,17 @@ const keymapResource: KeymapResource = {
 
 function PaletteHarness({
   execute = vi.fn().mockResolvedValue(undefined),
+  activateFile = vi.fn().mockResolvedValue(undefined),
   keymap = keymapResource,
 }: {
   execute?: (command: string) => Promise<void>
+  activateFile?: (file: FilePaletteItem) => Promise<void>
   keymap?: KeymapResource
 }) {
   const controller = useQuickAccessPalette({
     commands,
     executeBackendCommand: execute,
+    activateFile,
   })
   return (
     <>
@@ -123,7 +127,7 @@ describe('QuickAccessPalette', () => {
     await user.click(screen.getByRole('button', { name: 'Open all' }))
     const input = screen.getByRole('combobox')
     expect(input).toHaveFocus()
-    expect(screen.getByRole('option', { name: /Sequence: sequence/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Cell: sequence/i })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Project: song/i })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: /major \[4, 3\]/i })).not.toBeInTheDocument()
 
@@ -133,15 +137,19 @@ describe('QuickAccessPalette', () => {
     expect(screen.getByRole('option', { name: /Scale: major/i })).toBeInTheDocument()
   })
 
-  it('opens project documents with the backend-provided project command', async () => {
-    const execute = vi.fn().mockResolvedValue(undefined)
+  it('opens project documents through the dedicated file activation API', async () => {
+    const activateFile = vi.fn().mockResolvedValue(undefined)
     const user = userEvent.setup()
-    render(<PaletteHarness execute={execute} />)
+    render(<PaletteHarness activateFile={activateFile} />)
 
     await user.click(screen.getByRole('button', { name: 'Open all' }))
     await user.click(screen.getByRole('option', { name: /Project: song/i }))
 
-    await waitFor(() => expect(execute).toHaveBeenCalledWith('project open "song"'))
+    await waitFor(() => expect(activateFile).toHaveBeenCalledWith(expect.objectContaining({
+      fileKind: 'project',
+      relativePath: 'song.xenproj',
+      fileRevision: 'sha256:project',
+    })))
   })
 
   it('executes a zero-argument command directly', async () => {
@@ -232,12 +240,12 @@ describe('QuickAccessPalette', () => {
   })
 
   it('keeps failed actions open with an inline error', async () => {
-    const execute = vi.fn().mockRejectedValue(new Error('native rejected it'))
+    const activateFile = vi.fn().mockRejectedValue(new Error('native rejected it'))
     const user = userEvent.setup()
-    render(<PaletteHarness execute={execute} />)
+    render(<PaletteHarness activateFile={activateFile} />)
 
     await user.click(screen.getByRole('button', { name: 'Open all' }))
-    await user.click(screen.getByRole('option', { name: /Sequence: sequence/i }))
+    await user.click(screen.getByRole('option', { name: /Cell: sequence/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('native rejected it')
     expect(screen.getByRole('dialog', { name: 'Quick access' })).toBeInTheDocument()

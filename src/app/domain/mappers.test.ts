@@ -11,8 +11,9 @@ describe('DTO to domain mappers', () => {
   it('maps project snapshots to camelCase while preserving revision and pitch fields', () => {
     const project = projectFromDto(projectFixture(9))
 
-    expect(project.revision).toBe(9)
-    expect(project.historyEntryId).toBe(2)
+    expect(project.stateRevision).toBe('9')
+    expect(project.projectRevision).toBe('9')
+    expect(project.historyEntryId).toBe('2')
     expect(project.previewActive).toBe(false)
     expect(project.sequence.timeSignature).toEqual({ numerator: 4, denominator: 4 })
     expect(project.pitch.scale?.sourceId).toBe('scale:major')
@@ -24,7 +25,7 @@ describe('DTO to domain mappers', () => {
   it('maps arranged snapshots to sparse coordinate lookup maps', () => {
     const project = projectFromDto(arrangedProjectFixture(10))
 
-    expect(project.revision).toBe(10)
+    expect(project.projectRevision).toBe('10')
     expect(project.sequence.timeSignature).toEqual({ numerator: 7, denominator: 8 })
     expect(project.sequence.cell).toEqual({
       weight: 1,
@@ -81,9 +82,12 @@ describe('DTO to domain mappers', () => {
   it('maps library snapshots to camelCase resources and commands', () => {
     const library = libraryFromDto(libraryFixture(7))
 
-    expect(library.revision).toBe(7)
-    expect(library.cells[0]?.relativePath).toBe('sequence.xen')
-    expect(library.compositions[0]?.command).toBe('project open "song"')
+    expect(library.revision).toBe('7')
+    expect(library.cells[0]?.relativePath).toBe('sequence.xencell')
+    expect(library.projects[0]).toMatchObject({
+      relativePath: 'song.xenproj',
+      fileRevision: 'sha256:project',
+    })
     expect(library.tunings).toEqual([])
     expect(library.scales[1]).toMatchObject({
       id: 'scale:major',

@@ -107,9 +107,22 @@ const arrangedSequenceFromDto = (snapshot: ProjectSnapshotDto): Sequence => {
 export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot => {
   const pitchState = snapshot.project.composition.default_column.pitch
   return {
-    revision: snapshot.project_revision,
+    stateRevision: snapshot.state_revision,
+    projectRevision: snapshot.project_revision,
     historyEntryId: snapshot.history_entry_id,
     previewActive: snapshot.preview_active,
+    document: {
+      relativePath: snapshot.document.relative_path,
+      displayName: snapshot.document.display_name,
+      dirty: snapshot.document.dirty,
+      fileRevision: snapshot.document.file_revision,
+    },
+    recovery: snapshot.recovery ? {
+      revision: snapshot.recovery.revision,
+      savedAtUnixMs: snapshot.recovery.saved_at_unix_ms,
+      relativePath: snapshot.recovery.relative_path,
+      projectRevision: snapshot.recovery.project_revision,
+    } : null,
     sequence: arrangedSequenceFromDto(snapshot),
     sequenceBank: {
           nextId: snapshot.project.sequence_bank.next_id,
@@ -139,34 +152,22 @@ const pitchFromDto = (pitchState: ProjectSnapshotDto['project']['composition']['
 
 export const libraryFromDto = (snapshot: LibrarySnapshotDto): LibrarySnapshot => ({
   revision: snapshot.library_revision,
-  paths: snapshot.paths,
   cells: snapshot.cells.map((entry) => ({
     name: entry.name,
     relativePath: entry.relative_path,
     stem: entry.stem,
-    path: entry.path,
-    command: entry.command,
-    description: '',
-    intervals: [],
-    octave: null,
-    noteCount: null,
+    fileRevision: entry.file_revision,
   })),
-  compositions: snapshot.compositions.map((entry) => ({
+  projects: snapshot.projects.map((entry) => ({
     name: entry.name,
     relativePath: entry.relative_path,
     stem: entry.stem,
-    path: entry.path,
-    command: entry.command,
-    description: '',
-    intervals: [],
-    octave: null,
-    noteCount: null,
+    fileRevision: entry.file_revision,
   })),
   tunings: snapshot.tunings.map((entry) => ({
     name: entry.name,
     relativePath: entry.relative_path,
     stem: entry.stem,
-    path: entry.path,
     command: entry.command,
     description: entry.description,
     intervals: entry.intervals,

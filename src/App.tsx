@@ -19,6 +19,7 @@ import { CompositionSection } from './app/sections/CompositionSection'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { ModulationHeader } from './app/sections/ModulationHeader'
 import { NotificationToasts } from './app/sections/NotificationToasts'
+import { ProjectDocumentMenu } from './app/sections/ProjectDocumentMenu'
 import { SettingsOverlay } from './app/sections/SettingsOverlay'
 import { WorkspaceEditors } from './app/sections/WorkspaceEditors'
 import { QuickAccessPalette } from './app/sections/QuickAccessPalette'
@@ -39,6 +40,7 @@ import type {
   EditorState,
   TransportState,
 } from './app/domain/models'
+import type { FilePaletteItem } from './app/domain/palette'
 import {
   resolveSequenceEditorPresentation,
   type WorkspaceView,
@@ -105,6 +107,15 @@ function App() {
     keymapController,
     executeBackendCommand,
     beginBackendPreview,
+    documentBusy,
+    newProject,
+    openProject,
+    saveProject,
+    saveProjectAs,
+    importCell,
+    saveCell,
+    restoreRecovery,
+    discardRecovery,
   } = useProjectSession({
     transportRef,
     editorStateRef,
@@ -123,9 +134,12 @@ function App() {
     }
   }, [notify, statusLevel, statusMessage, statusRevision])
   const settingsOverlay = useSettingsOverlayState(keymapController.clearError)
+  const activateLibraryFile = useCallback((file: FilePaletteItem): Promise<void> =>
+    file.fileKind === 'project' ? openProject(file) : importCell(file), [importCell, openProject])
   const quickAccess = useQuickAccessPalette({
     commands: sessionReference.commands,
     executeBackendCommand,
+    activateFile: activateLibraryFile,
   })
   const openQuickAccess = quickAccess.open
   const openAllQuickAccess = useCallback((): void => {
@@ -154,6 +168,12 @@ function App() {
     : projectState.status === 'error'
       ? projectState.message
       : 'Project is loading'
+
+  useEffect(() => {
+    document.title = projectSnapshot
+      ? `${projectSnapshot.document.dirty ? '• ' : ''}${projectSnapshot.document.displayName} — XenSequencer`
+      : 'XenSequencer'
+  }, [projectSnapshot])
 
   const installCompositionSelection = useCallback((nextSelection: CompositionSelection): void => {
     compositionSelectionRef.current = nextSelection
@@ -451,6 +471,19 @@ function App() {
         tuningName={tuningName}
         sequenceName={headerSequenceName}
         currentInputMode={editorState.inputMode}
+        documentControls={(
+          <ProjectDocumentMenu
+            project={projectSnapshot}
+            busy={documentBusy}
+            disabledReason={disabledReason}
+            onNewProject={newProject}
+            onSaveProject={saveProject}
+            onSaveProjectAs={saveProjectAs}
+            onSaveCell={saveCell}
+            onRestoreRecovery={restoreRecovery}
+            onDiscardRecovery={discardRecovery}
+          />
+        )}
         onOpenQuickAccess={openAllQuickAccess}
         onOpenSettings={() => {
           quickAccess.close(false)

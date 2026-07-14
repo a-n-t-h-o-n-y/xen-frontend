@@ -48,6 +48,7 @@ type HeaderSectionProps = {
   tuningName: string
   sequenceName: string
   currentInputMode: InputMode
+  documentControls: ReactNode
   onOpenQuickAccess: () => void
   onOpenSettings: () => void
   onEnterModulation: () => void
@@ -98,6 +99,7 @@ export function HeaderSection({
   tuningName,
   sequenceName,
   currentInputMode,
+  documentControls,
   onOpenQuickAccess,
   onOpenSettings,
   onEnterModulation,
@@ -129,6 +131,7 @@ export function HeaderSection({
           </button>
         </div>
         <div className="headerActions">
+          {documentControls}
           <div className="headerInputStatus" aria-label={`Input mode ${currentInputMode}`}>
             <span className="headerInputStatusLabel">Input</span>
             <span className="headerInputStatusValue">

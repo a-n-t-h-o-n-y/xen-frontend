@@ -26,8 +26,9 @@ export type CommandInvocationPaletteItem = PaletteItemBase & {
 
 export type FilePaletteItem = PaletteItemBase & {
   kind: 'file'
-  fileKind: 'cell' | 'composition'
-  backendCommand: string
+  fileKind: 'cell' | 'project'
+  relativePath: string
+  fileRevision: string
 }
 
 export type TuningPaletteItem = PaletteItemBase & {
@@ -134,19 +135,20 @@ const libraryFileItems = (
     return {
       kind: 'file',
       fileKind,
-      id: `file:${fileKind}:${entry.path || entry.relativePath || entry.name}`,
+      id: `file:${fileKind}:${entry.relativePath || entry.name}`,
       label: leafName(sourceName),
-      detail: directory || entry.relativePath || entry.path,
+      detail: directory || entry.relativePath,
       keywords: ['file', fileKind, entry.name, entry.stem, entry.relativePath],
-      searchText: [entry.name, entry.stem, entry.relativePath, entry.path, `${fileKind} file`].join(' '),
+      searchText: [entry.name, entry.stem, entry.relativePath, `${fileKind} file`].join(' '),
       active: false,
-      backendCommand: entry.command,
+      relativePath: entry.relativePath,
+      fileRevision: entry.fileRevision,
     }
   })
 
 const fileItems = (library: LibrarySnapshot): FilePaletteItem[] => [
   ...libraryFileItems(library.cells, 'cell'),
-  ...libraryFileItems(library.compositions, 'composition'),
+  ...libraryFileItems(library.projects, 'project'),
 ]
 
 const tuningItems = (
@@ -161,7 +163,7 @@ const tuningItems = (
   ].filter(Boolean).join(' · ')
   return {
     kind: 'tuning',
-    id: `tuning:${tuning.path || tuning.relativePath || tuning.name}`,
+    id: `tuning:${tuning.relativePath || tuning.name}`,
     label: leafName(sourceName),
     detail: metadata,
     keywords: [tuning.name, tuning.stem, tuning.relativePath, 'tuning'],
@@ -169,7 +171,6 @@ const tuningItems = (
       tuning.name,
       tuning.stem,
       tuning.relativePath,
-      tuning.path,
       tuning.description,
       tuning.noteCount.toString(),
       tuning.octave.toString(),
