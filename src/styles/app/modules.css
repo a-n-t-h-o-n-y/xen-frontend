@@ -525,6 +525,200 @@
   background: var(--accent);
 }
 
+/* Catalog-driven modulation editor */
+.modulationDestinationControls,
+.modulationWaveControls,
+.modulationParameterControls {
+  display: grid;
+  align-items: end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.modulationDestinationControls {
+  grid-template-columns: minmax(7rem, 1.25fr) repeat(2, minmax(4.5rem, 0.75fr));
+}
+
+.modulationWaveControls {
+  position: relative;
+  grid-template-columns: minmax(9rem, 1.35fr) minmax(7rem, 1fr);
+}
+
+.modulationParameterControls {
+  grid-template-columns: minmax(6rem, 1.2fr) repeat(4, minmax(4.5rem, 1fr));
+}
+
+.modulationNumber,
+.modulationSelect,
+.modulationManagerTrigger,
+.modulationSelectedShape {
+  width: 100%;
+  min-width: 0;
+  height: var(--header-control-height);
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-size: var(--font-xs);
+}
+
+.modulationNumber,
+.modulationSelect {
+  padding: 0 var(--space-2);
+}
+
+.modulationManagerTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  cursor: pointer;
+}
+
+.modulationSelectedShape {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+}
+
+.modulationManagerTrigger:hover,
+.modulationSelect:hover,
+.modulationNumber:hover {
+  border-color: var(--border-strong-color);
+  background: var(--surface-control-hover);
+}
+
+.modulationManagerTrigger:focus-visible,
+.modulationSelect:focus-visible,
+.modulationNumber:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.modulationWaveManager {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 70;
+  display: grid;
+  gap: var(--space-2);
+  width: min(32rem, 72vw);
+  max-height: min(28rem, 62vh);
+  padding: var(--space-3);
+  border: var(--border-strong);
+  border-radius: var(--radius-2);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-md);
+}
+
+.modulationWaveManagerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.modulationWaveManagerHeader > div {
+  display: grid;
+  gap: 2px;
+}
+
+.modulationWaveManagerHeader strong {
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+}
+
+.modulationWaveManagerHeader span,
+.modulationWaveRole {
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+  text-transform: capitalize;
+}
+
+.modulationAddWave,
+.modulationRemoveWave,
+.modulationWaveSelect {
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-control);
+  color: var(--text-secondary);
+}
+
+.modulationAddWave {
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-2);
+}
+
+.modulationWaveRows {
+  display: grid;
+  gap: var(--space-1);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.modulationWaveRow {
+  display: grid;
+  grid-template-columns: 2rem 1.25rem minmax(8rem, 1fr) 4.75rem 2rem;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  padding: var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-1);
+}
+
+.modulationWaveRow-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.modulationWaveSelect,
+.modulationRemoveWave {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+
+.modulationWaveSelect[aria-pressed='true'] {
+  color: var(--accent-strong);
+}
+
+.modulationAddWave:hover:not(:disabled),
+.modulationRemoveWave:hover:not(:disabled),
+.modulationWaveSelect:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface-control-hover);
+  color: var(--text-primary);
+}
+
+.modulationAddWave:disabled,
+.modulationRemoveWave:disabled,
+.modulationWaveSelect:disabled,
+.modulationNumber:disabled,
+.modulationSelect:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (max-width: 980px) {
+  .modulationHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .modulationParameterControls {
+    grid-template-columns: minmax(6rem, 1.2fr) repeat(4, minmax(0, 1fr));
+  }
+
+  .modulationWaveManager {
+    width: min(36rem, calc(100vw - 3rem));
+  }
+}
+
 /* =========================================================
    Section 4: Sequence Bank Panel
    Purpose: 4x4 transport/selection matrix and per-slot states.

@@ -35,8 +35,6 @@ export type FrontendUiActionId =
   | 'edit.cut'
   | 'edit.paste'
   | 'modulator.mode.toggle'
-  | 'modulator.slot.select'
-  | 'modulator.target.toggle'
   | CommandUiActionId
 
 type UiActionMetadata = {
@@ -47,8 +45,6 @@ type UiActionMetadata = {
     | 'none'
     | 'selectionDirection'
     | 'inputMode'
-    | 'modulatorSlot'
-    | 'modTarget'
 }
 
 export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
@@ -166,18 +162,6 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     section: 'Modulators',
     argumentKind: 'none',
   },
-  'modulator.slot.select': {
-    id: 'modulator.slot.select',
-    label: 'Select modulator slot',
-    section: 'Modulators',
-    argumentKind: 'modulatorSlot',
-  },
-  'modulator.target.toggle': {
-    id: 'modulator.target.toggle',
-    label: 'Toggle modulator target',
-    section: 'Modulators',
-    argumentKind: 'modTarget',
-  },
   'command.open': {
     id: 'command.open',
     label: 'Open Quick Access commands',
@@ -284,12 +268,6 @@ export const formatUiActionTarget = (
   }
   if (target.action === 'input_mode.set') {
     return `Set input mode to ${target.arguments.mode}`
-  }
-  if (target.action === 'modulator.slot.select') {
-    return `Select modulator slot ${target.arguments.slot}`
-  }
-  if (target.action === 'modulator.target.toggle') {
-    return `Toggle ${target.arguments.target} modulator`
   }
   return uiActionRegistry[target.action].label
 }

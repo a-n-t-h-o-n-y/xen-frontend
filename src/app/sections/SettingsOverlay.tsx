@@ -27,7 +27,6 @@ import type {
   KeymapTrigger,
 } from '../domain/models'
 import type { CommandReferenceEntry } from '../domain/models'
-import type { ModTarget } from '../domain/modulation'
 
 type SettingsOverlayProps = {
   open: boolean
@@ -56,15 +55,12 @@ type EditorState = {
   direction: 'left' | 'right' | 'up' | 'down'
   amount: number
   mode: InputMode
-  modulatorSlot: 1 | 2 | 3 | 4
-  modTarget: ModTarget
   whenMode: InputMode | ''
   matchKind: 'key' | 'code'
   repeat: KeymapBinding['repeat']
 }
 
-const inputModes: InputMode[] = ['pitch', 'velocity', 'delay', 'gate', 'scale']
-const modTargets: ModTarget[] = ['pitch', 'velocity', 'delay', 'gate', 'weights']
+const inputModes: InputMode[] = ['pitch', 'velocity', 'delay', 'gate', 'weight', 'scale']
 const uiActionOptions = Object.values(uiActionRegistry)
 
 const editorFromBinding = (context: string, binding?: KeymapBinding): EditorState => {
@@ -87,12 +83,6 @@ const editorFromBinding = (context: string, binding?: KeymapBinding): EditorStat
       : 1,
     mode: target?.type === 'ui_action' && target.action === 'input_mode.set'
       ? target.arguments.mode
-      : 'pitch',
-    modulatorSlot: target?.type === 'ui_action' && target.action === 'modulator.slot.select'
-      ? target.arguments.slot
-      : 1,
-    modTarget: target?.type === 'ui_action' && target.action === 'modulator.target.toggle'
-      ? target.arguments.target
       : 'pitch',
     whenMode: binding?.trigger.when?.inputMode ?? '',
     matchKind: binding?.trigger.match.kind ?? 'key',
@@ -130,24 +120,9 @@ const targetFromEditor = (editor: EditorState): KeymapTarget => {
       arguments: { mode: editor.mode },
     }
   }
-  if (editor.targetType === 'modulator.slot.select') {
-    return {
-      type: 'ui_action',
-      action: 'modulator.slot.select',
-      arguments: { slot: editor.modulatorSlot },
-    }
-  }
-  if (editor.targetType === 'modulator.target.toggle') {
-    return {
-      type: 'ui_action',
-      action: 'modulator.target.toggle',
-      arguments: { target: editor.modTarget },
-    }
-  }
   const action = editor.targetType as Exclude<
     FrontendUiActionId,
-    'selection.move' | 'composition.selection.move' | 'input_mode.set' |
-    'modulator.slot.select' | 'modulator.target.toggle'
+    'selection.move' | 'composition.selection.move' | 'input_mode.set'
   >
   return {
     type: 'ui_action',
@@ -536,28 +511,6 @@ export function SettingsOverlay({
                   mode: event.target.value as InputMode,
                 })}>
                   {inputModes.map((mode) => <option value={mode} key={mode}>{mode}</option>)}
-                </select>
-              </label>
-            ) : null}
-            {editor.targetType === 'modulator.slot.select' ? (
-              <label className="settingsField">
-                <span>Modulator slot</span>
-                <select value={editor.modulatorSlot} onChange={(event) => setEditor({
-                  ...editor,
-                  modulatorSlot: Number(event.target.value) as EditorState['modulatorSlot'],
-                })}>
-                  {[1, 2, 3, 4].map((slot) => <option value={slot} key={slot}>{slot}</option>)}
-                </select>
-              </label>
-            ) : null}
-            {editor.targetType === 'modulator.target.toggle' ? (
-              <label className="settingsField">
-                <span>Modulator target</span>
-                <select value={editor.modTarget} onChange={(event) => setEditor({
-                  ...editor,
-                  modTarget: event.target.value as ModTarget,
-                })}>
-                  {modTargets.map((target) => <option value={target} key={target}>{target}</option>)}
                 </select>
               </label>
             ) : null}

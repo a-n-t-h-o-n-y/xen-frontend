@@ -56,7 +56,7 @@ describe('schema contract validation', () => {
 
   it('accepts envelopes and rejects invalid payloads', () => {
     expect(parseEnvelope({
-      protocol: 'xen.bridge.v6',
+      protocol: 'xen.bridge.v7',
       type: 'response',
       name: 'state.get',
       request_id: '1',
@@ -72,12 +72,17 @@ describe('schema contract validation', () => {
 
   it('validates hello catalog and opaque keymap storage', () => {
     const hello = parseSessionHello({
-      protocol: 'xen.bridge.v6',
+      protocol: 'xen.bridge.v7',
       plugin_version: '1.0.0',
       project_schema_version: 6,
       library_schema_version: 2,
+      binding: {
+        session_id: 'session-1',
+        instance_id: 'instance-1',
+        channel_id: 'drums',
+      },
       catalog: {
-        schema_version: 4,
+        schema_version: 5,
         commands: [{
           path: ['set', 'pitch'],
           keywords: ['note'],
@@ -97,6 +102,27 @@ describe('schema contract validation', () => {
           }],
           description: 'Set pitch',
         }],
+      },
+      modulation: {
+        schema_version: 1,
+        maximum_waveforms: 64,
+        waveform_shapes: ['sine', 'triangle', 'sawtooth_up', 'sawtooth_down', 'square'],
+        waveform_parameters: {
+          frequency: { minimum: 0, maximum: 1 },
+          phase: { minimum: 0, maximum: 1 },
+          amplitude: { minimum: -1, maximum: 1 },
+          amplitude_offset: { minimum: -1, maximum: 1 },
+        },
+        operations: [
+          { id: 'average', minimum_enabled_waveforms: 1 },
+          { id: 'ring', enabled_waveforms: 2, roles: ['carrier', 'modulator'] },
+        ],
+        destinations: [
+          { id: 'pitch', range: 'integer', quantization: 'nearest' },
+          { id: 'velocity', range: 'unit' },
+          { id: 'weight', range: 'positive' },
+        ],
+        normalization: 'clamp((raw + 1) / 2, 0, 1)',
       },
       keymap: {
         revision: '18446744073709551615',
@@ -180,6 +206,7 @@ describe('schema contract validation', () => {
         relative_path: 'legacy.xencomp',
         stem: 'legacy',
         file_revision: 'sha256:legacy',
+        command: 'project open "legacy.xencomp"',
       }],
     })).toThrow('Expected a .xenproj path')
     expect(() => parseLibrarySnapshot({
@@ -189,6 +216,7 @@ describe('schema contract validation', () => {
         relative_path: '/outside.xencell',
         stem: 'outside',
         file_revision: 'sha256:outside',
+        command: 'load cell "/outside.xencell"',
       }],
     })).toThrow('Expected a content-relative path')
     expect(() => parseLibrarySnapshot({
@@ -201,13 +229,13 @@ describe('schema contract validation', () => {
       snapshot: projectFixture(),
     }).status.message).toBe('ok')
     expect(parseBridgeEvent({
-      protocol: 'xen.bridge.v6',
+      protocol: 'xen.bridge.v7',
       type: 'event',
       name: 'library.changed',
       payload: libraryFixture(),
     }).name).toBe('library.changed')
     expect(parseBridgeEvent({
-      protocol: 'xen.bridge.v6',
+      protocol: 'xen.bridge.v7',
       type: 'event',
       name: 'preferences.changed',
       payload: {
@@ -215,6 +243,12 @@ describe('schema contract validation', () => {
         document: { schema_version: 1, theme: 'light', unknown: true },
       },
     }).name).toBe('preferences.changed')
+    expect(parseBridgeEvent({
+      protocol: 'xen.bridge.v7',
+      type: 'event',
+      name: 'phase.sync',
+      payload: { bpm: 120, phase: 0.5 },
+    }).name).toBe('phase.sync')
     expect(() => parseProjectSnapshot({ ...projectFixture(), schema_version: 5 })).toThrow()
     expect(() => parseProjectSnapshot({
       ...projectFixture(),

@@ -6,12 +6,11 @@ and new payloads.
 
 ## Transport and schemas
 
-JUCE exposes the native function `xenBridgeRequest` and event `xenBridgeEvent`. The
-WebView bridge uses `xen.bridge.v6`, and coordinator IPC uses `xen.ipc.v3`.
+JUCE exposes the native function `xenBridgeRequest` and event `xenBridgeEvent`.
 
 ```ts
 type Envelope = {
-  protocol: "xen.bridge.v6";
+  protocol: "xen.bridge.v7";
   type: "request" | "response" | "event";
   name: string;
   request_id?: string;
@@ -32,11 +31,12 @@ type CatalogCommand = {
 };
 
 type SessionHello = {
-  protocol: "xen.bridge.v6";
+  protocol: "xen.bridge.v7";
   plugin_version: string;
   project_schema_version: 6;
   library_schema_version: 2;
-  catalog: { schema_version: 4; commands: CatalogCommand[] };
+  catalog: { schema_version: 5; commands: CatalogCommand[] };
+  modulation: ModulationCatalog;
   binding: { session_id: string; instance_id: string; channel_id: string };
   keymap: KeymapResource;
   preferences: PreferencesResource;
@@ -130,16 +130,15 @@ type DocumentOperationResult = {
 };
 ```
 
-`state.get`, `state.changed`, document responses, preview responses, and
-`command.execute.payload.snapshot` all carry this shape. Ingest snapshots by
+`state.get`, `state.changed`, document responses, generic preview responses,
+modulation begin/end responses, and `command.execute.payload.snapshot` all carry this
+shape. Ingest snapshots by
 `state_revision`; use `project_revision` for optimistic project edits. A document save
 can advance `state_revision` without changing `project_revision`.
 
 The backend owns current path, clean baseline, dirty state, file-conflict token,
 recovery state, and unsaved-change enforcement for the shared multi-instance session.
-The frontend owns selection, input mode, and confirmation dialogs, and sends an
-explicit confirmation on retry. The nested `Project` retains the sequence bank, sparse
-composition arrangement, timing, tuning, scales, channels, and loop contract.
+The frontend owns confirmation dialogs and sends an explicit confirmation on retry.
 
 ### Project requests
 
@@ -249,9 +248,15 @@ needed, the frontend retries through the structured API.
 
 Preview requests are `preview.begin`, `preview.commit`, and `preview.cancel`; every
 `expected_project_revision` is a decimal string. Document operations are rejected while
-a preview is active, and the frontend disables document controls during preview for
-immediate feedback. Processor/DAW persistence always saves the persistent baseline, not
-transient preview state.
+a preview is active. Processor/DAW persistence always saves the persistent baseline,
+not transient preview state.
+
+Modulation uses the separate `modulation.preview.begin`, `.update`, `.commit`, and
+`.cancel` lifecycle. The begin/commit/cancel responses contain snapshots. Update
+responses are small acknowledgements and intentionally omit the project snapshot;
+accepted updates publish coalesced `state.changed` events at the coordinator maintenance
+rate. See [Modulation frontend specification](modulation_frontend_spec.md) for the
+complete schema, validation rules, target semantics, and client flow.
 
 ## Library resource
 
@@ -285,8 +290,7 @@ type LibrarySnapshot = {
 `library.get` and `library.changed` use this schema. Project discovery recognizes only
 `.xenproj`; the old `compositions` key and absolute per-entry `path` fields are gone.
 Successful project saves and cell exports advance `library_revision` and publish a
-library event to every instance. `library_revision` is an independent decimal-string
-freshness domain.
+library event to every instance.
 
 ## Persistence formats and limits
 
@@ -326,6 +330,6 @@ type BridgeEvent =
   | (Envelope & { name: "phase.sync" | "transport.stopped"; payload: object });
 ```
 
-After `session.hello`, request `state.get` and `library.get` concurrently; initial
-events are not guaranteed. Always ingest snapshots returned directly by a request as
-well as events, treating equal revisions as idempotent duplicates.
+After `session.hello`, request both `state.get` and `library.get`; initial events are
+not guaranteed. Always ingest snapshots returned directly by a request as well as
+events, treating equal revisions as idempotent duplicates.

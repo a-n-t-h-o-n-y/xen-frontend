@@ -65,6 +65,13 @@ add(trigger('v'), inputMode('velocity'))
 add(trigger('d'), inputMode('delay'))
 add(trigger('g'), inputMode('gate'))
 add(trigger('c'), inputMode('scale'))
+if (!(bindings.sequencer ?? []).some((binding) =>
+  binding.trigger.match.kind === 'key' &&
+  binding.trigger.match.value === 'w' &&
+  !Object.values(binding.trigger.modifiers).some(Boolean)
+)) {
+  add(trigger('w'), inputMode('weight'))
+}
 
 add(trigger('c', false, true), emptyAction('edit.copy'))
 add(trigger('x', false, true), emptyAction('edit.cut'))
@@ -110,6 +117,12 @@ for (const [mode, field, coarse, fine] of [
     addModeShift(mode, key, `shift ${field} ${sign}${coarse}`)
     addModeShift(mode, key, `shift ${field} ${sign}${fine}`, true)
   }
+}
+
+for (const [key, sign] of [
+  ['j', '-'], ['ArrowDown', '-'], ['k', '+'], ['ArrowUp', '+'],
+] as const) {
+  addModeShift('weight', key, `shift weight ${sign}0.1`)
 }
 
 for (const [key, sign] of [

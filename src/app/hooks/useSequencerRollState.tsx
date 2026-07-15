@@ -389,6 +389,16 @@ export function useSequencerRollState({
     [resolveSelectionSpans, selectionTraversal]
   )
 
+  const modulationTargetAvailable = useMemo(() => {
+    if (selectionTraversal.selectedElementKind === 'element') {
+      return selectionTraversal.selectedElement?.type === 'Sequence' &&
+        selectionTraversal.selectedElement.cells.length > 0
+    }
+    return selectionTraversal.currentCell.elements.some((element) =>
+      element.type === 'Sequence' && element.cells.length > 0
+    )
+  }, [selectionTraversal])
+
   const cellMuteWindow = useMemo((): RollCellMuteWindow | null => {
     if (selectionTraversal.selectedElementKind === 'element') {
       return {
@@ -419,5 +429,6 @@ export function useSequencerRollState({
     cellMuteWindow,
     sequenceDividerPositions,
     selectionSpans,
+    modulationTargetAvailable,
   }
 }

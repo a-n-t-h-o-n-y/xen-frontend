@@ -11,7 +11,7 @@ import type { KeymapResource } from '../domain/models'
 import type { FilePaletteItem } from '../domain/palette'
 
 const commands = buildSessionReference({
-  schema_version: 4,
+  schema_version: 5,
   commands: [
     {
       path: ['transport', 'stop'],

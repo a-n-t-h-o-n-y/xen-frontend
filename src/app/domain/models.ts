@@ -1,5 +1,6 @@
 import type { Cell, Sequence, Selection, SelectionPath } from './music'
 import type { InputMode, KeymapBinding, KeymapDocument, KeymapTarget, KeymapTrigger } from './keymap'
+import type { ModulationCatalog } from './modulation'
 
 export type MessageLevel = 'debug' | 'info' | 'warning' | 'error'
 export type TranslateDirection = 'up' | 'down'
@@ -166,6 +167,7 @@ export type ContentFile = {
   stem: string
   relativePath: string
   fileRevision: FileRevision
+  command: string
 }
 
 export type LibraryCommandEntry = {
@@ -173,6 +175,7 @@ export type LibraryCommandEntry = {
   stem: string
   command: string
   relativePath: string
+  fileRevision: FileRevision
   description: string
   intervals: number[]
   octave: number | null
@@ -210,6 +213,11 @@ export type LibraryChordEntry = {
 
 export type LibrarySnapshot = {
   revision: string
+  paths: {
+    library: string
+    content: string
+    tunings: string
+  }
   cells: ContentFile[]
   projects: ContentFile[]
   tunings: LibraryTuningEntry[]
@@ -235,7 +243,13 @@ export type CommandExecuteResponse = {
 
 export type SessionHello = {
   pluginVersion: string
+  binding: {
+    sessionId: string
+    instanceId: string
+    channelId: string
+  }
   catalog: SessionReference
+  modulation: ModulationCatalog
   keymap: KeymapResource
 }
 

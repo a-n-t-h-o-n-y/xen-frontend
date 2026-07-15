@@ -152,23 +152,27 @@ const pitchFromDto = (pitchState: ProjectSnapshotDto['project']['composition']['
 
 export const libraryFromDto = (snapshot: LibrarySnapshotDto): LibrarySnapshot => ({
   revision: snapshot.library_revision,
+  paths: snapshot.paths,
   cells: snapshot.cells.map((entry) => ({
     name: entry.name,
     relativePath: entry.relative_path,
     stem: entry.stem,
     fileRevision: entry.file_revision,
+    command: entry.command,
   })),
   projects: snapshot.projects.map((entry) => ({
     name: entry.name,
     relativePath: entry.relative_path,
     stem: entry.stem,
     fileRevision: entry.file_revision,
+    command: entry.command,
   })),
   tunings: snapshot.tunings.map((entry) => ({
     name: entry.name,
     relativePath: entry.relative_path,
     stem: entry.stem,
     command: entry.command,
+    fileRevision: entry.file_revision,
     description: entry.description,
     intervals: entry.intervals,
     octave: entry.octave,

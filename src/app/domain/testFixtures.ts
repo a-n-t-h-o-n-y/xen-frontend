@@ -1,5 +1,35 @@
 import type { LibrarySnapshotDto, ProjectSnapshotDto } from './contracts'
 import type { Cell } from './music'
+import type { ModulationCatalog } from './modulation'
+
+export const modulationCatalogFixture = (): ModulationCatalog => ({
+  schema_version: 1,
+  maximum_waveforms: 64,
+  waveform_shapes: ['sine', 'triangle', 'sawtooth_up', 'sawtooth_down', 'square'],
+  waveform_parameters: {
+    frequency: { minimum: 0, maximum: 1 },
+    phase: { minimum: 0, maximum: 1 },
+    amplitude: { minimum: -1, maximum: 1 },
+    amplitude_offset: { minimum: -1, maximum: 1 },
+  },
+  operations: [
+    { id: 'average', minimum_enabled_waveforms: 1 },
+    { id: 'sum', minimum_enabled_waveforms: 1 },
+    { id: 'product', minimum_enabled_waveforms: 1 },
+    { id: 'am', enabled_waveforms: 2, roles: ['carrier', 'modulator'] },
+    { id: 'ring', enabled_waveforms: 2, roles: ['carrier', 'modulator'] },
+    { id: 'fm', enabled_waveforms: 2, roles: ['carrier', 'modulator'] },
+    { id: 'pm', enabled_waveforms: 2, roles: ['carrier', 'modulator'] },
+  ],
+  destinations: [
+    { id: 'pitch', range: 'integer', quantization: 'nearest' },
+    { id: 'velocity', range: 'unit' },
+    { id: 'delay', range: 'unit' },
+    { id: 'gate', range: 'unit' },
+    { id: 'weight', range: 'positive' },
+  ],
+  normalization: 'clamp((raw + 1) / 2, 0, 1)',
+})
 
 export const nestedCell: Cell = {
   weight: 1,
@@ -173,12 +203,18 @@ export const arrangedProjectFixture = (revision: string | number = '3'): Project
 export const libraryFixture = (revision: string | number = '4'): LibrarySnapshotDto => ({
   schema_version: 2,
   library_revision: String(revision),
+  paths: {
+    library: '/Library/Xen',
+    content: '/Library/Xen/content',
+    tunings: '/Library/Xen/tunings',
+  },
   cells: [
     {
       name: 'sequence.xencell',
       relative_path: 'sequence.xencell',
       stem: 'sequence',
       file_revision: 'sha256:cell',
+      command: 'load cell "sequence.xencell"',
     },
   ],
   projects: [
@@ -187,6 +223,7 @@ export const libraryFixture = (revision: string | number = '4'): LibrarySnapshot
       relative_path: 'song.xenproj',
       stem: 'song',
       file_revision: 'sha256:project',
+      command: 'project open "song.xenproj"',
     },
   ],
   tunings: [],

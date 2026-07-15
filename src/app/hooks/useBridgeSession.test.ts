@@ -39,7 +39,7 @@ describe('useBridgeSession document lifecycle', () => {
       if (name === 'project.new' && requestMock.mock.calls.length === 1) {
         throw new BridgePayloadError('unsaved_changes', 'Unsaved changes')
       }
-      return { snapshot: projectFixture('4') }
+      return { snapshot: projectFixture('4'), file: null, suggested_selection: null }
     })
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { result } = renderHook(() => useBridgeSession(createArgs(requestMock as Request)))
@@ -60,7 +60,7 @@ describe('useBridgeSession document lifecycle', () => {
     const requestMock = vi.fn(async (name: string) => {
       if (name === 'project.save_as' && requestMock.mock.calls.length === 1) {
         throw new BridgePayloadError('file_exists', 'Target exists', {
-          file_revision: 'sha256:on-disk',
+          current_file_revision: 'sha256:on-disk',
         })
       }
       return {
@@ -71,6 +71,7 @@ describe('useBridgeSession document lifecycle', () => {
           stem: 'song',
           file_revision: 'sha256:saved',
         },
+        suggested_selection: null,
       }
     })
     vi.spyOn(window, 'prompt').mockReturnValue('sets/song.xenproj')
@@ -91,9 +92,48 @@ describe('useBridgeSession document lifecycle', () => {
     })
   })
 
+  it('retries an externally deleted project through save-as after confirmation', async () => {
+    const requestMock = vi.fn(async (name: string) => {
+      if (name === 'project.save') {
+        throw new BridgePayloadError('file_conflict', 'Project file was deleted', {
+          current_file_revision: null,
+        })
+      }
+      return {
+        snapshot: projectFixture('4'),
+        file: {
+          name: 'song.xenproj',
+          relative_path: 'song.xenproj',
+          stem: 'song',
+          file_revision: 'sha256:recreated',
+        },
+        suggested_selection: null,
+      }
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { result } = renderHook(() => useBridgeSession(createArgs(requestMock as Request)))
+
+    await act(async () => result.current.saveProject())
+
+    expect(requestMock).toHaveBeenNthCalledWith(1, 'project.save', {
+      expected_project_revision: '3',
+    })
+    expect(requestMock).toHaveBeenNthCalledWith(2, 'project.save_as', {
+      relative_path: 'song.xenproj',
+      expected_project_revision: '3',
+      expected_file_revision: null,
+    })
+  })
+
   it('imports a library cell with the current cursor and decimal project revision', async () => {
     const requestMock = vi.fn(async () => ({
       snapshot: projectFixture('4'),
+      file: {
+        name: 'bass.xencell',
+        relative_path: 'cells/bass.xencell',
+        stem: 'bass',
+        file_revision: 'sha256:bass',
+      },
       suggested_selection: { path: [] },
     }))
     const args = createArgs(requestMock as Request)

@@ -14,7 +14,7 @@ const responseEnvelope = (
   requestId: string,
   payload: Record<string, unknown>
 ) => ({
-  protocol: 'xen.bridge.v6',
+  protocol: 'xen.bridge.v7',
   type: 'response',
   name,
   request_id: requestId,
@@ -34,6 +34,62 @@ afterEach(() => {
 })
 
 describe('BridgeClient', () => {
+  it('serializes the dedicated modulation preview lifecycle', async () => {
+    const requests: Array<Record<string, unknown>> = []
+    const client = createClient(async (requestJson) => {
+      const request = JSON.parse(requestJson) as { name: string; request_id: string }
+      requests.push(request as unknown as Record<string, unknown>)
+      if (request.name === 'modulation.preview.update') {
+        return responseEnvelope(request.name, request.request_id, {
+          status: { level: 'info', message: 'ok' },
+          preview_id: 'mod-1',
+          accepted_update_sequence: '1',
+          accepted: true,
+          project_changed: true,
+          project_revision: '4',
+          state_revision: '9',
+        })
+      }
+      return responseEnvelope(request.name, request.request_id, {
+        status: { level: 'info', message: 'ok' },
+        preview_id: 'mod-1',
+        snapshot: projectFixture(),
+      })
+    })
+
+    await client.request('modulation.preview.begin', {
+      expected_project_revision: '3',
+      target: {
+        cursor: { row_coordinate: 0, column_coordinate: 0, sequence_id: null },
+        selection: { path: [] },
+        pattern: { offset: 0, intervals: [1] },
+      },
+    })
+    await client.request('modulation.preview.update', {
+      preview_id: 'mod-1',
+      update_sequence: '1',
+      expected_project_revision: '3',
+      destination: 'weight',
+      output_range: { minimum: 0.1, maximum: 2 },
+      modulation: {
+        operation: 'average',
+        waveforms: [{
+          enabled: true,
+          shape: 'sine',
+          frequency: 1,
+          phase: 0,
+          amplitude: 1,
+          amplitude_offset: 0,
+        }],
+      },
+    })
+
+    expect(requests.map((request) => request.name)).toEqual([
+      'modulation.preview.begin',
+      'modulation.preview.update',
+    ])
+  })
+
   it('builds typed request envelopes and returns validated payloads', async () => {
     let rawRequest = ''
     const client = createClient(async (requestJson) => {
@@ -45,7 +101,7 @@ describe('BridgeClient', () => {
 
     expect(payload.project_revision).toBe('3')
     expect(JSON.parse(rawRequest)).toEqual({
-      protocol: 'xen.bridge.v6',
+      protocol: 'xen.bridge.v7',
       type: 'request',
       name: 'state.get',
       request_id: 'req-test',
@@ -133,7 +189,11 @@ describe('BridgeClient', () => {
     let rawRequest = ''
     const client = createClient(async (requestJson) => {
       rawRequest = requestJson
-      return responseEnvelope('session.binding.set', 'req-test', {})
+      return responseEnvelope('session.binding.set', 'req-test', {
+        session_id: 'session-1',
+        instance_id: 'instance-1',
+        channel_id: 'drums',
+      })
     })
 
     await client.request('session.binding.set', {
@@ -157,25 +217,22 @@ describe('BridgeClient', () => {
         payload: Record<string, unknown>
       }
       requests.push(request)
-      if (request.name === 'project.save' || request.name === 'project.save_as' ||
-          request.name === 'cell.save') {
-        return responseEnvelope(request.name, 'req-test', {
-          snapshot: projectFixture('4'),
-          file: request.name === 'cell.save' ? {
+      const cellFile = {
             name: 'bass.xencell',
             relative_path: 'cells/bass.xencell',
             stem: 'bass',
             file_revision: 'sha256:updated-cell',
-          } : file,
-        })
       }
-      if (request.name === 'cell.import') {
-        return responseEnvelope(request.name, 'req-test', {
-          snapshot: projectFixture('4'),
-          suggested_selection: { path: [] },
-        })
-      }
-      return responseEnvelope(request.name, 'req-test', { snapshot: projectFixture('4') })
+      const hasProjectFile = request.name === 'project.open' ||
+        request.name === 'project.save' || request.name === 'project.save_as'
+      const hasCellFile = request.name === 'cell.import' || request.name === 'cell.save'
+      return responseEnvelope(request.name, 'req-test', {
+        snapshot: projectFixture('4'),
+        file: hasProjectFile ? file : hasCellFile ? cellFile : null,
+        suggested_selection: request.name === 'cell.import' || request.name === 'cell.save'
+          ? { path: [] }
+          : null,
+      })
     })
 
     await client.request('project.new', {
@@ -194,11 +251,11 @@ describe('BridgeClient', () => {
       expected_file_revision: null,
     })
     await client.request('project.recovery.restore', {
-      recovery_revision: '17',
+      recovery_revision: 'recovery:17-alpha',
       expected_project_revision: '3',
       discard_unsaved: true,
     })
-    await client.request('project.recovery.discard', { recovery_revision: '17' })
+    await client.request('project.recovery.discard', { recovery_revision: 'recovery:17-alpha' })
     await client.request('cell.import', {
       relative_path: 'cells/bass.xencell',
       expected_project_revision: '3',
@@ -339,7 +396,7 @@ describe('BridgeClient', () => {
         error: {
           code: 'file_exists',
           message: 'target exists',
-          details: { file_revision: 'sha256:on-disk' },
+          details: { current_file_revision: 'sha256:on-disk' },
         },
       })
     )
@@ -348,7 +405,7 @@ describe('BridgeClient', () => {
       name: 'BridgePayloadError',
       code: 'file_exists',
       message: 'target exists',
-      details: { file_revision: 'sha256:on-disk' },
+      details: { current_file_revision: 'sha256:on-disk' },
     } satisfies Partial<BridgePayloadError>)
   })
 

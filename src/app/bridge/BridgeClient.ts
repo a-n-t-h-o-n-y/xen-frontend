@@ -3,36 +3,44 @@ import { getXenBridgeRequest } from './juceBridge'
 import {
   BRIDGE_PROTOCOL,
   cellRelativePathSchema,
-  cellImportResponseSchema,
-  cellFileResponseSchema,
   commandResponseSchema,
   decimalRevisionSchema,
+  documentOperationResultSchema,
   envelopeSchema,
   fileRevisionSchema,
+  instanceBindingSchema,
   keymapStorageResourceSchema,
   keymapRevisionSchema,
   librarySnapshotSchema,
+  modulationDefinitionSchema,
+  modulationDestinationSchema,
+  modulationOutputRangeSchema,
+  modulationPreviewUpdateResponseSchema,
+  modulationTargetSchema,
   preferencesResourceSchema,
   preferencesRevisionSchema,
   projectSnapshotSchema,
   projectRelativePathSchema,
-  projectFileResponseSchema,
   previewBeginResponseSchema,
   previewEndResponseSchema,
-  projectSnapshotResponseSchema,
+  recoveryRevisionSchema,
   selectionSchema,
   sessionHelloSchema,
 } from '../domain/contracts'
 import { createRequestId } from '../utils/requestId'
 import type {
   CommandExecuteResponseDto,
-  CellImportResponseDto,
-  ContentFileResponseDto,
+  DocumentOperationResultDto,
+  InstanceBindingDto,
   KeymapStorageResourceDto,
   LibrarySnapshotDto,
+  ModulationDefinitionDto,
+  ModulationDestinationDto,
+  ModulationOutputRangeDto,
+  ModulationPreviewUpdateResponseDto,
+  ModulationTargetDto,
   PreferencesResourceDto,
   ProjectSnapshotDto,
-  ProjectSnapshotResponseDto,
   SelectionDto,
   SessionHelloDto,
 } from '../domain/contracts'
@@ -47,18 +55,20 @@ export type SessionHelloRequest = {
 
 type EmptyRequest = Record<string, never>
 
+export type CommandCursor = {
+  row_coordinate: number
+  column_coordinate: number
+  sequence_id: number | null
+}
+
 export type CommandExecuteRequest = {
   command: string
-  context: {
-    expected_project_revision: string
+  context?: {
+    expected_project_revision?: string | undefined
     preview_id?: string | undefined
-    selection: SelectionDto
-    cursor: {
-      row_coordinate: number
-      column_coordinate: number
-      sequence_id: number | null
-    }
-  }
+    selection?: SelectionDto | undefined
+    cursor: CommandCursor
+  } | undefined
 }
 
 export type PreviewBeginRequest = {
@@ -67,6 +77,20 @@ export type PreviewBeginRequest = {
 
 export type PreviewEndRequest = PreviewBeginRequest & {
   preview_id: string
+}
+
+export type ModulationPreviewBeginRequest = {
+  expected_project_revision: string
+  target: ModulationTargetDto
+}
+
+export type ModulationPreviewUpdateRequest = {
+  preview_id: string
+  update_sequence: string
+  expected_project_revision: string
+  destination: ModulationDestinationDto
+  output_range: ModulationOutputRangeDto
+  modulation: ModulationDefinitionDto
 }
 
 export type KeymapWriteRequest = {
@@ -119,7 +143,7 @@ export type RecoveryDiscardRequest = {
 
 export type CellImportRequest = ProjectSaveRequest & {
   relative_path: string
-  cursor: CommandExecuteRequest['context']['cursor']
+  cursor: CommandCursor
 }
 
 export type CellSaveRequest = CellImportRequest & {
@@ -132,9 +156,13 @@ export type BridgeMethodMap = {
     request: SessionHelloRequest
     response: SessionHelloDto
   }
+  'session.binding.get': {
+    request: EmptyRequest
+    response: InstanceBindingDto
+  }
   'session.binding.set': {
     request: SessionBindingSetRequest
-    response: EmptyRequest
+    response: InstanceBindingDto
   }
   'state.get': {
     request: EmptyRequest
@@ -146,35 +174,35 @@ export type BridgeMethodMap = {
   }
   'project.new': {
     request: ProjectNewRequest
-    response: ProjectSnapshotResponseDto
+    response: DocumentOperationResultDto
   }
   'project.open': {
     request: ProjectOpenRequest
-    response: ProjectSnapshotResponseDto
+    response: DocumentOperationResultDto
   }
   'project.save': {
     request: ProjectSaveRequest
-    response: ContentFileResponseDto
+    response: DocumentOperationResultDto
   }
   'project.save_as': {
     request: ProjectSaveAsRequest
-    response: ContentFileResponseDto
+    response: DocumentOperationResultDto
   }
   'project.recovery.restore': {
     request: RecoveryRestoreRequest
-    response: ProjectSnapshotResponseDto
+    response: DocumentOperationResultDto
   }
   'project.recovery.discard': {
     request: RecoveryDiscardRequest
-    response: ProjectSnapshotResponseDto
+    response: DocumentOperationResultDto
   }
   'cell.import': {
     request: CellImportRequest
-    response: CellImportResponseDto
+    response: DocumentOperationResultDto
   }
   'cell.save': {
     request: CellSaveRequest
-    response: ContentFileResponseDto
+    response: DocumentOperationResultDto
   }
   'command.execute': {
     request: CommandExecuteRequest
@@ -189,6 +217,22 @@ export type BridgeMethodMap = {
     response: import('../domain/contracts').PreviewEndResponseDto
   }
   'preview.cancel': {
+    request: PreviewEndRequest
+    response: import('../domain/contracts').PreviewEndResponseDto
+  }
+  'modulation.preview.begin': {
+    request: ModulationPreviewBeginRequest
+    response: import('../domain/contracts').PreviewBeginResponseDto
+  }
+  'modulation.preview.update': {
+    request: ModulationPreviewUpdateRequest
+    response: ModulationPreviewUpdateResponseDto
+  }
+  'modulation.preview.commit': {
+    request: PreviewEndRequest
+    response: import('../domain/contracts').PreviewEndResponseDto
+  }
+  'modulation.preview.cancel': {
     request: PreviewEndRequest
     response: import('../domain/contracts').PreviewEndResponseDto
   }
@@ -265,21 +309,26 @@ const preferencesDeleteRequestSchema = z.object({
 
 const responseSchemas = {
   'session.hello': sessionHelloSchema,
-  'session.binding.set': z.object({}).strict(),
+  'session.binding.get': instanceBindingSchema,
+  'session.binding.set': instanceBindingSchema,
   'state.get': projectSnapshotSchema,
   'library.get': librarySnapshotSchema,
-  'project.new': projectSnapshotResponseSchema,
-  'project.open': projectSnapshotResponseSchema,
-  'project.save': projectFileResponseSchema,
-  'project.save_as': projectFileResponseSchema,
-  'project.recovery.restore': projectSnapshotResponseSchema,
-  'project.recovery.discard': projectSnapshotResponseSchema,
-  'cell.import': cellImportResponseSchema,
-  'cell.save': cellFileResponseSchema,
+  'project.new': documentOperationResultSchema,
+  'project.open': documentOperationResultSchema,
+  'project.save': documentOperationResultSchema,
+  'project.save_as': documentOperationResultSchema,
+  'project.recovery.restore': documentOperationResultSchema,
+  'project.recovery.discard': documentOperationResultSchema,
+  'cell.import': documentOperationResultSchema,
+  'cell.save': documentOperationResultSchema,
   'command.execute': commandResponseSchema,
   'preview.begin': previewBeginResponseSchema,
   'preview.commit': previewEndResponseSchema,
   'preview.cancel': previewEndResponseSchema,
+  'modulation.preview.begin': previewBeginResponseSchema,
+  'modulation.preview.update': modulationPreviewUpdateResponseSchema,
+  'modulation.preview.commit': previewEndResponseSchema,
+  'modulation.preview.cancel': previewEndResponseSchema,
   'keymap.read': keymapStorageResourceSchema,
   'keymap.write': keymapStorageResourceSchema,
   'keymap.delete': keymapStorageResourceSchema,
@@ -294,6 +343,7 @@ const requestSchemas = {
     frontend_app: z.string(),
     frontend_version: z.string(),
   }),
+  'session.binding.get': z.object({}).strict(),
   'session.binding.set': z.object({
     channel_id: z.string().min(1),
   }),
@@ -302,11 +352,11 @@ const requestSchemas = {
   'command.execute': z.object({
     command: z.string(),
     context: z.object({
-      expected_project_revision: decimalRevisionSchema,
+      expected_project_revision: decimalRevisionSchema.optional(),
       preview_id: z.string().min(1).optional(),
-      selection: selectionSchema,
+      selection: selectionSchema.optional(),
       cursor: cursorSchema,
-    }),
+    }).optional(),
   }),
   'project.new': projectRevisionRequestSchema.extend({
     discard_unsaved: z.boolean(),
@@ -321,11 +371,11 @@ const requestSchemas = {
     expected_file_revision: fileRevisionSchema.nullable(),
   }),
   'project.recovery.restore': projectRevisionRequestSchema.extend({
-    recovery_revision: decimalRevisionSchema,
+    recovery_revision: recoveryRevisionSchema,
     discard_unsaved: z.boolean(),
   }),
   'project.recovery.discard': z.object({
-    recovery_revision: decimalRevisionSchema,
+    recovery_revision: recoveryRevisionSchema,
   }),
   'cell.import': projectRevisionRequestSchema.extend({
     relative_path: cellRelativePathSchema,
@@ -346,6 +396,26 @@ const requestSchemas = {
     preview_id: z.string().min(1),
     expected_project_revision: decimalRevisionSchema,
   }),
+  'modulation.preview.begin': z.object({
+    expected_project_revision: decimalRevisionSchema,
+    target: modulationTargetSchema,
+  }),
+  'modulation.preview.update': z.object({
+    preview_id: z.string().min(1),
+    update_sequence: decimalRevisionSchema,
+    expected_project_revision: decimalRevisionSchema,
+    destination: modulationDestinationSchema,
+    output_range: modulationOutputRangeSchema,
+    modulation: modulationDefinitionSchema,
+  }),
+  'modulation.preview.commit': z.object({
+    preview_id: z.string().min(1),
+    expected_project_revision: decimalRevisionSchema,
+  }),
+  'modulation.preview.cancel': z.object({
+    preview_id: z.string().min(1),
+    expected_project_revision: decimalRevisionSchema,
+  }),
   'keymap.read': z.object({}).strict(),
   'keymap.write': keymapWriteRequestSchema,
   'keymap.delete': keymapDeleteRequestSchema,
@@ -356,6 +426,7 @@ const requestSchemas = {
 
 const defaultTimeouts = {
   'session.hello': 5_000,
+  'session.binding.get': 5_000,
   'session.binding.set': 15_000,
   'state.get': 5_000,
   'library.get': 5_000,
@@ -371,6 +442,10 @@ const defaultTimeouts = {
   'preview.begin': 15_000,
   'preview.commit': 15_000,
   'preview.cancel': 15_000,
+  'modulation.preview.begin': 15_000,
+  'modulation.preview.update': 15_000,
+  'modulation.preview.commit': 15_000,
+  'modulation.preview.cancel': 15_000,
   'keymap.read': 5_000,
   'keymap.write': 15_000,
   'keymap.delete': 15_000,

@@ -239,6 +239,25 @@
   vector-effect: non-scaling-stroke;
 }
 
+.rollModulatorOverlay .modWaveLine {
+  fill: none;
+  stroke: var(--text-tertiary);
+  stroke-width: 1.1;
+  opacity: 0.48;
+}
+
+.rollModulatorOverlay .modWaveLine-selected {
+  stroke: var(--text-primary);
+  stroke-width: 1.8;
+  opacity: 0.86;
+}
+
+.rollModulatorOverlay .modWaveLine-mix {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  opacity: 1;
+}
+
 .rollModulatorOverlay .modWaveHandle {
   position: absolute;
   width: 0.82rem;
@@ -265,6 +284,21 @@
   opacity: 0.34;
   background: transparent;
   box-shadow: none;
+}
+
+.rollModulatorEmpty {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-4);
+  max-width: 28rem;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-overlay);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  text-align: center;
+  transform: translateX(-50%);
 }
 
 /* =========================================================

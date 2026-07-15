@@ -23,7 +23,6 @@ import type {
   MessageLevel,
   ProjectSnapshot,
 } from '../domain/models'
-import type { ModTarget } from '../domain/modulation'
 
 type WorkspaceView = 'composition' | 'sequencer'
 
@@ -52,9 +51,6 @@ type UseKeyboardControllerArgs = {
   isModulatorMode: boolean
   exitModulatorMode: () => void
   setIsModulatorMode: Dispatch<SetStateAction<boolean>>
-  selectActiveModulatorTab: (index: number) => void
-  setOpenWaveMenu: Dispatch<SetStateAction<'a' | 'b' | null>>
-  toggleActiveModulatorTarget: (target: ModTarget) => void
   setStatusMessage: Dispatch<SetStateAction<string>>
   setStatusLevel: Dispatch<SetStateAction<MessageLevel>>
 }
@@ -84,9 +80,6 @@ export function useKeyboardController({
   isModulatorMode,
   exitModulatorMode,
   setIsModulatorMode,
-  selectActiveModulatorTab,
-  setOpenWaveMenu,
-  toggleActiveModulatorTarget,
   setStatusMessage,
   setStatusLevel,
 }: UseKeyboardControllerArgs) {
@@ -333,8 +326,7 @@ export function useKeyboardController({
         }
         if (
           action !== 'modulator.mode.toggle' &&
-          action !== 'modulator.slot.select' &&
-          action !== 'modulator.target.toggle'
+          action !== 'input_mode.set'
         ) {
           event.preventDefault()
           pendingNumberRef.current = ''
@@ -472,25 +464,11 @@ export function useKeyboardController({
             }
 
             if (matchedBinding.target.action === 'modulator.mode.toggle') {
-              if (workspaceViewRef.current !== 'sequencer') return
-              setIsModulatorMode((previous) => {
-                const next = !previous
-                if (!next) {
-                  setOpenWaveMenu(null)
-                }
-                return next
-              })
-              return
-            }
-
-            if (matchedBinding.target.action === 'modulator.slot.select') {
-              selectActiveModulatorTab(matchedBinding.target.arguments.slot - 1)
-              return
-            }
-
-            if (matchedBinding.target.action === 'modulator.target.toggle') {
-              const target = matchedBinding.target.arguments.target as ModTarget
-              toggleActiveModulatorTarget(target)
+              if (
+                workspaceViewRef.current !== 'sequencer' ||
+                editorStateRef.current.inputMode === 'scale'
+              ) return
+              setIsModulatorMode((previous) => !previous)
               return
             }
 
@@ -564,16 +542,13 @@ export function useKeyboardController({
     openCommandPalette,
     projectRef,
     runSelectedCompositionAction,
-    selectActiveModulatorTab,
     setIsModulatorMode,
     setLoopEnd,
     setLoopStart,
-    setOpenWaveMenu,
     setStatusLevel,
     setStatusMessage,
     setWorkspaceView,
     settingsOpen,
-    toggleActiveModulatorTarget,
     toggleWorkspaceView,
     workspaceViewRef,
   ])

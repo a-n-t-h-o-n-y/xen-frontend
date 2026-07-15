@@ -80,9 +80,6 @@ const renderController = (
     isModulatorMode: options.isModulatorMode ?? false,
     exitModulatorMode: options.exitModulatorMode ?? vi.fn(),
     setIsModulatorMode: options.setIsModulatorMode ?? vi.fn(),
-    selectActiveModulatorTab: vi.fn(),
-    setOpenWaveMenu: vi.fn(),
-    toggleActiveModulatorTarget: vi.fn(),
     setStatusMessage: vi.fn(),
     setStatusLevel: vi.fn(),
   }
@@ -141,6 +138,35 @@ describe('useKeyboardController', () => {
     act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm' })))
 
     expect(setIsModulatorMode).toHaveBeenCalledOnce()
+    rendered.unmount()
+  })
+
+  it('does not enter modulation mode while Scale input is active', () => {
+    const keymap = createResource()
+    const template = keymap.bindings.sequencer?.find((binding) =>
+      binding.target.type === 'ui_action' && binding.target.action === 'command.open'
+    )
+    if (!template) throw new Error('Expected command binding')
+    const binding = structuredClone(template)
+    binding.trigger.match.value = 'm'
+    binding.trigger.modifiers = {
+      shift: false,
+      alt: false,
+      primary: false,
+      control: false,
+      meta: false,
+    }
+    binding.target = { type: 'ui_action', action: 'modulator.mode.toggle', arguments: {} }
+    keymap.bindings.sequencer?.push(binding)
+    const setIsModulatorMode = vi.fn()
+    const rendered = renderController(keymap, vi.fn(), vi.fn(), {
+      editorStateRef: { current: { selection: { path: [] }, inputMode: 'scale' } },
+      setIsModulatorMode,
+    })
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm' })))
+
+    expect(setIsModulatorMode).not.toHaveBeenCalled()
     rendered.unmount()
   })
 

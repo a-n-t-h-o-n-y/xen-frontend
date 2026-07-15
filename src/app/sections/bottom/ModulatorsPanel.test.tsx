@@ -1,114 +1,62 @@
-import { createRef } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { createInitialModulatorPanelState } from '../../domain/modulation'
+import { createInitialModulationEditorState } from '../../domain/modulation'
+import { modulationCatalogFixture } from '../../domain/testFixtures'
 import { ModulatorsPanel } from './ModulatorsPanel'
 
-const renderPanel = (activeModulator = createInitialModulatorPanelState()) => {
-  const beginContinuousEdit = vi.fn(() => true)
-  const commitContinuousEdit = vi.fn()
-  const cancelContinuousEdit = vi.fn()
-  const onWaveLerpChange = vi.fn()
-  const selectWaveType = vi.fn()
-  render(
-    <ModulatorsPanel
-      activeModulatorTab={0}
-      activeModulator={activeModulator}
-      selectActiveModulatorTab={vi.fn()}
-      selectWaveType={selectWaveType}
-      onWaveLerpChange={onWaveLerpChange}
-      onWaveAPulseWidthChange={vi.fn()}
-      onWaveBPulseWidthChange={vi.fn()}
-      clampNumber={(value, min, max) => Math.max(min, Math.min(value, max))}
-      setTargetEnabled={vi.fn()}
-      resetTargetControl={vi.fn()}
-      padDragRef={createRef()}
-      applyPadMotion={vi.fn()}
-      tuningLength={12}
-      beginContinuousEdit={beginContinuousEdit}
-      commitContinuousEdit={commitContinuousEdit}
-      cancelContinuousEdit={cancelContinuousEdit}
-    />
-  )
-  return {
-    slider: screen.getByRole('slider', { name: 'Wave lerp' }),
-    beginContinuousEdit,
-    commitContinuousEdit,
-    cancelContinuousEdit,
-    onWaveLerpChange,
-    selectWaveType,
-  }
-}
-
-describe('modulator continuous controls', () => {
-  it('uses compact waveform dropdowns', async () => {
+describe('ModulatorsPanel', () => {
+  it('uses one destination and an anchored catalog-driven waveform manager', async () => {
     const user = userEvent.setup()
-    const controls = renderPanel()
+    const catalog = modulationCatalogFixture()
+    const state = createInitialModulationEditorState(catalog, 12)
+    const setDestination = vi.fn()
+    const setWaveformManagerOpen = vi.fn()
+    const applyAtomicState = vi.fn()
+    const { rerender } = render(
+      <ModulatorsPanel
+        catalog={catalog}
+        destination="pitch"
+        state={state}
+        busy={false}
+        waveformManagerOpen={false}
+        setWaveformManagerOpen={setWaveformManagerOpen}
+        setDestination={setDestination}
+        updateLocalState={vi.fn()}
+        applyAtomicState={applyAtomicState}
+        beginContinuousEdit={vi.fn(() => true)}
+        updateContinuousState={vi.fn()}
+        commitContinuousEdit={vi.fn()}
+        cancelContinuousEdit={vi.fn()}
+      />
+    )
 
-    await user.click(screen.getByRole('button', { name: 'Wave A waveform' }))
-    await user.click(screen.getByRole('option', { name: 'Square' }))
+    await user.click(screen.getByRole('button', { name: 'Modulation destination' }))
+    await user.click(screen.getByRole('option', { name: 'Weight' }))
+    expect(setDestination).toHaveBeenCalledWith('weight')
 
-    expect(controls.selectWaveType).toHaveBeenCalledExactlyOnceWith('a', 'square')
-    expect(screen.getByRole('button', { name: 'Wave B waveform' })).toHaveTextContent('Triangle')
-  })
+    await user.click(screen.getByRole('button', { name: 'Waveforms' }))
+    expect(setWaveformManagerOpen).toHaveBeenCalledWith(true)
 
-  it('shows a symmetric amplitude range clamped around the target center', () => {
-    const activeModulator = createInitialModulatorPanelState()
-    activeModulator.targetControls.velocity.center = 0.8
-    activeModulator.targetControls.velocity.amount = -0.5
-    renderPanel(activeModulator)
-
-    const target = screen.getByText('Velocity').closest('.modTargetItem')
-    const range = target?.querySelector<HTMLElement>('.modTargetChipCenter')
-
-    expect(Number.parseFloat(range?.style.getPropertyValue('--mod-range-start') ?? '')).toBeCloseTo(30)
-    expect(Number.parseFloat(range?.style.getPropertyValue('--mod-range-width') ?? '')).toBeCloseTo(70)
-  })
-
-  it('begins on pointer down, previews changes, and commits on pointer up', () => {
-    const controls = renderPanel()
-
-    fireEvent.pointerDown(controls.slider)
-    fireEvent.change(controls.slider, { target: { value: '0.75' } })
-    fireEvent.pointerUp(controls.slider)
-
-    expect(controls.beginContinuousEdit).toHaveBeenCalledOnce()
-    expect(controls.onWaveLerpChange).toHaveBeenCalledExactlyOnceWith(0.75)
-    expect(controls.commitContinuousEdit).toHaveBeenCalledOnce()
-  })
-
-  it('groups repeated slider key changes until keyup', () => {
-    const controls = renderPanel()
-
-    fireEvent.keyDown(controls.slider, { key: 'ArrowRight', repeat: false })
-    fireEvent.keyDown(controls.slider, { key: 'ArrowRight', repeat: true })
-    fireEvent.change(controls.slider, { target: { value: '0.52' } })
-    fireEvent.keyUp(controls.slider, { key: 'ArrowRight' })
-
-    expect(controls.beginContinuousEdit).toHaveBeenCalledOnce()
-    expect(controls.commitContinuousEdit).toHaveBeenCalledOnce()
-  })
-
-  it('cancels an active slider gesture on focus loss', () => {
-    const controls = renderPanel()
-
-    fireEvent.keyDown(controls.slider, { key: 'PageUp', repeat: false })
-    fireEvent.blur(controls.slider)
-
-    expect(controls.beginContinuousEdit).toHaveBeenCalledOnce()
-    expect(controls.cancelContinuousEdit).toHaveBeenCalledOnce()
-  })
-
-  it('does not let delayed pointer focus loss cancel another gesture', () => {
-    const controls = renderPanel()
-
-    fireEvent.pointerDown(controls.slider)
-    fireEvent.pointerUp(controls.slider)
-    fireEvent.blur(controls.slider)
-
-    expect(controls.beginContinuousEdit).toHaveBeenCalledOnce()
-    expect(controls.commitContinuousEdit).toHaveBeenCalledOnce()
-    expect(controls.cancelContinuousEdit).not.toHaveBeenCalled()
+    rerender(
+      <ModulatorsPanel
+        catalog={catalog}
+        destination="pitch"
+        state={state}
+        busy={false}
+        waveformManagerOpen
+        setWaveformManagerOpen={setWaveformManagerOpen}
+        setDestination={setDestination}
+        updateLocalState={vi.fn()}
+        applyAtomicState={applyAtomicState}
+        beginContinuousEdit={vi.fn(() => true)}
+        updateContinuousState={vi.fn()}
+        commitContinuousEdit={vi.fn()}
+        cancelContinuousEdit={vi.fn()}
+      />
+    )
+    expect(screen.getByRole('dialog', { name: 'Waveform manager' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '+ Add waveform' }))
+    expect(applyAtomicState).toHaveBeenCalledOnce()
   })
 })

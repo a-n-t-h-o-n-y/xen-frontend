@@ -2,7 +2,7 @@ import { usesMetaForCommand } from '../platform'
 import { formatUiActionTarget } from './uiActions'
 import type { KeymapResource } from './models'
 
-export type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'scale'
+export type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'weight' | 'scale'
 
 export type KeymapTrigger = {
   match: {
@@ -69,20 +69,6 @@ export type UiActionKeymapTarget =
       arguments: {
         direction: 'left' | 'right' | 'up' | 'down'
         amount: number
-      }
-    }
-  | {
-      type: 'ui_action'
-      action: 'modulator.slot.select'
-      arguments: {
-        slot: 1 | 2 | 3 | 4
-      }
-    }
-  | {
-      type: 'ui_action'
-      action: 'modulator.target.toggle'
-      arguments: {
-        target: 'pitch' | 'velocity' | 'delay' | 'gate' | 'weights'
       }
     }
   | {

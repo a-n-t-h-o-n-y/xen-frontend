@@ -1,10 +1,10 @@
 import { z } from 'zod'
 
-export const BRIDGE_PROTOCOL = 'xen.bridge.v6'
+export const BRIDGE_PROTOCOL = 'xen.bridge.v7'
 export const IPC_PROTOCOL = 'xen.ipc.v3'
 export const PROJECT_SCHEMA_VERSION = 6
 export const LIBRARY_SCHEMA_VERSION = 2
-export const CATALOG_SCHEMA_VERSION = 4
+export const CATALOG_SCHEMA_VERSION = 5
 export const KEYMAP_SCHEMA_VERSION = 2
 
 const finiteNumber = z.number().finite()
@@ -16,6 +16,7 @@ export const decimalRevisionSchema = z.string().regex(/^\d+$/, 'Expected a decim
 export const keymapRevisionSchema = decimalRevisionSchema
 export const preferencesRevisionSchema = decimalRevisionSchema
 export const fileRevisionSchema = z.string().min(1)
+export const recoveryRevisionSchema = z.string().min(1)
 const contentRelativePathSchema = z.string().min(1).refine(
   (path) => {
     if (path.startsWith('/') || path.includes('\\') || /^[a-zA-Z]:/.test(path)) return false
@@ -31,7 +32,87 @@ export const cellRelativePathSchema = contentRelativePathSchema.refine(
   (path) => path.endsWith('.xencell'),
   'Expected a .xencell path'
 )
-const modTargetIdSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'weights'])
+export const modulationShapeSchema = z.enum([
+  'sine',
+  'triangle',
+  'sawtooth_up',
+  'sawtooth_down',
+  'square',
+])
+export const modulationOperationIdSchema = z.enum([
+  'average',
+  'sum',
+  'product',
+  'am',
+  'ring',
+  'fm',
+  'pm',
+])
+export const modulationDestinationSchema = z.enum([
+  'pitch',
+  'velocity',
+  'delay',
+  'gate',
+  'weight',
+])
+
+const unitParameterRangeSchema = z.object({
+  minimum: z.literal(0),
+  maximum: z.literal(1),
+}).strict()
+const bipolarParameterRangeSchema = z.object({
+  minimum: z.literal(-1),
+  maximum: z.literal(1),
+}).strict()
+
+export const modulationCatalogSchema = z.object({
+  schema_version: z.literal(1),
+  maximum_waveforms: z.literal(64),
+  waveform_shapes: z.array(modulationShapeSchema).min(1),
+  waveform_parameters: z.object({
+    frequency: unitParameterRangeSchema,
+    phase: unitParameterRangeSchema,
+    amplitude: bipolarParameterRangeSchema,
+    amplitude_offset: bipolarParameterRangeSchema,
+  }).strict(),
+  operations: z.array(z.object({
+    id: modulationOperationIdSchema,
+    minimum_enabled_waveforms: z.literal(1).optional(),
+    enabled_waveforms: z.literal(2).optional(),
+    roles: z.tuple([z.literal('carrier'), z.literal('modulator')]).optional(),
+  }).strict()).min(1),
+  destinations: z.array(z.discriminatedUnion('id', [
+    z.object({
+      id: z.literal('pitch'),
+      range: z.literal('integer'),
+      quantization: z.literal('nearest'),
+    }).strict(),
+    z.object({ id: z.literal('velocity'), range: z.literal('unit') }).strict(),
+    z.object({ id: z.literal('delay'), range: z.literal('unit') }).strict(),
+    z.object({ id: z.literal('gate'), range: z.literal('unit') }).strict(),
+    z.object({ id: z.literal('weight'), range: z.literal('positive') }).strict(),
+  ])).min(1),
+  normalization: z.literal('clamp((raw + 1) / 2, 0, 1)'),
+}).strict()
+
+export const modulationWaveformSchema = z.object({
+  enabled: z.boolean(),
+  shape: modulationShapeSchema,
+  frequency: finiteNumber,
+  phase: finiteNumber,
+  amplitude: finiteNumber,
+  amplitude_offset: finiteNumber,
+}).strict()
+
+export const modulationDefinitionSchema = z.object({
+  operation: modulationOperationIdSchema,
+  waveforms: z.array(modulationWaveformSchema).min(1).max(64),
+}).strict()
+
+export const modulationOutputRangeSchema = z.object({
+  minimum: finiteNumber,
+  maximum: finiteNumber,
+}).strict()
 
 export const selectionStepSchema = z.object({
   kind: z.enum(['element', 'cell']),
@@ -52,6 +133,19 @@ export const selectionSchema = z.object({
     }
   })
 })
+
+export const modulationTargetSchema = z.object({
+  cursor: z.object({
+    row_coordinate: compositionCoordinateSchema,
+    column_coordinate: compositionCoordinateSchema,
+    sequence_id: nonNegativeInteger.nullable(),
+  }).strict(),
+  selection: selectionSchema,
+  pattern: z.object({
+    offset: nonNegativeInteger,
+    intervals: z.array(z.number().int().positive()).min(1),
+  }).strict(),
+}).strict()
 
 export const noteSchema = z.object({
   type: z.literal('Note'),
@@ -228,7 +322,7 @@ export const arrangementProjectSnapshotSchema = z.object({
     file_revision: fileRevisionSchema.nullable(),
   }).strict(),
   recovery: z.object({
-    revision: decimalRevisionSchema,
+    revision: recoveryRevisionSchema,
     saved_at_unix_ms: decimalRevisionSchema,
     relative_path: projectRelativePathSchema.nullable(),
     project_revision: decimalRevisionSchema,
@@ -252,12 +346,15 @@ export const arrangementProjectSnapshotSchema = z.object({
 
 export const projectSnapshotSchema = arrangementProjectSnapshotSchema
 
-export const contentFileSchema = z.object({
+export const documentFileSchema = z.object({
   name: z.string(),
   relative_path: contentRelativePathSchema,
   stem: z.string(),
   file_revision: fileRevisionSchema,
 }).strict()
+export const contentFileSchema = documentFileSchema.extend({
+  command: z.string(),
+})
 export const cellContentFileSchema = contentFileSchema.extend({
   relative_path: cellRelativePathSchema,
 })
@@ -265,16 +362,12 @@ export const projectContentFileSchema = contentFileSchema.extend({
   relative_path: projectRelativePathSchema,
 })
 
-const tuningEntrySchema = z.object({
-  name: z.string(),
-  relative_path: contentRelativePathSchema,
-  stem: z.string(),
-  command: z.string(),
+const tuningEntrySchema = contentFileSchema.extend({
   description: z.string(),
   intervals: z.array(finiteNumber),
   octave: finiteNumber,
   note_count: finiteNumber,
-}).strict()
+})
 
 const chromaticScaleSchema = z.object({
   id: z.literal('chromatic'),
@@ -293,6 +386,11 @@ const definedScaleSchema = z.object({
 export const librarySnapshotSchema = z.object({
   schema_version: z.literal(LIBRARY_SCHEMA_VERSION),
   library_revision: decimalRevisionSchema,
+  paths: z.object({
+    library: z.string(),
+    content: z.string(),
+    tunings: z.string(),
+  }).strict(),
   cells: z.array(cellContentFileSchema),
   projects: z.array(projectContentFileSchema),
   tunings: z.array(tuningEntrySchema),
@@ -338,7 +436,7 @@ export const catalogSchema = z.object({
   commands: z.array(catalogCommandSchema),
 })
 
-export const inputModeSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'scale'])
+export const inputModeSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'weight', 'scale'])
 
 export const keymapTriggerSchema = z.object({
   match: z.object({
@@ -421,20 +519,6 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     type: z.literal('ui_action'),
-    action: z.literal('modulator.slot.select'),
-    arguments: z.object({
-      slot: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
-    }),
-  }),
-  z.object({
-    type: z.literal('ui_action'),
-    action: z.literal('modulator.target.toggle'),
-    arguments: z.object({
-      target: modTargetIdSchema,
-    }),
-  }),
-  z.object({
-    type: z.literal('ui_action'),
     action: z.enum([
       'command.open',
       'command.cancel',
@@ -510,12 +594,20 @@ export const preferencesResourceSchema = z.object({
   document: z.record(z.string(), z.unknown()).nullable(),
 })
 
+export const instanceBindingSchema = z.object({
+  session_id: z.string(),
+  instance_id: z.string(),
+  channel_id: z.string(),
+}).strict()
+
 export const sessionHelloSchema = z.object({
   protocol: z.literal(BRIDGE_PROTOCOL),
   plugin_version: z.string(),
   project_schema_version: z.literal(PROJECT_SCHEMA_VERSION),
   library_schema_version: z.literal(LIBRARY_SCHEMA_VERSION),
   catalog: catalogSchema,
+  modulation: modulationCatalogSchema,
+  binding: instanceBindingSchema,
   keymap: keymapStorageResourceSchema,
   preferences: preferencesResourceSchema,
 })
@@ -539,25 +631,11 @@ export const commandResponseSchema = z.object({
   snapshot: projectSnapshotSchema,
 })
 
-export const projectSnapshotResponseSchema = z.object({
+export const documentOperationResultSchema = z.object({
   snapshot: projectSnapshotSchema,
-})
-
-export const contentFileResponseSchema = projectSnapshotResponseSchema.extend({
-  file: contentFileSchema,
-})
-
-export const projectFileResponseSchema = projectSnapshotResponseSchema.extend({
-  file: projectContentFileSchema,
-})
-
-export const cellFileResponseSchema = projectSnapshotResponseSchema.extend({
-  file: cellContentFileSchema,
-})
-
-export const cellImportResponseSchema = projectSnapshotResponseSchema.extend({
+  file: documentFileSchema.nullable(),
   suggested_selection: selectionSchema.nullable(),
-})
+}).strict()
 
 export const previewBeginResponseSchema = z.object({
   status: commandStatusSchema,
@@ -569,6 +647,16 @@ export const previewEndResponseSchema = z.object({
   status: commandStatusSchema,
   snapshot: projectSnapshotSchema,
 })
+
+export const modulationPreviewUpdateResponseSchema = z.object({
+  status: commandStatusSchema,
+  preview_id: z.string().min(1),
+  accepted_update_sequence: decimalRevisionSchema,
+  accepted: z.boolean(),
+  project_changed: z.boolean(),
+  project_revision: decimalRevisionSchema,
+  state_revision: decimalRevisionSchema,
+}).strict()
 
 export const bridgeEventSchema = z.discriminatedUnion('name', [
   envelopeSchema.extend({
@@ -601,6 +689,14 @@ export const bridgeEventSchema = z.discriminatedUnion('name', [
   }),
   envelopeSchema.extend({
     type: z.literal('event'),
+    name: z.literal('phase.sync'),
+    payload: z.object({
+      bpm: finiteNumber,
+      phase: finiteNumber,
+    }),
+  }),
+  envelopeSchema.extend({
+    type: z.literal('event'),
     name: z.literal('transport.stopped'),
     payload: z.object({}),
   }),
@@ -614,15 +710,21 @@ export type SelectionPathDto = SelectionDto['path']
 export type SequenceEntryDto = z.infer<typeof sequenceEntrySchema>
 export type ScaleDefinitionDto = z.infer<typeof scaleDefinitionSchema>
 export type ProjectSnapshotDto = z.infer<typeof projectSnapshotSchema>
+export type DocumentFileDto = z.infer<typeof documentFileSchema>
 export type ContentFileDto = z.infer<typeof contentFileSchema>
 export type LibrarySnapshotDto = z.infer<typeof librarySnapshotSchema>
 export type CatalogDto = z.infer<typeof catalogSchema>
 export type CatalogCommandDto = z.infer<typeof catalogCommandSchema>
 export type SessionHelloDto = z.infer<typeof sessionHelloSchema>
+export type ModulationCatalogDto = z.infer<typeof modulationCatalogSchema>
+export type ModulationDefinitionDto = z.infer<typeof modulationDefinitionSchema>
+export type ModulationDestinationDto = z.infer<typeof modulationDestinationSchema>
+export type ModulationShapeDto = z.infer<typeof modulationShapeSchema>
+export type ModulationOutputRangeDto = z.infer<typeof modulationOutputRangeSchema>
+export type ModulationTargetDto = z.infer<typeof modulationTargetSchema>
+export type InstanceBindingDto = SessionHelloDto['binding']
 export type CommandExecuteResponseDto = z.infer<typeof commandResponseSchema>
-export type ProjectSnapshotResponseDto = z.infer<typeof projectSnapshotResponseSchema>
-export type ContentFileResponseDto = z.infer<typeof contentFileResponseSchema>
-export type CellImportResponseDto = z.infer<typeof cellImportResponseSchema>
+export type DocumentOperationResultDto = z.infer<typeof documentOperationResultSchema>
 export type InputModeDto = z.infer<typeof inputModeSchema>
 export type KeymapTriggerDto = z.infer<typeof keymapTriggerSchema>
 export type KeymapTargetDto = z.infer<typeof keymapTargetSchema>
@@ -643,6 +745,9 @@ export const parseBridgeEvent = (value: unknown) => bridgeEventSchema.parse(valu
 
 export type PreviewBeginResponseDto = z.infer<typeof previewBeginResponseSchema>
 export type PreviewEndResponseDto = z.infer<typeof previewEndResponseSchema>
+export type ModulationPreviewUpdateResponseDto = z.infer<
+  typeof modulationPreviewUpdateResponseSchema
+>
 export const parseKeymapDocument = (value: unknown): KeymapDocumentDto =>
   keymapDocumentSchema.parse(value)
 export const parseKeymapStorageResource = (value: unknown): KeymapStorageResourceDto =>

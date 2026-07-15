@@ -1,397 +1,341 @@
-import { useRef } from 'react'
-import type { CSSProperties, KeyboardEvent } from 'react'
+import { useEffect, useRef } from 'react'
 import { ListboxPicker } from '../../ui/ListboxPicker'
 import {
-  MOD_TARGET_ORDER,
-  getModTargetSpecForTuning,
-  WAVE_OPTIONS,
-  WAVE_OPTION_LABELS,
-  type ModTarget,
-  type ModulatorPanelState,
-  type WaveType,
+  MODULATION_DESTINATION_LABELS,
+  MODULATION_OPERATION_LABELS,
+  MODULATION_SHAPE_LABELS,
+  createEditorWaveform,
+  getSelectedWaveform,
+  operationAcceptsEnabledCount,
+} from '../../domain/modulation'
+import type { ChangeEvent } from 'react'
+import type {
+  ModulationCatalog,
+  ModulationDestination,
+  ModulationEditorState,
+  ModulationOperation,
+  ModulationShape,
 } from '../../domain/modulation'
 
-type PadDragState = {
-  pointerId: number
-  target: ModTarget
-  mode: 'amount' | 'center'
-  host: HTMLDivElement
-  startClientX: number
-  startClientY: number
-  startAmount: number
-  startCenter: number
-}
+type StateUpdater = (current: ModulationEditorState) => ModulationEditorState
 
 type ModulatorsPanelProps = {
-  activeModulatorTab: number
-  activeModulator: ModulatorPanelState
-  selectActiveModulatorTab: (index: number) => void
-  selectWaveType: (wave: 'a' | 'b', waveType: WaveType) => void
-  onWaveLerpChange: (value: number) => void
-  onWaveAPulseWidthChange: (value: number) => void
-  onWaveBPulseWidthChange: (value: number) => void
-  clampNumber: (value: number, min: number, max: number) => number
-  setTargetEnabled: (target: ModTarget, enabled: boolean) => void
-  resetTargetControl: (target: ModTarget) => void
-  padDragRef: { current: PadDragState | null }
-  applyPadMotion: (
-    target: ModTarget,
-    host: HTMLDivElement,
-    clientX: number,
-    clientY: number,
-    mode: 'amount' | 'center',
-    start: {
-      startClientX: number
-      startClientY: number
-      startAmount: number
-      startCenter: number
-    },
-    precision: 'fine' | 'coarse'
-  ) => void
-  tuningLength: number
+  catalog: ModulationCatalog
+  destination: ModulationDestination
+  state: ModulationEditorState
+  busy: boolean
+  waveformManagerOpen: boolean
+  setWaveformManagerOpen: (open: boolean) => void
+  setDestination: (destination: ModulationDestination) => void
+  updateLocalState: (update: StateUpdater) => void
+  applyAtomicState: (update: StateUpdater) => void
   beginContinuousEdit: () => boolean
+  updateContinuousState: (update: StateUpdater) => void
   commitContinuousEdit: () => void
   cancelContinuousEdit: () => void
 }
 
-const RANGE_ADJUSTMENT_KEYS = new Set([
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-  'ArrowUp',
-  'End',
-  'Home',
-  'PageDown',
-  'PageUp',
-])
-
-const useContinuousRangeKeyboardEdit = (
-  begin: () => boolean,
-  commit: () => void,
-  cancel: () => void
-) => {
-  const keyboardActiveRef = useRef(false)
-
-  return {
-    onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
-      if (RANGE_ADJUSTMENT_KEYS.has(event.key) && !event.repeat) {
-        keyboardActiveRef.current = begin()
-      }
-    },
-    onKeyUp: (event: KeyboardEvent<HTMLInputElement>) => {
-      if (!RANGE_ADJUSTMENT_KEYS.has(event.key) || !keyboardActiveRef.current) return
-      keyboardActiveRef.current = false
-      commit()
-    },
-    onBlur: () => {
-      if (!keyboardActiveRef.current) return
-      keyboardActiveRef.current = false
-      cancel()
-    },
-  }
-}
-
-const formatSignedAmount = (value: number): string => {
-  if (Math.abs(value) < 0.005) {
-    return '0'
-  }
-  const formatted = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2)
-  return value > 0 ? `+${formatted}` : formatted
-}
-
-const WAVE_PICKER_OPTIONS = WAVE_OPTIONS.map((option) => ({
-  id: option,
-  name: WAVE_OPTION_LABELS[option],
-}))
-
-function WaveSelectControl({
-  wave,
-  label,
-  waveType,
-  pulseWidth,
-  setPulseWidth,
-  selectWaveType,
-  beginContinuousEdit,
-  commitContinuousEdit,
-  cancelContinuousEdit,
-}: {
-  wave: 'a' | 'b'
-  label: string
-  waveType: WaveType
-  pulseWidth: number
-  setPulseWidth: (value: number) => void
-  selectWaveType: (wave: 'a' | 'b', waveType: WaveType) => void
-  beginContinuousEdit: () => boolean
-  commitContinuousEdit: () => void
-  cancelContinuousEdit: () => void
-}) {
-  const keyboardEditHandlers = useContinuousRangeKeyboardEdit(
-    beginContinuousEdit,
-    commitContinuousEdit,
-    cancelContinuousEdit
-  )
-
-  return (
-    <div className="modulationField modRailWaveSelect">
-      <span className="fieldLabel">{label}</span>
-      <div className="modRailWaveControl">
-        <ListboxPicker
-          className="modRailWavePickerControl"
-          options={WAVE_PICKER_OPTIONS}
-          selectedId={waveType}
-          selectedName={WAVE_OPTION_LABELS[waveType]}
-          triggerLabel={`${label} waveform`}
-          listLabel={`${label} waveforms`}
-          onSelect={(option) => selectWaveType(wave, option as WaveType)}
-        />
-        {waveType === 'square' ? (
-          <label className="modRailPulseControl">
-            <span className="modRailPulseLabel">PW</span>
-            <input
-              className="modulatorSlider modulatorTopLerp"
-              type="range"
-              min={0.05}
-              max={0.95}
-              step={0.01}
-              value={pulseWidth}
-              onChange={(event) => setPulseWidth(Number(event.target.value))}
-              onPointerDown={() => beginContinuousEdit()}
-              onPointerUp={commitContinuousEdit}
-              onPointerCancel={cancelContinuousEdit}
-              {...keyboardEditHandlers}
-            />
-            <span className="modRailPulseValue mono">{pulseWidth.toFixed(2)}</span>
-          </label>
-        ) : null}
-      </div>
-    </div>
-  )
-}
+const formatValue = (value: number): string => Number.isInteger(value)
+  ? value.toFixed(0)
+  : value.toFixed(2)
 
 export function ModulatorsPanel({
-  activeModulatorTab,
-  activeModulator,
-  selectActiveModulatorTab,
-  selectWaveType,
-  onWaveLerpChange,
-  onWaveAPulseWidthChange,
-  onWaveBPulseWidthChange,
-  clampNumber,
-  setTargetEnabled,
-  resetTargetControl,
-  padDragRef,
-  applyPadMotion,
-  tuningLength,
+  catalog,
+  destination,
+  state,
+  busy,
+  waveformManagerOpen,
+  setWaveformManagerOpen,
+  setDestination,
+  updateLocalState,
+  applyAtomicState,
   beginContinuousEdit,
+  updateContinuousState,
   commitContinuousEdit,
   cancelContinuousEdit,
 }: ModulatorsPanelProps) {
-  const lerpKeyboardEditHandlers = useContinuousRangeKeyboardEdit(
-    beginContinuousEdit,
-    commitContinuousEdit,
-    cancelContinuousEdit
+  const managerRef = useRef<HTMLDivElement>(null)
+  const selected = getSelectedWaveform(state)
+  const enabledCount = state.waveforms.filter((waveform) => waveform.enabled).length
+  const operation = catalog.operations.find((entry) => entry.id === state.operation)
+
+  useEffect(() => {
+    if (!waveformManagerOpen) return
+    const closeOutside = (event: PointerEvent): void => {
+      if (!managerRef.current?.contains(event.target as Node)) setWaveformManagerOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
+  }, [setWaveformManagerOpen, waveformManagerOpen])
+
+  const updateNumber = (
+    createUpdate: (value: number) => StateUpdater,
+    event: ChangeEvent<HTMLInputElement>
+  ): void => {
+    const value = Number(event.target.value)
+    if (Number.isFinite(value)) updateContinuousState(createUpdate(value))
+  }
+
+  const destinationOptions = catalog.destinations.map((entry) => ({
+    id: entry.id,
+    name: MODULATION_DESTINATION_LABELS[entry.id],
+  }))
+  const shapeOptions = catalog.waveform_shapes.map((shape) => ({
+    id: shape,
+    name: MODULATION_SHAPE_LABELS[shape],
+  }))
+  const validOperations = catalog.operations.filter((entry) =>
+    operationAcceptsEnabledCount(catalog, entry.id, enabledCount)
   )
+  const range = state.outputRanges[destination]
 
   return (
     <>
-      <section
-        className="headerControlGroup modulationControlGroup modulationControlGroup-mode"
-        aria-label="Modulator slots"
-      >
-        <h2 className="headerGroupLabel">Mods</h2>
-        <div className="modTabs" role="tablist" aria-label="Modulator slots">
-          {Array.from({ length: 4 }, (_, index) => (
-            <button
-              key={`mod-tab-${index}`}
-              type="button"
-              className={`modTab${activeModulatorTab === index ? ' modTab-active' : ''}`}
-              onClick={() => selectActiveModulatorTab(index)}
-              role="tab"
-              aria-selected={activeModulatorTab === index}
-            >
-              {index + 1}
-            </button>
+      <section className="headerControlGroup modulationControlGroup" aria-label="Destination">
+        <h2 className="headerGroupLabel">Target</h2>
+        <div className="modulationDestinationControls">
+          <label className="modulationField">
+            <span className="fieldLabel">Destination</span>
+            <ListboxPicker
+              options={destinationOptions}
+              selectedId={destination}
+              selectedName={MODULATION_DESTINATION_LABELS[destination]}
+              triggerLabel="Modulation destination"
+              listLabel="Modulation destinations"
+              disabled={busy}
+              onSelect={(id) => setDestination(id as ModulationDestination)}
+            />
+          </label>
+          {(['minimum', 'maximum'] as const).map((endpoint) => (
+            <label className="modulationField" key={endpoint}>
+              <span className="fieldLabel">{endpoint === 'minimum' ? 'Minimum' : 'Maximum'}</span>
+              <input
+                className="modulationNumber mono"
+                type="number"
+                step={destination === 'pitch' ? 1 : 0.01}
+                value={range[endpoint]}
+                disabled={busy}
+                onFocus={beginContinuousEdit}
+                onChange={(event) => updateNumber((value) => (current) => ({
+                  ...current,
+                  outputRanges: {
+                    ...current.outputRanges,
+                    [destination]: { ...current.outputRanges[destination], [endpoint]: value },
+                  },
+                }), event)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitContinuousEdit()
+                  if (event.key === 'Escape') cancelContinuousEdit()
+                }}
+                onBlur={commitContinuousEdit}
+              />
+            </label>
           ))}
         </div>
       </section>
-      <section
-        className="headerControlGroup modulationControlGroup modulationControlGroup-source"
-        aria-label="Modulation source"
-      >
-        <h2 className="headerGroupLabel">Source</h2>
-        <div className="modulatorRailControls">
-          <WaveSelectControl
-            wave="a"
-            label="Wave A"
-            waveType={activeModulator.waveAType}
-            pulseWidth={activeModulator.waveAPulseWidth}
-            setPulseWidth={onWaveAPulseWidthChange}
-            selectWaveType={selectWaveType}
-            beginContinuousEdit={beginContinuousEdit}
-            commitContinuousEdit={commitContinuousEdit}
-            cancelContinuousEdit={cancelContinuousEdit}
-          />
-          <label className="modulationField modRailLerp">
-            <span className="fieldLabel modRailLerpLabel">
-              <span>Blend</span>
-              <span className="modRailLerpValue mono">
-                {Math.round(activeModulator.waveLerp * 100)}%
-              </span>
-            </span>
-            <input
-              className="modulatorSlider modulatorTopLerp"
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={activeModulator.waveLerp}
-              onChange={(event) => onWaveLerpChange(Number(event.target.value))}
-              onPointerDown={() => beginContinuousEdit()}
-              onPointerUp={commitContinuousEdit}
-              onPointerCancel={cancelContinuousEdit}
-              {...lerpKeyboardEditHandlers}
-              aria-label="Wave lerp"
-            />
+
+      <section className="headerControlGroup modulationControlGroup" aria-label="Waveforms">
+        <h2 className="headerGroupLabel">Waves</h2>
+        <div className="modulationWaveControls" ref={managerRef}>
+          <label className="modulationField modulationWaveManagerField">
+            <span className="fieldLabel">Waveforms</span>
+            <button
+              type="button"
+              className="modulationManagerTrigger"
+              aria-haspopup="dialog"
+              aria-expanded={waveformManagerOpen}
+              onClick={() => setWaveformManagerOpen(!waveformManagerOpen)}
+            >
+              <span aria-hidden="true">∿</span>
+              <span>{enabledCount}/{state.waveforms.length} enabled</span>
+            </button>
           </label>
-          <WaveSelectControl
-            wave="b"
-            label="Wave B"
-            waveType={activeModulator.waveBType}
-            pulseWidth={activeModulator.waveBPulseWidth}
-            setPulseWidth={onWaveBPulseWidthChange}
-            selectWaveType={selectWaveType}
-            beginContinuousEdit={beginContinuousEdit}
-            commitContinuousEdit={commitContinuousEdit}
-            cancelContinuousEdit={cancelContinuousEdit}
-          />
+          <label className="modulationField">
+            <span className="fieldLabel">Combine</span>
+            <select
+              className="modulationSelect"
+              value={state.operation}
+              disabled={busy}
+              onChange={(event) => applyAtomicState((current) => ({
+                ...current,
+                operation: event.target.value as ModulationOperation,
+              }))}
+            >
+              {validOperations.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {MODULATION_OPERATION_LABELS[entry.id]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {waveformManagerOpen ? (
+            <div className="modulationWaveManager" role="dialog" aria-label="Waveform manager">
+              <div className="modulationWaveManagerHeader">
+                <div>
+                  <strong>Waveforms</strong>
+                  <span>{state.waveforms.length} of {catalog.maximum_waveforms}</span>
+                </div>
+                <button
+                  type="button"
+                  className="modulationAddWave"
+                  disabled={busy || state.waveforms.length >= catalog.maximum_waveforms}
+                  onClick={() => applyAtomicState((current) => {
+                    const fixedTwo = operation?.enabled_waveforms === 2 ||
+                      ['am', 'ring', 'fm', 'pm'].includes(state.operation)
+                    const waveform = createEditorWaveform(
+                      catalog.waveform_shapes[0] ?? 'sine',
+                      !fixedTwo
+                    )
+                    return {
+                      ...current,
+                      waveforms: [...current.waveforms, waveform],
+                      selectedWaveformId: waveform.id,
+                    }
+                  })}
+                >
+                  + Add waveform
+                </button>
+              </div>
+              <div className="modulationWaveRows">
+                {state.waveforms.map((waveform) => {
+                  const enabledIndex = state.waveforms.filter((entry) => entry.enabled)
+                    .findIndex((entry) => entry.id === waveform.id)
+                  const role = operation?.roles?.[enabledIndex] ?? (
+                    operation?.enabled_waveforms === 2 ||
+                    ['am', 'ring', 'fm', 'pm'].includes(state.operation)
+                      ? enabledIndex === 0 ? 'carrier' : enabledIndex === 1 ? 'modulator' : undefined
+                      : undefined
+                  )
+                  const nextEnabledCount = enabledCount + (waveform.enabled ? -1 : 1)
+                  const canToggle = operationAcceptsEnabledCount(
+                    catalog,
+                    state.operation,
+                    nextEnabledCount
+                  )
+                  const countAfterRemoval = enabledCount - (waveform.enabled ? 1 : 0)
+                  const canRemove = state.waveforms.length > 1 && operationAcceptsEnabledCount(
+                    catalog,
+                    state.operation,
+                    countAfterRemoval
+                  )
+                  return (
+                    <div
+                      className={`modulationWaveRow${waveform.id === selected.id ? ' modulationWaveRow-selected' : ''}`}
+                      key={waveform.id}
+                    >
+                      <button
+                        type="button"
+                        className="modulationWaveSelect"
+                        aria-label={`Select waveform ${state.waveforms.indexOf(waveform) + 1}`}
+                        aria-pressed={waveform.id === selected.id}
+                        onClick={() => updateLocalState((current) => ({
+                          ...current,
+                          selectedWaveformId: waveform.id,
+                        }))}
+                      >
+                        <span aria-hidden="true">∿</span>
+                      </button>
+                      <input
+                        type="checkbox"
+                        aria-label={`Enable waveform ${state.waveforms.indexOf(waveform) + 1}`}
+                        checked={waveform.enabled}
+                        disabled={busy || !canToggle}
+                        onChange={() => applyAtomicState((current) => ({
+                          ...current,
+                          waveforms: current.waveforms.map((entry) => entry.id === waveform.id
+                            ? { ...entry, enabled: !entry.enabled }
+                            : entry),
+                        }))}
+                      />
+                      <ListboxPicker
+                        options={shapeOptions}
+                        selectedId={waveform.shape}
+                        selectedName={MODULATION_SHAPE_LABELS[waveform.shape]}
+                        triggerLabel={`Waveform ${state.waveforms.indexOf(waveform) + 1} shape`}
+                        listLabel="Waveform shapes"
+                        disabled={busy}
+                        onSelect={(id) => applyAtomicState((current) => ({
+                          ...current,
+                          waveforms: current.waveforms.map((entry) => entry.id === waveform.id
+                            ? { ...entry, shape: id as ModulationShape }
+                            : entry),
+                        }))}
+                      />
+                      <span className="modulationWaveRole">{role ?? ''}</span>
+                      <button
+                        type="button"
+                        className="modulationRemoveWave"
+                        aria-label={`Remove waveform ${state.waveforms.indexOf(waveform) + 1}`}
+                        disabled={busy || !canRemove}
+                        onClick={() => applyAtomicState((current) => {
+                          const index = current.waveforms.findIndex((entry) => entry.id === waveform.id)
+                          const waveforms = current.waveforms.filter((entry) => entry.id !== waveform.id)
+                          const nextSelected = waveform.id === current.selectedWaveformId
+                            ? waveforms[Math.min(index, waveforms.length - 1)]?.id ?? waveforms[0]?.id
+                            : current.selectedWaveformId
+                          return { ...current, waveforms, selectedWaveformId: nextSelected ?? '' }
+                        })}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
-      <section
-        className="headerControlGroup modulationControlGroup modulationControlGroup-targets"
-        aria-label="Modulation targets"
-      >
-        <h2 className="headerGroupLabel">Targets</h2>
-        <div className="modTargetChipList">
-            {MOD_TARGET_ORDER.map((target) => {
-            const spec = getModTargetSpecForTuning(target, tuningLength)
-            const control = activeModulator.targetControls[target]
-            const clampedCenter = clampNumber(control.center, spec.min, spec.max)
-            const maxPositiveSpan = spec.max - clampedCenter
-            const maxNegativeSpan = clampedCenter - spec.min
-            const amountLimit = Math.max(maxPositiveSpan, maxNegativeSpan)
-            const displayAmount = clampNumber(control.amount, -amountLimit, amountLimit)
-            const centerRatio = spec.max === spec.min
-              ? 0.5
-              : clampNumber((clampedCenter - spec.min) / (spec.max - spec.min), 0, 1)
-            const amplitude = Math.abs(displayAmount)
-            const rangeStartRatio = spec.max === spec.min
-              ? 0.5
-              : clampNumber(
-                  (clampedCenter - amplitude - spec.min) / (spec.max - spec.min),
-                  0,
-                  1
-                )
-            const rangeEndRatio = spec.max === spec.min
-              ? 0.5
-              : clampNumber(
-                  (clampedCenter + amplitude - spec.min) / (spec.max - spec.min),
-                  0,
-                  1
-                )
 
+      <section className="headerControlGroup modulationControlGroup" aria-label="Selected waveform">
+        <h2 className="headerGroupLabel">Edit</h2>
+        <div className="modulationParameterControls">
+          <div className="modulationField">
+            <span className="fieldLabel">Selected</span>
+            <button
+              type="button"
+              className="modulationSelectedShape"
+              onClick={() => setWaveformManagerOpen(true)}
+            >
+              <span aria-hidden="true">∿</span>
+              <span>{MODULATION_SHAPE_LABELS[selected.shape]}</span>
+            </button>
+          </div>
+          {([
+            ['frequency', 'Frequency'],
+            ['phase', 'Phase'],
+            ['amplitude', 'Amplitude'],
+            ['amplitude_offset', 'Offset'],
+          ] as const).map(([parameter, label]) => {
+            const bounds = catalog.waveform_parameters[parameter]
             return (
-              <div className="modTargetItem" key={`mod-target-${target}`}>
-                <span className="fieldLabel">{spec.label}</span>
-                <div
-                  className={`modTargetChip${control.enabled ? ' modTargetChip-enabled' : ''}`}
-                  onDoubleClick={(event) => {
-                    event.preventDefault()
-                    resetTargetControl(target)
+              <label className="modulationField" key={parameter}>
+                <span className="fieldLabel">{label}</span>
+                <input
+                  className="modulationNumber mono"
+                  type="number"
+                  min={bounds.minimum}
+                  max={bounds.maximum}
+                  step={0.01}
+                  value={formatValue(selected[parameter])}
+                  disabled={busy}
+                  onFocus={beginContinuousEdit}
+                  onChange={(event) => updateNumber((value) => (current) => ({
+                    ...current,
+                    waveforms: current.waveforms.map((waveform) =>
+                      waveform.id === current.selectedWaveformId
+                        ? { ...waveform, [parameter]: Math.max(bounds.minimum, Math.min(value, bounds.maximum)) }
+                        : waveform),
+                  }), event)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') commitContinuousEdit()
+                    if (event.key === 'Escape') cancelContinuousEdit()
                   }}
-                  onPointerDown={(event) => {
-                    if (!(event.currentTarget instanceof HTMLDivElement)) {
-                      return
-                    }
-                    if (event.target instanceof HTMLElement && event.target.closest('.modTargetChipLed')) {
-                      return
-                    }
-                    if (!beginContinuousEdit()) return
-                    const mode = event.metaKey || event.ctrlKey ? 'center' : 'amount'
-                    padDragRef.current = {
-                      pointerId: event.pointerId,
-                      target,
-                      mode,
-                      host: event.currentTarget,
-                      startClientX: event.clientX,
-                      startClientY: event.clientY,
-                      startAmount: control.amount,
-                      startCenter: control.center,
-                    }
-                    event.currentTarget.setPointerCapture(event.pointerId)
-                  }}
-                  onPointerMove={(event) => {
-                    const drag = padDragRef.current
-                    if (!drag || drag.pointerId !== event.pointerId || drag.target !== target) {
-                      return
-                    }
-                    applyPadMotion(
-                      target,
-                      drag.host,
-                      event.clientX,
-                      event.clientY,
-                      drag.mode,
-                      {
-                        startClientX: drag.startClientX,
-                        startClientY: drag.startClientY,
-                        startAmount: drag.startAmount,
-                        startCenter: drag.startCenter,
-                      },
-                      event.shiftKey ? 'fine' : 'coarse'
-                    )
-                  }}
-                  onPointerUp={(event) => {
-                    if (padDragRef.current?.pointerId === event.pointerId) {
-                      padDragRef.current = null
-                      commitContinuousEdit()
-                    }
-                  }}
-                  onPointerCancel={(event) => {
-                    if (padDragRef.current?.pointerId === event.pointerId) {
-                      padDragRef.current = null
-                      cancelContinuousEdit()
-                    }
-                  }}
-                  title="Drag up/down for amount. Shift=fine. Cmd/Ctrl+drag moves center."
-                >
-                  <label className="modTargetChipLed" aria-label={`${spec.label} modulator enabled`}>
-                    <input
-                      className="modTargetLed"
-                      type="checkbox"
-                      checked={control.enabled}
-                      onChange={(event) => {
-                        setTargetEnabled(target, event.target.checked)
-                      }}
-                    />
-                  </label>
-                  <span
-                    className="modTargetChipCenter"
-                    aria-hidden="true"
-                    style={{
-                      '--mod-center-ratio': centerRatio,
-                      '--mod-range-start': `${rangeStartRatio * 100}%`,
-                      '--mod-range-width': `${(rangeEndRatio - rangeStartRatio) * 100}%`,
-                    } as CSSProperties}
-                  >
-                    <span className="modTargetChipRange" />
-                    <span className="modTargetChipCenterDot" />
-                  </span>
-                  <span className="modTargetChipAmount mono">
-                    {formatSignedAmount(displayAmount)}
-                  </span>
-                </div>
-              </div>
+                  onBlur={commitContinuousEdit}
+                />
+              </label>
             )
-            })}
+          })}
         </div>
       </section>
     </>

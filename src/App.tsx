@@ -2,10 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { HeaderSection } from './app/sections/HeaderSection'
 import { useCompositionCommands } from './app/hooks/useCompositionCommands'
 import { useHeaderEditing } from './app/hooks/useHeaderEditing'
-import { useModulatorPanelState } from './app/hooks/useModulatorPanelState'
 import { useProjectSession } from './app/hooks/useProjectSession'
 import { useKeyboardController } from './app/hooks/useKeyboardController'
-import { useModulatorController } from './app/hooks/useModulatorController'
+import { useModulationEditor } from './app/hooks/useModulationEditor'
 import { useProjectViewModel } from './app/hooks/useProjectViewModel'
 import { useQuickAccessPalette } from './app/hooks/useQuickAccessPalette'
 import { useSessionResources } from './app/hooks/useSessionResources'
@@ -32,7 +31,7 @@ import {
   getContextualSequenceName,
   reconcileActiveSequenceTarget,
 } from './app/domain/composition'
-import { clampNumber } from './app/domain/music'
+import { getSelectedWaveform } from './app/domain/modulation'
 import type {
   Cell,
   ActiveSequenceTarget,
@@ -41,6 +40,7 @@ import type {
   TransportState,
 } from './app/domain/models'
 import type { FilePaletteItem } from './app/domain/palette'
+import type { ModulationDestination } from './app/domain/modulation'
 import {
   resolveSequenceEditorPresentation,
   type WorkspaceView,
@@ -76,24 +76,24 @@ function App() {
   const selectedTimeSignatureRef = useRef({ numerator: 4, denominator: 4 })
   const [isTransportActive, setIsTransportActive] = useState(false)
   const [playheadPhase, setPlayheadPhase] = useState<number | null>(null)
-  const [modulatorPreviewWidth, setModulatorPreviewWidth] = useState(0)
+  const wavePadDragRef = useRef<{
+    pointerId: number
+    host: HTMLDivElement
+    startClientX: number
+    startClientY: number
+    startFrequency: number
+    startPhase: number
+    mode: 'frequency-amplitude' | 'phase-offset'
+    moved: boolean
+  } | null>(null)
   const {
     sessionReference,
     setSessionReference,
     librarySnapshot,
     setLibrarySnapshot,
+    modulationCatalog,
+    setModulationCatalog,
   } = useSessionResources()
-  const {
-    activeModulatorTab,
-    selectActiveModulatorTab,
-    activeModulator,
-    updateActiveModulator,
-    updateActiveTargetControl,
-    setOpenWaveMenu,
-    padDragRef,
-    wavePadDragRef,
-    lastWaveHandleUsedRef,
-  } = useModulatorPanelState()
   const {
     projectState,
     statusMessage,
@@ -106,7 +106,7 @@ function App() {
     keymapRef,
     keymapController,
     executeBackendCommand,
-    beginBackendPreview,
+    beginModulationPreview,
     documentBusy,
     newProject,
     openProject,
@@ -125,6 +125,7 @@ function App() {
     setEditorState,
     setSessionReference,
     setLibrarySnapshot,
+    setModulationCatalog,
     setIsTransportActive,
     setPlayheadPhase,
   })
@@ -154,10 +155,15 @@ function App() {
   const installEditorState = useCallback((nextState: EditorState): void => {
     editorStateRef.current = nextState
     setEditorState(nextState)
+    if (nextState.inputMode === 'scale') setIsModulatorMode(false)
   }, [])
 
   const isProjectReady = projectState.status === 'ready'
-  const modulationModeActive = isModulatorMode && isProjectReady && workspaceView === 'sequencer'
+  const modulationDestination = editorState.inputMode === 'scale'
+    ? null
+    : editorState.inputMode as ModulationDestination
+  const modulationModeActive = isModulatorMode && isProjectReady &&
+    workspaceView === 'sequencer' && modulationDestination !== null && modulationCatalog !== null
   const projectSnapshot = isProjectReady ? projectState.snapshot : null
   const {
     workspaceRef,
@@ -337,47 +343,46 @@ function App() {
     sequenceDividerPositions,
     rollNotes,
     selectionSpans,
+    modulationTargetAvailable,
   } = useSequencerRollState({
     rootCell,
     selectionPath: editorState.selection.path,
     tuningLength,
   })
 
-  const {
-    beginContinuousEdit,
-    commitContinuousEdit,
-    cancelContinuousEdit,
-    waveAPreviewPath,
-    waveBPreviewPath,
-    morphedWavePreviewPath,
-    setTargetEnabled,
-    toggleTargetEnabled,
-    resetTargetControl,
-    handleWaveLerpChange,
-    handleWaveAPulseWidthChange,
-    handleWaveBPulseWidthChange,
-    applyPadMotion,
-    waveHandleA,
-    waveHandleB,
-    waveAOpacity,
-    waveBOpacity,
-    applyWavePadMotion,
-    snapWaveToCenterGuides,
-    selectWaveType,
-  } = useModulatorController({
-    bridgeUnavailableMessage,
+  const modulationEditor = useModulationEditor({
+    catalog: modulationCatalog,
     tuningLength,
-    modulatorPreviewWidth,
-    executeBackendCommand,
-    beginBackendPreview,
+    destination: modulationDestination,
+    projectRef,
+    editorStateRef,
+    activeSequenceTargetRef,
+    compositionSelectionRef,
+    workspaceViewRef,
+    beginPreview: beginModulationPreview,
     setStatusMessage,
     setStatusLevel,
-    activeModulator,
-    updateActiveModulator,
-    updateActiveTargetControl,
-    setOpenWaveMenu,
-    lastWaveHandleUsedRef,
   })
+  const selectedModulationWaveform = modulationEditor.state
+    ? getSelectedWaveform(modulationEditor.state)
+    : null
+  const {
+    setWaveformManagerOpen,
+    updateContinuousState,
+    cancelContinuousEdit,
+  } = modulationEditor
+  const updateSelectedWaveform = useCallback((update: {
+    frequency?: number
+    phase?: number
+    amplitude?: number
+    amplitude_offset?: number
+  }): void => {
+    updateContinuousState((current) => ({
+      ...current,
+      waveforms: current.waveforms.map((waveform) =>
+        waveform.id === current.selectedWaveformId ? { ...waveform, ...update } : waveform),
+    }))
+  }, [updateContinuousState])
 
   useKeyboardController({
     bridgeUnavailableMessage,
@@ -404,19 +409,16 @@ function App() {
     isModulatorMode: modulationModeActive,
     exitModulatorMode: () => setIsModulatorMode(false),
     setIsModulatorMode,
-    selectActiveModulatorTab,
-    setOpenWaveMenu,
-    toggleActiveModulatorTarget: toggleTargetEnabled,
     setStatusMessage,
     setStatusLevel,
   })
 
   useEffect(() => {
     if (!modulationModeActive) {
-      setOpenWaveMenu(null)
+      setWaveformManagerOpen(false)
       cancelContinuousEdit()
     }
-  }, [cancelContinuousEdit, modulationModeActive, setOpenWaveMenu])
+  }, [cancelContinuousEdit, modulationModeActive, setWaveformManagerOpen])
 
   useEffect(() => {
     const handleContextMenu = (event: MouseEvent): void => {
@@ -491,34 +493,36 @@ function App() {
         }}
         onEnterModulation={() => setIsModulatorMode(true)}
         onExitModulation={() => setIsModulatorMode(false)}
-        modulationDisabled={!isProjectReady || workspaceView !== 'sequencer'}
-        modulationControls={modulationModeActive ? (
+        modulationDisabled={
+          !isProjectReady || workspaceView !== 'sequencer' ||
+          editorState.inputMode === 'scale' || modulationCatalog === null
+        }
+        modulationControls={
+          modulationModeActive && modulationCatalog && modulationDestination && modulationEditor.state ? (
           <ModulationHeader
             controls={(
               <ModulatorsPanel
-                activeModulatorTab={activeModulatorTab}
-                activeModulator={activeModulator}
-                selectActiveModulatorTab={(index) => {
-                  cancelContinuousEdit()
-                  selectActiveModulatorTab(index)
-                }}
-                selectWaveType={selectWaveType}
-                onWaveLerpChange={handleWaveLerpChange}
-                onWaveAPulseWidthChange={handleWaveAPulseWidthChange}
-                onWaveBPulseWidthChange={handleWaveBPulseWidthChange}
-                clampNumber={clampNumber}
-                setTargetEnabled={setTargetEnabled}
-                resetTargetControl={resetTargetControl}
-                padDragRef={padDragRef}
-                applyPadMotion={applyPadMotion}
-                tuningLength={tuningLength}
-                beginContinuousEdit={beginContinuousEdit}
-                commitContinuousEdit={commitContinuousEdit}
+                catalog={modulationCatalog}
+                destination={modulationDestination}
+                state={modulationEditor.state}
+                busy={modulationEditor.busy}
+                waveformManagerOpen={modulationEditor.waveformManagerOpen}
+                setWaveformManagerOpen={setWaveformManagerOpen}
+                setDestination={(destination) => installEditorState({
+                  ...editorStateRef.current,
+                  inputMode: destination,
+                })}
+                updateLocalState={modulationEditor.updateLocalState}
+                applyAtomicState={modulationEditor.applyAtomicState}
+                beginContinuousEdit={modulationEditor.beginContinuousEdit}
+                updateContinuousState={updateContinuousState}
+                commitContinuousEdit={modulationEditor.commitContinuousEdit}
                 cancelContinuousEdit={cancelContinuousEdit}
               />
             )}
           />
-        ) : undefined}
+          ) : undefined
+        }
       />
       <section
         className="workspaceSection"
@@ -563,21 +567,16 @@ function App() {
                 rulerRatios={rulerRatios}
                 highlightedPitches={highlightedPitches}
                 isModulatorMode={modulationModeActive}
+                modulationTargetAvailable={modulationTargetAvailable}
                 wavePadDragRef={wavePadDragRef}
-                clampNumber={clampNumber}
-                waveHandleA={waveHandleA}
-                waveHandleB={waveHandleB}
-                lastWaveHandleUsedRef={lastWaveHandleUsedRef}
-                snapWaveToCenterGuides={snapWaveToCenterGuides}
-                applyWavePadMotion={applyWavePadMotion}
-                waveAOpacity={waveAOpacity}
-                waveBOpacity={waveBOpacity}
-                waveAPreviewPath={waveAPreviewPath}
-                waveBPreviewPath={waveBPreviewPath}
-                morphedWavePreviewPath={morphedWavePreviewPath}
-                setModulatorPreviewWidth={setModulatorPreviewWidth}
-                beginContinuousEdit={beginContinuousEdit}
-                commitContinuousEdit={commitContinuousEdit}
+                selectedWaveformId={selectedModulationWaveform?.id ?? ''}
+                selectedFrequency={selectedModulationWaveform?.frequency ?? 0}
+                selectedPhase={selectedModulationWaveform?.phase ?? 0}
+                waveformPaths={modulationEditor.plotPaths.waveforms}
+                combinedWaveformPath={modulationEditor.plotPaths.combined}
+                updateSelectedWaveform={updateSelectedWaveform}
+                beginContinuousEdit={modulationEditor.beginContinuousEdit}
+                commitContinuousEdit={modulationEditor.commitContinuousEdit}
                 cancelContinuousEdit={cancelContinuousEdit}
               />
             )}

@@ -30,6 +30,7 @@ import type {
   TransportState,
 } from '../domain/models'
 import type { ProjectSessionState } from '../types/session'
+import type { ModulationCatalog } from '../domain/modulation'
 
 type UseProjectSessionArgs = {
   transportRef: MutableRefObject<TransportState>
@@ -40,6 +41,7 @@ type UseProjectSessionArgs = {
   setEditorState: Dispatch<SetStateAction<EditorState>>
   setSessionReference: Dispatch<SetStateAction<SessionReference>>
   setLibrarySnapshot: Dispatch<SetStateAction<LibrarySnapshot>>
+  setModulationCatalog: Dispatch<SetStateAction<ModulationCatalog | null>>
   setIsTransportActive: Dispatch<SetStateAction<boolean>>
   setPlayheadPhase: Dispatch<SetStateAction<number | null>>
 }
@@ -53,6 +55,7 @@ export function useProjectSession({
   setEditorState,
   setSessionReference,
   setLibrarySnapshot,
+  setModulationCatalog,
   setIsTransportActive,
   setPlayheadPhase,
 }: UseProjectSessionArgs) {
@@ -96,6 +99,7 @@ export function useProjectSession({
     ingestLibrary,
     executeBackendCommand,
     beginBackendPreview,
+    beginModulationPreview,
     documentBusy,
     newProject,
     openProject,
@@ -146,7 +150,7 @@ export function useProjectSession({
               ingestPreferences(event.payload)
               return
             }
-            if (event.name === 'transport.phase.sync') {
+            if (event.name === 'transport.phase.sync' || event.name === 'phase.sync') {
               if (event.payload.bpm > 0) {
                 transportRef.current.bpm = event.payload.bpm
               }
@@ -175,6 +179,7 @@ export function useProjectSession({
 
         setBridgeUnavailableMessage(null)
         setSessionReference(sessionReferenceFromCatalogDto(hello.catalog))
+        setModulationCatalog(hello.modulation)
         ingestKeymap(keymapFromDto(hello.keymap))
         ingestPreferences(hello.preferences)
 
@@ -215,7 +220,8 @@ export function useProjectSession({
     setLibrarySnapshot,
     setIsTransportActive,
     setPlayheadPhase,
-    setSessionReference,
+      setSessionReference,
+      setModulationCatalog,
     setStatusLevel,
     transportRef,
   ])
@@ -234,6 +240,7 @@ export function useProjectSession({
     request,
     executeBackendCommand,
     beginBackendPreview,
+    beginModulationPreview,
     documentBusy,
     newProject,
     openProject,

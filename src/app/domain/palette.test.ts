@@ -12,7 +12,7 @@ import { buildSessionReference } from './reference'
 import { libraryFixture } from './testFixtures'
 
 const commands = buildSessionReference({
-  schema_version: 4,
+  schema_version: 5,
   commands: [
     {
       path: ['transport', 'stop'],
@@ -45,6 +45,7 @@ const createItems = () => {
     name: 'systems/19edo.scl',
     stem: 'systems/19edo',
     relative_path: 'systems/19edo.scl',
+    file_revision: 'sha256:19edo',
     command: 'set tuning "systems/19edo.scl"',
     description: 'Nineteen equal divisions',
     intervals: Array.from({ length: 19 }, (_, index) => index * 1200 / 19),

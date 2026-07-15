@@ -14,7 +14,7 @@ import type { ActiveArgument } from './commandCompletion'
 
 describe('command completion', () => {
   const commands = buildSessionReference({
-    schema_version: 4,
+    schema_version: 5,
     commands: [
       {
         path: ['set', 'velocity'],
@@ -321,6 +321,7 @@ describe('command completion', () => {
       name: '12EDO.scl',
       stem: '12EDO',
       relativePath: '12EDO.scl',
+      fileRevision: 'sha256:12edo',
       command: 'load tuning "12EDO"',
       description: 'Equal temperament',
       intervals: [],

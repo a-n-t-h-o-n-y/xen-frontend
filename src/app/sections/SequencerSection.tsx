@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { REFERENCE_RATIOS } from '../domain/music'
 import { getNoteFillColor, isNoteOffVelocity } from './sequencerNoteColor'
 import type { BgOverlayState } from '../presentation/viewModels'
@@ -33,10 +33,12 @@ type RollSequenceDivider = {
 
 type WavePadDragState = {
   pointerId: number
-  wave: 'a' | 'b'
   host: HTMLDivElement
   startClientX: number
   startClientY: number
+  startFrequency: number
+  startPhase: number
+  mode: 'frequency-amplitude' | 'phase-offset'
   moved: boolean
 }
 
@@ -55,28 +57,19 @@ type SequencerSectionProps = {
   rulerRatios: number[]
   highlightedPitches: Set<number>
   isModulatorMode: boolean
+  modulationTargetAvailable: boolean
   wavePadDragRef: { current: WavePadDragState | null }
-  clampNumber: (value: number, min: number, max: number) => number
-  waveHandleA: { x: number; y: number }
-  waveHandleB: { x: number; y: number }
-  lastWaveHandleUsedRef: { current: 'a' | 'b' }
-  snapWaveToCenterGuides: (
-    wave: 'a' | 'b',
-    options: { snapFrequency: boolean; snapOffset: boolean }
-  ) => void
-  applyWavePadMotion: (
-    wave: 'a' | 'b',
-    host: HTMLDivElement,
-    clientX: number,
-    clientY: number,
-    lockMode: 'frequency' | 'offset' | 'none'
-  ) => void
-  waveAOpacity: number
-  waveBOpacity: number
-  waveAPreviewPath: string
-  waveBPreviewPath: string
-  morphedWavePreviewPath: string
-  setModulatorPreviewWidth: Dispatch<SetStateAction<number>>
+  selectedWaveformId: string
+  selectedFrequency: number
+  selectedPhase: number
+  waveformPaths: Array<{ id: string; points: string }>
+  combinedWaveformPath: string
+  updateSelectedWaveform: (update: {
+    frequency?: number
+    phase?: number
+    amplitude?: number
+    amplitude_offset?: number
+  }) => void
   beginContinuousEdit: () => boolean
   commitContinuousEdit: () => void
   cancelContinuousEdit: () => void
@@ -84,79 +77,41 @@ type SequencerSectionProps = {
 
 function ModulatorOverlay({
   selectedOutline,
+  targetAvailable,
   wavePadDragRef,
-  clampNumber,
-  waveHandleA,
-  waveHandleB,
-  lastWaveHandleUsedRef,
-  snapWaveToCenterGuides,
-  applyWavePadMotion,
-  waveAOpacity,
-  waveBOpacity,
-  waveAPreviewPath,
-  waveBPreviewPath,
-  morphedWavePreviewPath,
-  setModulatorPreviewWidth,
+  selectedWaveformId,
+  selectedFrequency,
+  selectedPhase,
+  waveformPaths,
+  combinedWaveformPath,
+  updateSelectedWaveform,
   beginContinuousEdit,
   commitContinuousEdit,
   cancelContinuousEdit,
 }: {
   selectedOutline: RollSelectionSpan | null
+  targetAvailable: boolean
   wavePadDragRef: { current: WavePadDragState | null }
-  clampNumber: (value: number, min: number, max: number) => number
-  waveHandleA: { x: number; y: number }
-  waveHandleB: { x: number; y: number }
-  lastWaveHandleUsedRef: { current: 'a' | 'b' }
-  snapWaveToCenterGuides: (
-    wave: 'a' | 'b',
-    options: { snapFrequency: boolean; snapOffset: boolean }
-  ) => void
-  applyWavePadMotion: (
-    wave: 'a' | 'b',
-    host: HTMLDivElement,
-    clientX: number,
-    clientY: number,
-    lockMode: 'frequency' | 'offset' | 'none'
-  ) => void
-  waveAOpacity: number
-  waveBOpacity: number
-  waveAPreviewPath: string
-  waveBPreviewPath: string
-  morphedWavePreviewPath: string
-  setModulatorPreviewWidth: Dispatch<SetStateAction<number>>
+  selectedWaveformId: string
+  selectedFrequency: number
+  selectedPhase: number
+  waveformPaths: Array<{ id: string; points: string }>
+  combinedWaveformPath: string
+  updateSelectedWaveform: SequencerSectionProps['updateSelectedWaveform']
   beginContinuousEdit: () => boolean
   commitContinuousEdit: () => void
   cancelContinuousEdit: () => void
 }) {
-  const overlayRef = useRef<HTMLDivElement | null>(null)
-  const hasSelection = selectedOutline !== null && selectedOutline.width > 0
+  const hasSelection = targetAvailable && selectedOutline !== null && selectedOutline.width > 0
   const overlaySpan = hasSelection ? selectedOutline : { x: 0, width: 1 }
   const overlayStyle = {
     left: `${overlaySpan.x * 100}%`,
     width: `${overlaySpan.width * 100}%`,
   } as CSSProperties
 
-  useEffect(() => {
-    const overlay = overlayRef.current
-    if (!overlay) {
-      setModulatorPreviewWidth(0)
-      return
-    }
-
-    const updateWidth = (): void => {
-      setModulatorPreviewWidth(Math.round(overlay.getBoundingClientRect().width))
-    }
-
-    updateWidth()
-    const observer = new ResizeObserver(updateWidth)
-    observer.observe(overlay)
-    return () => observer.disconnect()
-  }, [hasSelection, overlayStyle.left, overlayStyle.width, setModulatorPreviewWidth])
-
   return (
     <div className="rollModulatorOverlayLayer" aria-hidden="true">
       <div
-        ref={overlayRef}
         className={`rollModulatorOverlay${hasSelection ? '' : ' rollModulatorOverlay-previewOnly'}`}
         style={overlayStyle}
         onPointerDown={
@@ -166,18 +121,14 @@ function ModulatorOverlay({
                   return
                 }
                 if (!beginContinuousEdit()) return
-                const bounds = event.currentTarget.getBoundingClientRect()
-                const xRatio = clampNumber((event.clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
-                const yRatio = clampNumber((event.clientY - bounds.top) / Math.max(bounds.height, 1), 0, 1)
-                const distanceA = Math.hypot(xRatio - waveHandleA.x / 100, yRatio - waveHandleA.y / 100)
-                const distanceB = Math.hypot(xRatio - waveHandleB.x / 100, yRatio - waveHandleB.y / 100)
-                const selectedWave: 'a' | 'b' = distanceA <= distanceB ? 'a' : 'b'
                 wavePadDragRef.current = {
                   pointerId: event.pointerId,
-                  wave: selectedWave,
                   host: event.currentTarget,
                   startClientX: event.clientX,
                   startClientY: event.clientY,
+                  startFrequency: selectedFrequency,
+                  startPhase: selectedPhase,
+                  mode: event.shiftKey ? 'phase-offset' : 'frequency-amplitude',
                   moved: false,
                 }
                 event.currentTarget.setPointerCapture(event.pointerId)
@@ -198,8 +149,24 @@ function ModulatorOverlay({
                 if (!drag.moved) {
                   return
                 }
-                const lockMode = event.shiftKey ? 'frequency' : event.altKey ? 'offset' : 'none'
-                applyWavePadMotion(drag.wave, drag.host, event.clientX, event.clientY, lockMode)
+                const bounds = drag.host.getBoundingClientRect()
+                const xDelta = (event.clientX - drag.startClientX) / Math.max(bounds.width, 1)
+                const yRatio = Math.max(0, Math.min(
+                  (event.clientY - bounds.top) / Math.max(bounds.height, 1),
+                  1
+                ))
+                const bipolarY = 1 - yRatio * 2
+                if (drag.mode === 'phase-offset') {
+                  updateSelectedWaveform({
+                    phase: ((drag.startPhase + xDelta) % 1 + 1) % 1,
+                    amplitude_offset: bipolarY,
+                  })
+                } else {
+                  updateSelectedWaveform({
+                    frequency: Math.max(0, Math.min(drag.startFrequency + xDelta, 1)),
+                    amplitude: bipolarY,
+                  })
+                }
               }
             : undefined
         }
@@ -208,25 +175,9 @@ function ModulatorOverlay({
             ? (event) => {
                 const drag = wavePadDragRef.current
                 if (drag?.pointerId === event.pointerId) {
-                  if (!drag.moved) {
-                    const clickWave = lastWaveHandleUsedRef.current
-                    const bounds = drag.host.getBoundingClientRect()
-                    const xRatio = clampNumber((event.clientX - bounds.left) / Math.max(bounds.width, 1), 0, 1)
-                    const yRatio = clampNumber((event.clientY - bounds.top) / Math.max(bounds.height, 1), 0, 1)
-                    const isNearFreqCenterLine = Math.abs(xRatio - 0.5) <= 0.06
-                    const isNearCenterLine = Math.abs(yRatio - 0.5) <= 0.06
-                    if (isNearCenterLine || isNearFreqCenterLine) {
-                      snapWaveToCenterGuides(clickWave, {
-                        snapFrequency: isNearFreqCenterLine,
-                        snapOffset: isNearCenterLine,
-                      })
-                    } else {
-                      const lockMode = event.shiftKey ? 'frequency' : event.altKey ? 'offset' : 'none'
-                      applyWavePadMotion(clickWave, drag.host, event.clientX, event.clientY, lockMode)
-                    }
-                  }
                   wavePadDragRef.current = null
-                  commitContinuousEdit()
+                  if (drag.moved) commitContinuousEdit()
+                  else cancelContinuousEdit()
                 }
               }
             : undefined
@@ -241,21 +192,23 @@ function ModulatorOverlay({
               }
             : undefined
         }
-        title="Drag handle: horizontal = frequency, vertical = phase offset. Shift=frequency only. Option/Alt=offset only."
+        title="Drag to edit frequency and amplitude. Shift-drag edits phase and amplitude offset."
       >
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-          <polyline points={waveAPreviewPath} className="modWaveLine modWaveLine-a" style={{ opacity: waveAOpacity }} />
-          <polyline points={waveBPreviewPath} className="modWaveLine modWaveLine-b" style={{ opacity: waveBOpacity }} />
-          <polyline points={morphedWavePreviewPath} className="modWaveLine modWaveLine-mix" />
+          {waveformPaths.map((waveform) => (
+            <polyline
+              key={waveform.id}
+              points={waveform.points}
+              className={`modWaveLine${waveform.id === selectedWaveformId ? ' modWaveLine-selected' : ''}`}
+            />
+          ))}
+          <polyline points={combinedWaveformPath} className="modWaveLine modWaveLine-mix" />
         </svg>
-        <span
-          className="modWaveHandle modWaveHandle-a"
-          style={{ left: `${waveHandleA.x}%`, top: `${waveHandleA.y}%`, opacity: waveAOpacity }}
-        />
-        <span
-          className="modWaveHandle modWaveHandle-b"
-          style={{ left: `${waveHandleB.x}%`, top: `${waveHandleB.y}%`, opacity: waveBOpacity }}
-        />
+        {!hasSelection ? (
+          <span className="rollModulatorEmpty">
+            Select a Sequence or a Cell containing a Sequence to apply modulation.
+          </span>
+        ) : null}
       </div>
     </div>
   )
@@ -276,19 +229,14 @@ export function SequencerSection({
   rulerRatios,
   highlightedPitches: _highlightedPitches,
   isModulatorMode,
+  modulationTargetAvailable,
   wavePadDragRef,
-  clampNumber,
-  waveHandleA,
-  waveHandleB,
-  lastWaveHandleUsedRef,
-  snapWaveToCenterGuides,
-  applyWavePadMotion,
-  waveAOpacity,
-  waveBOpacity,
-  waveAPreviewPath,
-  waveBPreviewPath,
-  morphedWavePreviewPath,
-  setModulatorPreviewWidth,
+  selectedWaveformId,
+  selectedFrequency,
+  selectedPhase,
+  waveformPaths,
+  combinedWaveformPath,
+  updateSelectedWaveform,
   beginContinuousEdit,
   commitContinuousEdit,
   cancelContinuousEdit,
@@ -423,19 +371,14 @@ export function SequencerSection({
             {isModulatorMode ? (
               <ModulatorOverlay
                 selectedOutline={selectedOutline ?? null}
+                targetAvailable={modulationTargetAvailable}
                 wavePadDragRef={wavePadDragRef}
-                clampNumber={clampNumber}
-                waveHandleA={waveHandleA}
-                waveHandleB={waveHandleB}
-                lastWaveHandleUsedRef={lastWaveHandleUsedRef}
-                snapWaveToCenterGuides={snapWaveToCenterGuides}
-                applyWavePadMotion={applyWavePadMotion}
-                waveAOpacity={waveAOpacity}
-                waveBOpacity={waveBOpacity}
-                waveAPreviewPath={waveAPreviewPath}
-                waveBPreviewPath={waveBPreviewPath}
-                morphedWavePreviewPath={morphedWavePreviewPath}
-                setModulatorPreviewWidth={setModulatorPreviewWidth}
+                selectedWaveformId={selectedWaveformId}
+                selectedFrequency={selectedFrequency}
+                selectedPhase={selectedPhase}
+                waveformPaths={waveformPaths}
+                combinedWaveformPath={combinedWaveformPath}
+                updateSelectedWaveform={updateSelectedWaveform}
                 beginContinuousEdit={beginContinuousEdit}
                 commitContinuousEdit={commitContinuousEdit}
                 cancelContinuousEdit={cancelContinuousEdit}

@@ -1,8 +1,14 @@
 import { useState } from 'react'
 import type { LibrarySnapshot, SessionReference } from '../domain/models'
+import type { ModulationCatalog } from '../domain/modulation'
 
 const createInitialLibrarySnapshot = (): LibrarySnapshot => ({
   revision: '0',
+  paths: {
+    library: '',
+    content: '',
+    tunings: '',
+  },
   cells: [],
   projects: [],
   tunings: [],
@@ -24,11 +30,14 @@ export function useSessionResources() {
   const [librarySnapshot, setLibrarySnapshot] = useState<LibrarySnapshot>(
     createInitialLibrarySnapshot
   )
+  const [modulationCatalog, setModulationCatalog] = useState<ModulationCatalog | null>(null)
 
   return {
     sessionReference,
     setSessionReference,
     librarySnapshot,
     setLibrarySnapshot,
+    modulationCatalog,
+    setModulationCatalog,
   }
 }
