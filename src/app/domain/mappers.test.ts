@@ -9,7 +9,12 @@ import { arrangedProjectFixture, libraryFixture, projectFixture } from './testFi
 
 describe('DTO to domain mappers', () => {
   it('maps project snapshots to camelCase while preserving revision and pitch fields', () => {
-    const project = projectFromDto(projectFixture(9))
+    const fixture = projectFixture(9)
+    const note = fixture.project.sequence_bank.sequences[0]!.cell.elements[0]!
+    if (note.type !== 'Note') throw new Error('Expected note fixture')
+    note.midi_cc = [{ controller: 74, value: 0 }]
+    fixture.project.midi_cc_labels = [{ controller: 74, label: 'Brightness' }]
+    const project = projectFromDto(fixture)
 
     expect(project.stateRevision).toBe('9')
     expect(project.projectRevision).toBe('9')
@@ -20,6 +25,11 @@ describe('DTO to domain mappers', () => {
     expect(project.pitch.scale?.definition.tuningLength).toBe(12)
     expect(project.pitch.translationDirection).toBe('up')
     expect(project.pitch.baseFrequency).toBe(440)
+    expect(project.sequence.cell.elements[0]).toMatchObject({
+      type: 'Note',
+      midiCc: [{ controller: 74, value: 0 }],
+    })
+    expect(project.midiCcLabels.get(74)).toBe('Brightness')
   })
 
   it('maps arranged snapshots to sparse coordinate lookup maps', () => {
@@ -29,7 +39,7 @@ describe('DTO to domain mappers', () => {
     expect(project.sequence.timeSignature).toEqual({ numerator: 7, denominator: 8 })
     expect(project.sequence.cell).toEqual({
       weight: 1,
-      elements: [{ type: 'Note', pitch: 99, velocity: 1, delay: 0, gate: 1 }],
+      elements: [{ type: 'Note', pitch: 99, velocity: 1, delay: 0, gate: 1, midiCc: [] }],
     })
     expect(project.sequenceBank?.sequences.map((entry) => entry.name)).toEqual(['S1', 'S2'])
     expect(project.composition?.columns.size).toBe(3)

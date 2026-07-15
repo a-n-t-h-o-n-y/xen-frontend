@@ -3,7 +3,7 @@ import { createModulationPreview } from './ModulationPreview'
 import type { ModulationUpdate } from './ModulationPreview'
 
 const definition = (frequency: number): ModulationUpdate => ({
-  destination: 'pitch',
+  destination: { id: 'pitch' },
   outputRange: { minimum: 0, maximum: 11 },
   modulation: {
     operation: 'average',

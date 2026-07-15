@@ -1,10 +1,10 @@
 import { z } from 'zod'
 
-export const BRIDGE_PROTOCOL = 'xen.bridge.v7'
-export const IPC_PROTOCOL = 'xen.ipc.v3'
-export const PROJECT_SCHEMA_VERSION = 6
+export const BRIDGE_PROTOCOL = 'xen.bridge.v9'
+export const IPC_PROTOCOL = 'xen.ipc.v5'
+export const PROJECT_SCHEMA_VERSION = 7
 export const LIBRARY_SCHEMA_VERSION = 2
-export const CATALOG_SCHEMA_VERSION = 5
+export const CATALOG_SCHEMA_VERSION = 7
 export const KEYMAP_SCHEMA_VERSION = 2
 
 const finiteNumber = z.number().finite()
@@ -48,7 +48,7 @@ export const modulationOperationIdSchema = z.enum([
   'fm',
   'pm',
 ])
-export const modulationDestinationSchema = z.enum([
+export const scalarModulationDestinationIdSchema = z.enum([
   'pitch',
   'velocity',
   'delay',
@@ -56,24 +56,35 @@ export const modulationDestinationSchema = z.enum([
   'weight',
 ])
 
-const unitParameterRangeSchema = z.object({
-  minimum: z.literal(0),
-  maximum: z.literal(1),
-}).strict()
-const bipolarParameterRangeSchema = z.object({
-  minimum: z.literal(-1),
-  maximum: z.literal(1),
-}).strict()
+export const modulationDestinationSchema = z.discriminatedUnion('id', [
+  z.object({ id: z.literal('pitch') }).strict(),
+  z.object({ id: z.literal('velocity') }).strict(),
+  z.object({ id: z.literal('delay') }).strict(),
+  z.object({ id: z.literal('gate') }).strict(),
+  z.object({ id: z.literal('weight') }).strict(),
+  z.object({
+    id: z.literal('midi_cc'),
+    controller: z.number().int().min(0).max(127),
+  }).strict(),
+])
+
+const modulationParameterRangeSchema = z.object({
+  minimum: finiteNumber,
+  maximum: finiteNumber,
+}).strict().refine(
+  (range) => range.minimum <= range.maximum,
+  'Modulation parameter minimum must not exceed maximum'
+)
 
 export const modulationCatalogSchema = z.object({
-  schema_version: z.literal(1),
+  schema_version: z.literal(3),
   maximum_waveforms: z.literal(64),
   waveform_shapes: z.array(modulationShapeSchema).min(1),
   waveform_parameters: z.object({
-    frequency: unitParameterRangeSchema,
-    phase: unitParameterRangeSchema,
-    amplitude: bipolarParameterRangeSchema,
-    amplitude_offset: bipolarParameterRangeSchema,
+    frequency: modulationParameterRangeSchema,
+    phase: modulationParameterRangeSchema,
+    amplitude: modulationParameterRangeSchema,
+    amplitude_offset: modulationParameterRangeSchema,
   }).strict(),
   operations: z.array(z.object({
     id: modulationOperationIdSchema,
@@ -86,11 +97,26 @@ export const modulationCatalogSchema = z.object({
       id: z.literal('pitch'),
       range: z.literal('integer'),
       quantization: z.literal('nearest'),
+      parameters: z.tuple([]),
     }).strict(),
-    z.object({ id: z.literal('velocity'), range: z.literal('unit') }).strict(),
-    z.object({ id: z.literal('delay'), range: z.literal('unit') }).strict(),
-    z.object({ id: z.literal('gate'), range: z.literal('unit') }).strict(),
-    z.object({ id: z.literal('weight'), range: z.literal('positive') }).strict(),
+    z.object({ id: z.literal('velocity'), range: z.literal('unit'), parameters: z.tuple([]) }).strict(),
+    z.object({ id: z.literal('delay'), range: z.literal('unit'), parameters: z.tuple([]) }).strict(),
+    z.object({ id: z.literal('gate'), range: z.literal('unit'), parameters: z.tuple([]) }).strict(),
+    z.object({ id: z.literal('weight'), range: z.literal('positive'), parameters: z.tuple([]) }).strict(),
+    z.object({
+      id: z.literal('midi_cc'),
+      range: z.literal('unit'),
+      parameters: z.tuple([z.object({
+        id: z.literal('controller'),
+        kind: z.literal('integer'),
+        required: z.literal(true),
+        constraints: z.tuple([z.object({
+          kind: z.literal('range'),
+          minimum: z.literal(0),
+          maximum: z.literal(127),
+        }).strict()]),
+      }).strict()]),
+    }).strict(),
   ])).min(1),
   normalization: z.literal('clamp((raw + 1) / 2, 0, 1)'),
 }).strict()
@@ -147,13 +173,56 @@ export const modulationTargetSchema = z.object({
   }).strict(),
 }).strict()
 
+export const midiCcEntrySchema = z.object({
+  controller: z.number().int().min(0).max(127),
+  value: finiteNumber.min(0).max(1),
+}).strict()
+
+export const midiCcLabelSchema = z.object({
+  controller: z.number().int().min(0).max(127),
+  label: z.string().min(1).refine(
+    (label) => new TextEncoder().encode(label).byteLength <= 4096,
+    'MIDI CC labels must not exceed 4096 UTF-8 bytes'
+  ),
+}).strict()
+
+const sortedUniqueControllers = <T extends { controller: number }>(entries: T[]): boolean =>
+  entries.every((entry, index) => index === 0 || entry.controller > entries[index - 1]!.controller)
+
+const midiCcEntriesSchema = z.array(midiCcEntrySchema).refine(
+  sortedUniqueControllers,
+  'MIDI CC entries must be sorted by unique controller numbers'
+)
+
+const asciiFold = (value: string): string => value.replace(/[A-Z]/g, (letter) =>
+  letter.toLowerCase())
+
+const midiCcLabelsSchema = z.array(midiCcLabelSchema).refine(
+  sortedUniqueControllers,
+  'MIDI CC labels must be sorted by unique controller numbers'
+).superRefine((labels, context) => {
+  const assigned = new Set<string>()
+  labels.forEach((entry, index) => {
+    const folded = asciiFold(entry.label)
+    if (assigned.has(folded)) {
+      context.addIssue({
+        code: 'custom',
+        path: [index, 'label'],
+        message: 'MIDI CC labels must be unique under ASCII case-insensitive comparison',
+      })
+    }
+    assigned.add(folded)
+  })
+})
+
 export const noteSchema = z.object({
   type: z.literal('Note'),
   pitch: finiteNumber,
   velocity: finiteNumber,
   delay: finiteNumber,
   gate: finiteNumber,
-})
+  midi_cc: midiCcEntriesSchema,
+}).strict()
 
 export type NoteElement = z.infer<typeof noteSchema>
 
@@ -330,6 +399,7 @@ export const arrangementProjectSnapshotSchema = z.object({
   project: z.object({
     sequence_bank: sequenceBankSchema,
     composition: compositionSchema,
+    midi_cc_labels: midiCcLabelsSchema,
   }).strict(),
 }).strict().superRefine((snapshot, context) => {
   const sequenceIds = new Set(snapshot.project.sequence_bank.sequences.map((entry) => entry.id))
@@ -436,7 +506,15 @@ export const catalogSchema = z.object({
   commands: z.array(catalogCommandSchema),
 })
 
-export const inputModeSchema = z.enum(['pitch', 'velocity', 'delay', 'gate', 'weight', 'scale'])
+export const inputModeSchema = z.enum([
+  'pitch',
+  'velocity',
+  'delay',
+  'gate',
+  'weight',
+  'scale',
+  'midi_cc',
+])
 
 export const keymapTriggerSchema = z.object({
   match: z.object({
@@ -515,6 +593,18 @@ export const uiActionTargetSchema = z.discriminatedUnion('action', [
   z.object({
     type: z.literal('ui_action'),
     action: z.literal('modulator.mode.toggle'),
+    arguments: z.object({}).strict(),
+  }),
+  z.object({
+    type: z.literal('ui_action'),
+    action: z.literal('midi_cc.shift'),
+    arguments: z.object({
+      amount: finiteNumber.min(-1).max(1),
+    }).strict(),
+  }),
+  z.object({
+    type: z.literal('ui_action'),
+    action: z.literal('midi_cc.remove'),
     arguments: z.object({}).strict(),
   }),
   z.object({

@@ -3,11 +3,11 @@ import type { Cell } from './music'
 import type { ModulationCatalog } from './modulation'
 
 export const modulationCatalogFixture = (): ModulationCatalog => ({
-  schema_version: 1,
+  schema_version: 3,
   maximum_waveforms: 64,
   waveform_shapes: ['sine', 'triangle', 'sawtooth_up', 'sawtooth_down', 'square'],
   waveform_parameters: {
-    frequency: { minimum: 0, maximum: 1 },
+    frequency: { minimum: 0, maximum: 64 },
     phase: { minimum: 0, maximum: 1 },
     amplitude: { minimum: -1, maximum: 1 },
     amplitude_offset: { minimum: -1, maximum: 1 },
@@ -22,11 +22,21 @@ export const modulationCatalogFixture = (): ModulationCatalog => ({
     { id: 'pm', enabled_waveforms: 2, roles: ['carrier', 'modulator'] },
   ],
   destinations: [
-    { id: 'pitch', range: 'integer', quantization: 'nearest' },
-    { id: 'velocity', range: 'unit' },
-    { id: 'delay', range: 'unit' },
-    { id: 'gate', range: 'unit' },
-    { id: 'weight', range: 'positive' },
+    { id: 'pitch', range: 'integer', quantization: 'nearest', parameters: [] },
+    { id: 'velocity', range: 'unit', parameters: [] },
+    { id: 'delay', range: 'unit', parameters: [] },
+    { id: 'gate', range: 'unit', parameters: [] },
+    { id: 'weight', range: 'positive', parameters: [] },
+    {
+      id: 'midi_cc',
+      range: 'unit',
+      parameters: [{
+        id: 'controller',
+        kind: 'integer',
+        required: true,
+        constraints: [{ kind: 'range', minimum: 0, maximum: 127 }],
+      }],
+    },
   ],
   normalization: 'clamp((raw + 1) / 2, 0, 1)',
 })
@@ -34,24 +44,24 @@ export const modulationCatalogFixture = (): ModulationCatalog => ({
 export const nestedCell: Cell = {
   weight: 1,
   elements: [
-    { type: 'Note', pitch: 0, velocity: 1, delay: 0, gate: 1 },
+    { type: 'Note', pitch: 0, velocity: 1, delay: 0, gate: 1, midiCc: [] },
     {
       type: 'Sequence',
       cells: [
         {
           weight: 1,
-          elements: [{ type: 'Note', pitch: 1, velocity: 1, delay: 0, gate: 1 }],
+          elements: [{ type: 'Note', pitch: 1, velocity: 1, delay: 0, gate: 1, midiCc: [] }],
         },
         {
           weight: 1,
           elements: [
-            { type: 'Note', pitch: 2, velocity: 1, delay: 0, gate: 1 },
+            { type: 'Note', pitch: 2, velocity: 1, delay: 0, gate: 1, midiCc: [] },
             {
               type: 'Sequence',
               cells: [
                 {
                   weight: 1,
-                  elements: [{ type: 'Note', pitch: 7, velocity: 1, delay: 0, gate: 1 }],
+                  elements: [{ type: 'Note', pitch: 7, velocity: 1, delay: 0, gate: 1, midiCc: [] }],
                 },
               ],
             },
@@ -61,6 +71,22 @@ export const nestedCell: Cell = {
     },
   ],
 }
+
+const cellToDto = (
+  cell: Cell
+): ProjectSnapshotDto['project']['sequence_bank']['sequences'][number]['cell'] => ({
+  weight: cell.weight,
+  elements: cell.elements.map((element) => element.type === 'Note'
+    ? {
+        type: 'Note',
+        pitch: element.pitch,
+        velocity: element.velocity,
+        delay: element.delay,
+        gate: element.gate,
+        midi_cc: element.midiCc,
+      }
+    : { type: 'Sequence', cells: element.cells.map(cellToDto) }),
+})
 
 const pitchFixture = () => ({
   tuning: {
@@ -85,7 +111,7 @@ const pitchFixture = () => ({
 })
 
 export const projectFixture = (revision: string | number = '3'): ProjectSnapshotDto => ({
-  schema_version: 6,
+  schema_version: 7,
   state_revision: String(revision),
   history_entry_id: '2',
   project_revision: String(revision),
@@ -100,7 +126,7 @@ export const projectFixture = (revision: string | number = '3'): ProjectSnapshot
   project: {
     sequence_bank: {
       next_id: 2,
-      sequences: [{ id: 1, cell: nestedCell }],
+      sequences: [{ id: 1, cell: cellToDto(nestedCell) }],
     },
     composition: {
       default_column: {
@@ -136,11 +162,12 @@ export const projectFixture = (revision: string | number = '3'): ProjectSnapshot
       placements: [{ row: 0, column: 0, sequence_id: 1 }],
       loop_region: { start_column: 0, end_column: 0 },
     },
+    midi_cc_labels: [],
   },
 })
 
 export const arrangedProjectFixture = (revision: string | number = '3'): ProjectSnapshotDto => ({
-  schema_version: 6,
+  schema_version: 7,
   state_revision: String(revision),
   history_entry_id: '2',
   project_revision: String(revision),
@@ -160,12 +187,19 @@ export const arrangedProjectFixture = (revision: string | number = '3'): Project
           id: 1,
           cell: {
               weight: 1,
-              elements: [{ type: 'Note', pitch: 99, velocity: 1, delay: 0, gate: 1 }],
+              elements: [{
+                type: 'Note',
+                pitch: 99,
+                velocity: 1,
+                delay: 0,
+                gate: 1,
+                midi_cc: [],
+              }],
           },
         },
         {
           id: 2,
-          cell: nestedCell,
+          cell: cellToDto(nestedCell),
         },
       ],
     },
@@ -197,6 +231,7 @@ export const arrangedProjectFixture = (revision: string | number = '3'): Project
         end_column: 6,
       },
     },
+    midi_cc_labels: [],
   },
 })
 

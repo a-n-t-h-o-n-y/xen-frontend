@@ -54,13 +54,23 @@ type EditorState = {
   command: string
   direction: 'left' | 'right' | 'up' | 'down'
   amount: number
+  normalizedDelta: number
   mode: InputMode
   whenMode: InputMode | ''
   matchKind: 'key' | 'code'
   repeat: KeymapBinding['repeat']
 }
 
-const inputModes: InputMode[] = ['pitch', 'velocity', 'delay', 'gate', 'weight', 'scale']
+const inputModes: InputMode[] = [
+  'pitch',
+  'velocity',
+  'delay',
+  'gate',
+  'weight',
+  'scale',
+  'midi_cc',
+]
+const inputModeLabel = (mode: InputMode): string => mode === 'midi_cc' ? 'MIDI CC' : mode
 const uiActionOptions = Object.values(uiActionRegistry)
 
 const editorFromBinding = (context: string, binding?: KeymapBinding): EditorState => {
@@ -81,6 +91,9 @@ const editorFromBinding = (context: string, binding?: KeymapBinding): EditorStat
       (target.action === 'selection.move' || target.action === 'composition.selection.move')
       ? target.arguments.amount
       : 1,
+    normalizedDelta: target?.type === 'ui_action' && target.action === 'midi_cc.shift'
+      ? target.arguments.amount
+      : 1 / 127,
     mode: target?.type === 'ui_action' && target.action === 'input_mode.set'
       ? target.arguments.mode
       : 'pitch',
@@ -120,9 +133,16 @@ const targetFromEditor = (editor: EditorState): KeymapTarget => {
       arguments: { mode: editor.mode },
     }
   }
+  if (editor.targetType === 'midi_cc.shift') {
+    return {
+      type: 'ui_action',
+      action: 'midi_cc.shift',
+      arguments: { amount: editor.normalizedDelta },
+    }
+  }
   const action = editor.targetType as Exclude<
     FrontendUiActionId,
-    'selection.move' | 'composition.selection.move' | 'input_mode.set'
+    'selection.move' | 'composition.selection.move' | 'input_mode.set' | 'midi_cc.shift'
   >
   return {
     type: 'ui_action',
@@ -441,7 +461,9 @@ export function SettingsOverlay({
                 whenMode: event.target.value as InputMode | '',
               })}>
                 <option value="">Any mode</option>
-                {inputModes.map((mode) => <option value={mode} key={mode}>{mode}</option>)}
+                {inputModes.map((mode) => (
+                  <option value={mode} key={mode}>{inputModeLabel(mode)}</option>
+                ))}
               </select>
             </label>
             <label className="settingsField settingsCheckboxField">
@@ -510,8 +532,26 @@ export function SettingsOverlay({
                   ...editor,
                   mode: event.target.value as InputMode,
                 })}>
-                  {inputModes.map((mode) => <option value={mode} key={mode}>{mode}</option>)}
+                  {inputModes.map((mode) => (
+                    <option value={mode} key={mode}>{inputModeLabel(mode)}</option>
+                  ))}
                 </select>
+              </label>
+            ) : null}
+            {editor.targetType === 'midi_cc.shift' ? (
+              <label className="settingsField">
+                <span>Normalized delta</span>
+                <input
+                  type="number"
+                  min="-1"
+                  max="1"
+                  step={1 / 127}
+                  value={editor.normalizedDelta}
+                  onChange={(event) => setEditor({
+                    ...editor,
+                    normalizedDelta: Number(event.target.value),
+                  })}
+                />
               </label>
             ) : null}
             {conflict ? (
@@ -537,6 +577,12 @@ export function SettingsOverlay({
                     !isUiActionAllowedInContext(editor.targetType, editor.context)) ||
                   ((editor.targetType === 'selection.move' ||
                     editor.targetType === 'composition.selection.move') && editor.amount < 1) ||
+                  (editor.targetType === 'midi_cc.shift' && (
+                    !Number.isFinite(editor.normalizedDelta) ||
+                    editor.normalizedDelta < -1 ||
+                    editor.normalizedDelta > 1 ||
+                    editor.normalizedDelta === 0
+                  )) ||
                   (editor.targetType === 'command' && !editor.command.trim())
                 }
                 onClick={() => void saveEditor()}

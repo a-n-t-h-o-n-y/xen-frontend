@@ -12,7 +12,7 @@ import { buildSessionReference } from './reference'
 import { libraryFixture } from './testFixtures'
 
 const commands = buildSessionReference({
-  schema_version: 5,
+  schema_version: 7,
   commands: [
     {
       path: ['transport', 'stop'],

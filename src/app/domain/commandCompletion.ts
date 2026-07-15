@@ -69,6 +69,8 @@ export type CompletionResources = {
   sequenceBank: SequenceBank | null
   activeTuningName: string
   activeScaleId: string | null
+  midiCcLabels?: ReadonlyMap<number, string>
+  activeMidiCcController?: number
 }
 
 type LexedArgument = {
@@ -342,6 +344,16 @@ const dynamicCandidateSeeds = (
         value: sequence.name,
         detail: `Sequence ${sequence.id}`,
       })) ?? []
+    case 'midi_controller':
+      return Array.from({ length: 128 }, (_, controller) => {
+        const label = resources.midiCcLabels?.get(controller)
+        return {
+          value: String(controller),
+          label: label ? `CC ${controller} — ${label}` : `CC ${controller}`,
+          detail: label ?? 'Unlabeled MIDI controller',
+          active: controller === resources.activeMidiCcController,
+        }
+      })
     default:
       return []
   }
@@ -356,6 +368,7 @@ const dynamicArgumentKinds = new Set([
   'project_name',
   'project_path',
   'sequence_name',
+  'midi_controller',
 ])
 
 export const getArgumentCompletionCandidates = (

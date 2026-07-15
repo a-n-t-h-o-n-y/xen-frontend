@@ -110,6 +110,51 @@
   z-index: 3;
 }
 
+.rollMidiCcLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.rollMidiCcSegment,
+.rollMidiCcConnector {
+  position: absolute;
+  display: block;
+  background: var(--accent);
+  opacity: 0.1;
+}
+
+.rollMidiCcSegment {
+  height: 1px;
+  transform: translateY(0.5px);
+}
+
+.rollMidiCcConnector {
+  width: 1px;
+  transform: translateX(-0.5px);
+}
+
+.rollMidiCcSegment-active {
+  height: 2px;
+  opacity: 0.5;
+}
+
+.rollMidiCcSegment-selected {
+  height: 2px;
+  opacity: 0.9;
+}
+
+.rollMidiCcNode {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--seq-panel-bg);
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, 50%);
+}
+
 .rollCellDivider {
   position: absolute;
   top: 0;

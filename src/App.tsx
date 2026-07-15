@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { HeaderSection } from './app/sections/HeaderSection'
 import { useCompositionCommands } from './app/hooks/useCompositionCommands'
 import { useHeaderEditing } from './app/hooks/useHeaderEditing'
@@ -17,6 +17,7 @@ import { usePreferences } from './app/preferences/usePreferences'
 import { CompositionSection } from './app/sections/CompositionSection'
 import { SequencerSection } from './app/sections/SequencerSection'
 import { ModulationHeader } from './app/sections/ModulationHeader'
+import { MidiCcAutomationSection } from './app/sections/header/MidiCcAutomationSection'
 import { NotificationToasts } from './app/sections/NotificationToasts'
 import { ProjectDocumentMenu } from './app/sections/ProjectDocumentMenu'
 import { SettingsOverlay } from './app/sections/SettingsOverlay'
@@ -32,6 +33,14 @@ import {
   reconcileActiveSequenceTarget,
 } from './app/domain/composition'
 import { getSelectedWaveform } from './app/domain/modulation'
+import { findInputModeKeyLabel } from './app/domain/keymap'
+import { summarizeSelectedMidiCc } from './app/domain/midiCcAutomation'
+import {
+  removeMidiCc,
+  removeMidiCcLabel,
+  setMidiCcLabel,
+  shiftMidiCc,
+} from './app/domain/commands'
 import type {
   Cell,
   ActiveSequenceTarget,
@@ -47,6 +56,7 @@ import {
 } from './app/workspace/workspaceLayout'
 
 const EMPTY_ROOT_CELL: Cell = { weight: 1, elements: [] }
+const EMPTY_MIDI_CC_LABELS = new Map<number, string>()
 const INITIAL_COMPOSITION_SELECTION: CompositionSelection = {
   rowCoordinate: 0,
   columnCoordinate: 0,
@@ -58,6 +68,7 @@ function App() {
   const [editorState, setEditorState] = useState<EditorState>({
     selection: { path: [] },
     inputMode: 'pitch',
+    midiCcController: 0,
   })
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('sequencer')
   const [compositionSelection, setCompositionSelection] = useState<CompositionSelection>(
@@ -81,8 +92,15 @@ function App() {
     host: HTMLDivElement
     startClientX: number
     startClientY: number
+    startFrequencyPointerDistance: number
     startFrequency: number
     startPhase: number
+    startAmplitude: number
+    startAmplitudeOffset: number
+    currentFrequency: number
+    currentPhase: number
+    currentAmplitude: number
+    currentAmplitudeOffset: number
     mode: 'frequency-amplitude' | 'phase-offset'
     moved: boolean
   } | null>(null)
@@ -159,9 +177,11 @@ function App() {
   }, [])
 
   const isProjectReady = projectState.status === 'ready'
-  const modulationDestination = editorState.inputMode === 'scale'
+  const modulationDestination: ModulationDestination | null = editorState.inputMode === 'scale'
     ? null
-    : editorState.inputMode as ModulationDestination
+    : editorState.inputMode === 'midi_cc'
+      ? { id: 'midi_cc', controller: editorState.midiCcController }
+      : { id: editorState.inputMode }
   const modulationModeActive = isModulatorMode && isProjectReady &&
     workspaceView === 'sequencer' && modulationDestination !== null && modulationCatalog !== null
   const projectSnapshot = isProjectReady ? projectState.snapshot : null
@@ -349,6 +369,21 @@ function App() {
     selectionPath: editorState.selection.path,
     tuningLength,
   })
+  const midiCcLabels = projectSnapshot?.midiCcLabels ?? EMPTY_MIDI_CC_LABELS
+  const usedMidiCcControllers = useMemo(() => new Set(
+    rollNotes.flatMap((note) => note.midiCc.map((entry) => entry.controller))
+  ), [rollNotes])
+  const midiCcValueSummary = useMemo(
+    () => summarizeSelectedMidiCc(rollNotes, editorState.midiCcController),
+    [editorState.midiCcController, rollNotes]
+  )
+  const currentInputLabel = editorState.inputMode === 'midi_cc'
+    ? `CC ${editorState.midiCcController}${
+        midiCcLabels.get(editorState.midiCcController)
+          ? ` · ${midiCcLabels.get(editorState.midiCcController)}`
+          : ''
+      }`
+    : undefined
 
   const modulationEditor = useModulationEditor({
     catalog: modulationCatalog,
@@ -473,6 +508,33 @@ function App() {
         tuningName={tuningName}
         sequenceName={headerSequenceName}
         currentInputMode={editorState.inputMode}
+        currentInputKey={findInputModeKeyLabel(keymapController.resource, editorState.inputMode)}
+        {...(currentInputLabel ? { currentInputLabel } : {})}
+        automationControls={(
+          <MidiCcAutomationSection
+            key={editorState.midiCcController}
+            controller={editorState.midiCcController}
+            labels={midiCcLabels}
+            usedControllers={usedMidiCcControllers}
+            valueSummary={midiCcValueSummary}
+            disabled={!isProjectReady}
+            onSelectController={(controller) => installEditorState({
+              ...editorStateRef.current,
+              inputMode: 'midi_cc',
+              midiCcController: controller,
+            })}
+            onSetLabel={(controller, label) =>
+              executeBackendCommand(setMidiCcLabel(controller, label))}
+            onRemoveLabel={(controller) =>
+              executeBackendCommand(removeMidiCcLabel(controller))}
+            onShift={(amount) => executeBackendCommand(
+              shiftMidiCc(editorStateRef.current.midiCcController, amount)
+            )}
+            onRemoveValue={() => executeBackendCommand(
+              removeMidiCc(editorStateRef.current.midiCcController)
+            )}
+          />
+        )}
         documentControls={(
           <ProjectDocumentMenu
             project={projectSnapshot}
@@ -503,15 +565,10 @@ function App() {
             controls={(
               <ModulatorsPanel
                 catalog={modulationCatalog}
-                destination={modulationDestination}
                 state={modulationEditor.state}
                 busy={modulationEditor.busy}
                 waveformManagerOpen={modulationEditor.waveformManagerOpen}
                 setWaveformManagerOpen={setWaveformManagerOpen}
-                setDestination={(destination) => installEditorState({
-                  ...editorStateRef.current,
-                  inputMode: destination,
-                })}
                 updateLocalState={modulationEditor.updateLocalState}
                 applyAtomicState={modulationEditor.applyAtomicState}
                 beginContinuousEdit={modulationEditor.beginContinuousEdit}
@@ -562,6 +619,7 @@ function App() {
                 selectionSpans={selectionSpans}
                 tuningLength={tuningLength}
                 rollNotes={rollNotes}
+                activeMidiCcController={editorState.midiCcController}
                 playheadPhase={playheadPhase}
                 ratioToBottom={ratioToBottom}
                 rulerRatios={rulerRatios}
@@ -572,6 +630,9 @@ function App() {
                 selectedWaveformId={selectedModulationWaveform?.id ?? ''}
                 selectedFrequency={selectedModulationWaveform?.frequency ?? 0}
                 selectedPhase={selectedModulationWaveform?.phase ?? 0}
+                selectedAmplitude={selectedModulationWaveform?.amplitude ?? 1}
+                selectedAmplitudeOffset={selectedModulationWaveform?.amplitude_offset ?? 0}
+                waveformParameterRanges={modulationCatalog?.waveform_parameters ?? null}
                 waveformPaths={modulationEditor.plotPaths.waveforms}
                 combinedWaveformPath={modulationEditor.plotPaths.combined}
                 updateSelectedWaveform={updateSelectedWaveform}
@@ -621,6 +682,8 @@ function App() {
         sequenceBank={projectSnapshot?.sequenceBank ?? null}
         keymapResource={keymapController.resource}
         currentInputMode={editorState.inputMode}
+        {...(projectSnapshot ? { midiCcLabels: projectSnapshot.midiCcLabels } : {})}
+        activeMidiCcController={editorState.midiCcController}
       />
       <SettingsOverlay
         open={settingsOverlay.open}

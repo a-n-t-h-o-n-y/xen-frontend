@@ -2,7 +2,7 @@ import { usesMetaForCommand } from '../platform'
 import { formatUiActionTarget } from './uiActions'
 import type { KeymapResource } from './models'
 
-export type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'weight' | 'scale'
+export type InputMode = 'pitch' | 'velocity' | 'delay' | 'gate' | 'weight' | 'scale' | 'midi_cc'
 
 export type KeymapTrigger = {
   match: {
@@ -70,6 +70,16 @@ export type UiActionKeymapTarget =
         direction: 'left' | 'right' | 'up' | 'down'
         amount: number
       }
+    }
+  | {
+      type: 'ui_action'
+      action: 'midi_cc.shift'
+      arguments: { amount: number }
+    }
+  | {
+      type: 'ui_action'
+      action: 'midi_cc.remove'
+      arguments: Record<string, never>
     }
   | {
       type: 'ui_action'
@@ -242,4 +252,27 @@ export const formatKeymapTarget = (target: KeymapTarget): string => {
     return target.command
   }
   return formatUiActionTarget(target)
+}
+
+export const findInputModeKeyLabel = (
+  resource: KeymapResource | null,
+  mode: InputMode
+): string => {
+  const bindings = resource?.bindings.sequencer?.filter((entry) =>
+    entry.target.type === 'ui_action' &&
+    entry.target.action === 'input_mode.set' &&
+    entry.target.arguments.mode === mode
+  ) ?? []
+  const binding = bindings.find((entry) =>
+    entry.trigger.match.kind === 'key' &&
+    entry.trigger.match.value.length === 1 &&
+    !Object.values(entry.trigger.modifiers).some(Boolean)
+  ) ?? bindings[0]
+  if (!binding) return '—'
+  const trigger = binding.trigger
+  const hasModifiers = Object.values(trigger.modifiers).some(Boolean)
+  if (!hasModifiers && trigger.match.kind === 'key' && trigger.match.value.length === 1) {
+    return trigger.match.value.toUpperCase()
+  }
+  return formatKeymapTrigger(trigger).replace(/ in [a-z]+$/i, '')
 }

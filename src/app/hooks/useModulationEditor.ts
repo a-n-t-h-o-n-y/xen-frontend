@@ -129,7 +129,7 @@ export function useModulationEditor({
     if (!catalog || !destination) return false
     const modulation = editorStateToDefinition(next)
     const definitionError = validateModulationDefinition(catalog, modulation)
-    const range = next.outputRanges[destination]
+    const range = next.outputRanges[destination.id]
     const rangeError = validateOutputRange(destination, range)
     if (definitionError || rangeError) {
       setStatusMessage(definitionError ?? rangeError ?? 'Invalid modulation definition')

@@ -65,6 +65,7 @@ add(trigger('v'), inputMode('velocity'))
 add(trigger('d'), inputMode('delay'))
 add(trigger('g'), inputMode('gate'))
 add(trigger('c'), inputMode('scale'))
+add(trigger('a'), inputMode('midi_cc'))
 if (!(bindings.sequencer ?? []).some((binding) =>
   binding.trigger.match.kind === 'key' &&
   binding.trigger.match.value === 'w' &&
@@ -124,6 +125,29 @@ for (const [key, sign] of [
 ] as const) {
   addModeShift('weight', key, `shift weight ${sign}0.1`)
 }
+
+for (const [key, amount] of [
+  ['j', -8 / 127],
+  ['ArrowDown', -8 / 127],
+  ['k', 8 / 127],
+  ['ArrowUp', 8 / 127],
+] as const) {
+  add(trigger(key, false, false, false, 'midi_cc'), action({
+    type: 'ui_action',
+    action: 'midi_cc.shift',
+    arguments: { amount },
+  }))
+  add(trigger(key, false, true, false, 'midi_cc'), action({
+    type: 'ui_action',
+    action: 'midi_cc.shift',
+    arguments: { amount: Math.sign(amount) / 127 },
+  }))
+}
+add(trigger('x', false, false, false, 'midi_cc'), action({
+  type: 'ui_action',
+  action: 'midi_cc.remove',
+  arguments: {},
+}))
 
 for (const [key, sign] of [
   ['j', '-'], ['ArrowDown', '-'], ['k', '+'], ['ArrowUp', '+'],
@@ -216,6 +240,7 @@ const repeatableActions = new Set([
   'command.history.next',
   'command.completion.previous',
   'command.completion.next',
+  'midi_cc.shift',
 ])
 for (const contextBindings of Object.values(bindings)) {
   for (const binding of contextBindings) {

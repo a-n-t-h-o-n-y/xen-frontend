@@ -11,6 +11,20 @@ import { projectRootCell, reconcileSelection } from './selection'
 
 const quoteCommandArgument = (value: string): string => JSON.stringify(value)
 
+export const shiftMidiCc = (controller: number, amount: number): string =>
+  `shift midiCC ${controller} ${amount >= 0 ? '+' : ''}${amount}`
+
+export const setMidiCc = (controller: number, value: number): string =>
+  `set midiCC ${controller} ${value}`
+
+export const removeMidiCc = (controller: number): string => `remove midiCC ${controller}`
+
+export const setMidiCcLabel = (controller: number, label: string): string =>
+  `set midiCCLabel ${controller} ${quoteCommandArgument(label)}`
+
+export const removeMidiCcLabel = (controller: number): string =>
+  `remove midiCCLabel ${controller}`
+
 /* =========================================================
    Composition command builders
    ========================================================= */

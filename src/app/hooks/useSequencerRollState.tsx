@@ -6,7 +6,7 @@ import {
   getLargestElement,
   normalizePitch,
 } from '../domain/music'
-import type { Cell, SelectionPath, SequenceElement } from '../domain/music'
+import type { Cell, MidiCcValue, SelectionPath, SequenceElement } from '../domain/music'
 import type { BgOverlayState } from '../presentation/viewModels'
 
 type RollNoteSpan = {
@@ -18,6 +18,7 @@ type RollNoteSpan = {
   hasDelay: boolean
   shortGate: boolean
   octaveLabel: string | null
+  midiCc: MidiCcValue[]
 }
 
 type RollSelectionSpan = {
@@ -215,6 +216,7 @@ export function useSequencerRollState({
             hasDelay: normalizedDelay > 0,
             shortGate: normalizedGate < 1,
             octaveLabel: noteOctave === 0 ? null : noteOctave > 0 ? `+${noteOctave}` : `${noteOctave}`,
+            midiCc: element.midiCc,
           })
         }
 

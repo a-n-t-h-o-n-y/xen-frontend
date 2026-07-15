@@ -64,6 +64,7 @@ const renderHeader = (
       tuningName={metadataAvailable ? '12EDO' : '--'}
       sequenceName="Lead"
       currentInputMode="velocity"
+      currentInputKey="V"
       documentControls={null}
       onOpenQuickAccess={onOpenQuickAccess}
       onOpenSettings={vi.fn()}
@@ -79,7 +80,7 @@ describe('HeaderSection quick access trigger', () => {
     renderHeader(vi.fn())
 
     expect(screen.getByText('Lead')).toBeInTheDocument()
-    expect(screen.getByLabelText('Input mode velocity')).toHaveTextContent('InputVelocity')
+    expect(screen.getByLabelText('Input mode velocity')).toHaveTextContent('VInputVelocity')
     expect(screen.getByRole('button', { name: 'Open settings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Modulate' })).toBeInTheDocument()
     const timing = within(screen.getByRole('region', { name: 'Timing' }))

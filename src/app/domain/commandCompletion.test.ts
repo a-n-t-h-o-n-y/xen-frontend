@@ -14,7 +14,7 @@ import type { ActiveArgument } from './commandCompletion'
 
 describe('command completion', () => {
   const commands = buildSessionReference({
-    schema_version: 5,
+    schema_version: 7,
     commands: [
       {
         path: ['set', 'velocity'],
@@ -369,5 +369,21 @@ describe('command completion', () => {
       label: 'song', insertionText: 'song.xenproj',
     })
     expect(getArgumentCompletionCandidates(active('sequence_name'), resources)[0]?.label).toBe('S1')
+
+    const controllerCandidates = getArgumentCompletionCandidates({
+      ...active('midi_controller'),
+      typedValue: 'bright',
+      rawValue: 'bright',
+      hasValue: true,
+    }, {
+      ...resources,
+      midiCcLabels: new Map([[74, 'Brightness']]),
+      activeMidiCcController: 74,
+    })
+    expect(controllerCandidates[0]).toMatchObject({
+      label: 'CC 74 — Brightness',
+      insertionText: '74',
+      isActive: true,
+    })
   })
 })

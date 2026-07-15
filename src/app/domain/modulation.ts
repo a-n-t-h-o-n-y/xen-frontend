@@ -9,6 +9,7 @@ import type {
 
 export type ModulationCatalog = ModulationCatalogDto
 export type ModulationDestination = ModulationDestinationDto
+export type ModulationDestinationId = ModulationDestination['id']
 export type ModulationOutputRange = ModulationOutputRangeDto
 export type ModulationDefinition = ModulationDefinitionDto
 export type ModulationShape = ModulationShapeDto
@@ -21,15 +22,16 @@ export type ModulationEditorState = {
   operation: ModulationOperation
   waveforms: EditorWaveform[]
   selectedWaveformId: string
-  outputRanges: Record<ModulationDestination, ModulationOutputRange>
+  outputRanges: Record<ModulationDestinationId, ModulationOutputRange>
 }
 
-export const MODULATION_DESTINATION_LABELS: Record<ModulationDestination, string> = {
+export const MODULATION_DESTINATION_LABELS: Record<ModulationDestinationId, string> = {
   pitch: 'Pitch',
   velocity: 'Velocity',
   delay: 'Delay',
   gate: 'Gate',
   weight: 'Weight',
+  midi_cc: 'MIDI CC',
 }
 
 export const MODULATION_SHAPE_LABELS: Record<ModulationShape, string> = {
@@ -67,12 +69,16 @@ export const createEditorWaveform = (
 
 export const createDefaultOutputRanges = (
   tuningLength: number
-): Record<ModulationDestination, ModulationOutputRange> => ({
-  pitch: { minimum: 0, maximum: Math.max(0, Math.trunc(tuningLength) - 1) },
+): Record<ModulationDestinationId, ModulationOutputRange> => ({
+  pitch: {
+    minimum: -2 * Math.max(1, Math.trunc(tuningLength)),
+    maximum: 2 * Math.max(1, Math.trunc(tuningLength)),
+  },
   velocity: { minimum: 0, maximum: 1 },
   delay: { minimum: 0, maximum: 1 },
   gate: { minimum: 0, maximum: 1 },
   weight: { minimum: 0.1, maximum: 2 },
+  midi_cc: { minimum: 0, maximum: 1 },
 })
 
 export const createInitialModulationEditorState = (
@@ -132,6 +138,28 @@ export const operationAcceptsEnabledCount = (
   return count >= (definition.minimum_enabled_waveforms ?? 1)
 }
 
+export const isBinaryOperation = (
+  catalog: ModulationCatalog,
+  operation: ModulationOperation
+): boolean => {
+  const definition = catalog.operations.find((entry) => entry.id === operation)
+  return definition?.enabled_waveforms === 2 ||
+    operation === 'am' || operation === 'ring' || operation === 'fm' || operation === 'pm'
+}
+
+export const normalizeWaveformsForOperation = (
+  catalog: ModulationCatalog,
+  operation: ModulationOperation,
+  waveforms: EditorWaveform[]
+): EditorWaveform[] => {
+  if (!isBinaryOperation(catalog, operation)) return waveforms
+  const next = [...waveforms]
+  while (next.length < 2) {
+    next.push(createEditorWaveform(catalog.waveform_shapes[0] ?? 'sine'))
+  }
+  return next.map((waveform, index) => ({ ...waveform, enabled: index < 2 }))
+}
+
 const isPositiveFloat32 = (value: number): boolean => {
   const converted = Math.fround(value)
   return Number.isFinite(value) && Number.isFinite(converted) && converted > 0
@@ -145,7 +173,7 @@ export const validateOutputRange = (
     return 'Range endpoints must be finite numbers.'
   }
   if (range.minimum > range.maximum) return 'Minimum must not exceed maximum.'
-  if (destination === 'pitch') {
+  if (destination.id === 'pitch') {
     if (!Number.isInteger(range.minimum) || !Number.isInteger(range.maximum)) {
       return 'Pitch range endpoints must be integers.'
     }
@@ -155,7 +183,7 @@ export const validateOutputRange = (
     ) return 'Pitch range endpoints must fit a 32-bit integer.'
     return null
   }
-  if (destination === 'weight') {
+  if (destination.id === 'weight') {
     return isPositiveFloat32(range.minimum) && isPositiveFloat32(range.maximum)
       ? null
       : 'Weight range endpoints must be positive 32-bit floats.'
@@ -228,6 +256,30 @@ export const sampleWaveform = (waveform: ModulationWaveform, x: number): number 
     waveform.frequency * x + waveform.phase
   )
 
+export const frequencyFromWavelengthPointer = (
+  pointerDistance: number,
+  sequenceWidth: number,
+  range: { minimum: number; maximum: number }
+): number => {
+  if (pointerDistance <= 0) return range.maximum
+  const frequency = Math.max(sequenceWidth, 1) / pointerDistance
+  return clampNumber(frequency, range.minimum, range.maximum)
+}
+
+export const phaseFromWavelengthDrag = (
+  startPhase: number,
+  pointerDelta: number,
+  sequenceWidth: number,
+  frequency: number,
+  range: { minimum: number; maximum: number }
+): number => {
+  const rangeWidth = range.maximum - range.minimum
+  if (rangeWidth <= 0) return range.minimum
+  const phaseDelta = pointerDelta / Math.max(sequenceWidth, 1) * frequency
+  const value = startPhase - phaseDelta
+  return ((value - range.minimum) % rangeWidth + rangeWidth) % rangeWidth + range.minimum
+}
+
 export const sampleCombinedModulation = (
   definition: ModulationDefinition,
   x: number,
@@ -285,7 +337,7 @@ export const createModulationPlotPaths = (
     for (let index = 0; index <= samples; index += 1) {
       const x = index / samples
       const value = sampleWaveform(waveform, x)
-      points.push(`${(x * 100).toFixed(2)},${((1 - (clampNumber(value, -1, 1) + 1) / 2) * 100).toFixed(2)}`)
+      points.push(`${(x * 100).toFixed(2)},${((1 - (value + 1) / 2) * 100).toFixed(2)}`)
     }
     return { id: waveform.id, points: points.join(' ') }
   })

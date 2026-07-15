@@ -1,5 +1,7 @@
 import { useMemo, type CSSProperties } from 'react'
 import { REFERENCE_RATIOS } from '../domain/music'
+import { buildMidiCcAutomationSegments } from '../domain/midiCcAutomation'
+import { frequencyFromWavelengthPointer, phaseFromWavelengthDrag } from '../domain/modulation'
 import { getNoteFillColor, isNoteOffVelocity } from './sequencerNoteColor'
 import type { BgOverlayState } from '../presentation/viewModels'
 
@@ -12,6 +14,7 @@ type RollNoteSpan = {
   hasDelay: boolean
   shortGate: boolean
   octaveLabel: string | null
+  midiCc: Array<{ controller: number; value: number }>
 }
 
 type RollSelectionSpan = {
@@ -36,8 +39,15 @@ type WavePadDragState = {
   host: HTMLDivElement
   startClientX: number
   startClientY: number
+  startFrequencyPointerDistance: number
   startFrequency: number
   startPhase: number
+  startAmplitude: number
+  startAmplitudeOffset: number
+  currentFrequency: number
+  currentPhase: number
+  currentAmplitude: number
+  currentAmplitudeOffset: number
   mode: 'frequency-amplitude' | 'phase-offset'
   moved: boolean
 }
@@ -52,6 +62,7 @@ type SequencerSectionProps = {
   selectionSpans: RollSelectionSpan[]
   tuningLength: number
   rollNotes: RollNoteSpan[]
+  activeMidiCcController: number
   playheadPhase: number | null
   ratioToBottom: (ratio: number) => number
   rulerRatios: number[]
@@ -62,6 +73,14 @@ type SequencerSectionProps = {
   selectedWaveformId: string
   selectedFrequency: number
   selectedPhase: number
+  selectedAmplitude: number
+  selectedAmplitudeOffset: number
+  waveformParameterRanges: {
+    frequency: { minimum: number; maximum: number }
+    phase: { minimum: number; maximum: number }
+    amplitude: { minimum: number; maximum: number }
+    amplitude_offset: { minimum: number; maximum: number }
+  } | null
   waveformPaths: Array<{ id: string; points: string }>
   combinedWaveformPath: string
   updateSelectedWaveform: (update: {
@@ -82,6 +101,9 @@ function ModulatorOverlay({
   selectedWaveformId,
   selectedFrequency,
   selectedPhase,
+  selectedAmplitude,
+  selectedAmplitudeOffset,
+  waveformParameterRanges,
   waveformPaths,
   combinedWaveformPath,
   updateSelectedWaveform,
@@ -95,6 +117,9 @@ function ModulatorOverlay({
   selectedWaveformId: string
   selectedFrequency: number
   selectedPhase: number
+  selectedAmplitude: number
+  selectedAmplitudeOffset: number
+  waveformParameterRanges: SequencerSectionProps['waveformParameterRanges']
   waveformPaths: Array<{ id: string; points: string }>
   combinedWaveformPath: string
   updateSelectedWaveform: SequencerSectionProps['updateSelectedWaveform']
@@ -102,6 +127,8 @@ function ModulatorOverlay({
   commitContinuousEdit: () => void
   cancelContinuousEdit: () => void
 }) {
+  const clampToRange = (value: number, range: { minimum: number; maximum: number }): number =>
+    Math.max(range.minimum, Math.min(value, range.maximum))
   const hasSelection = targetAvailable && selectedOutline !== null && selectedOutline.width > 0
   const overlaySpan = hasSelection ? selectedOutline : { x: 0, width: 1 }
   const overlayStyle = {
@@ -121,13 +148,21 @@ function ModulatorOverlay({
                   return
                 }
                 if (!beginContinuousEdit()) return
+                const bounds = event.currentTarget.getBoundingClientRect()
                 wavePadDragRef.current = {
                   pointerId: event.pointerId,
                   host: event.currentTarget,
                   startClientX: event.clientX,
                   startClientY: event.clientY,
+                  startFrequencyPointerDistance: event.clientX - bounds.left,
                   startFrequency: selectedFrequency,
                   startPhase: selectedPhase,
+                  startAmplitude: selectedAmplitude,
+                  startAmplitudeOffset: selectedAmplitudeOffset,
+                  currentFrequency: selectedFrequency,
+                  currentPhase: selectedPhase,
+                  currentAmplitude: selectedAmplitude,
+                  currentAmplitudeOffset: selectedAmplitudeOffset,
                   mode: event.shiftKey ? 'phase-offset' : 'frequency-amplitude',
                   moved: false,
                 }
@@ -150,22 +185,53 @@ function ModulatorOverlay({
                   return
                 }
                 const bounds = drag.host.getBoundingClientRect()
-                const xDelta = (event.clientX - drag.startClientX) / Math.max(bounds.width, 1)
-                const yRatio = Math.max(0, Math.min(
-                  (event.clientY - bounds.top) / Math.max(bounds.height, 1),
-                  1
-                ))
-                const bipolarY = 1 - yRatio * 2
+                const width = Math.max(bounds.width, 1)
+                const height = Math.max(bounds.height, 1)
+                const nextMode = event.shiftKey ? 'phase-offset' : 'frequency-amplitude'
+                if (nextMode !== drag.mode) {
+                  drag.mode = nextMode
+                  drag.startClientX = event.clientX
+                  drag.startClientY = event.clientY
+                  drag.startFrequency = drag.currentFrequency
+                  drag.startPhase = drag.currentPhase
+                  drag.startAmplitude = drag.currentAmplitude
+                  drag.startAmplitudeOffset = drag.currentAmplitudeOffset
+                  if (nextMode === 'frequency-amplitude') {
+                    drag.startFrequencyPointerDistance = width /
+                      Math.max(drag.currentFrequency, 0.000001)
+                  }
+                  return
+                }
+                const yDelta = (event.clientY - drag.startClientY) / height
+                if (!waveformParameterRanges) return
                 if (drag.mode === 'phase-offset') {
-                  updateSelectedWaveform({
-                    phase: ((drag.startPhase + xDelta) % 1 + 1) % 1,
-                    amplitude_offset: bipolarY,
-                  })
+                  const phase = phaseFromWavelengthDrag(
+                    drag.startPhase,
+                    event.clientX - drag.startClientX,
+                    width,
+                    drag.startFrequency,
+                    waveformParameterRanges.phase
+                  )
+                  const amplitudeOffset = clampToRange(
+                    drag.startAmplitudeOffset - yDelta * 2,
+                    waveformParameterRanges.amplitude_offset
+                  )
+                  drag.currentPhase = phase
+                  drag.currentAmplitudeOffset = amplitudeOffset
+                  updateSelectedWaveform({ phase, amplitude_offset: amplitudeOffset })
                 } else {
-                  updateSelectedWaveform({
-                    frequency: Math.max(0, Math.min(drag.startFrequency + xDelta, 1)),
-                    amplitude: bipolarY,
-                  })
+                  const frequency = frequencyFromWavelengthPointer(
+                    drag.startFrequencyPointerDistance + event.clientX - drag.startClientX,
+                    width,
+                    waveformParameterRanges.frequency
+                  )
+                  const amplitude = clampToRange(
+                    drag.startAmplitude - yDelta * 2,
+                    waveformParameterRanges.amplitude
+                  )
+                  drag.currentFrequency = frequency
+                  drag.currentAmplitude = amplitude
+                  updateSelectedWaveform({ frequency, amplitude })
                 }
               }
             : undefined
@@ -192,7 +258,7 @@ function ModulatorOverlay({
               }
             : undefined
         }
-        title="Drag to edit frequency and amplitude. Shift-drag edits phase and amplitude offset."
+        title="Drag the wavelength and amplitude. Hold Shift at any time for phase and amplitude offset."
       >
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
           {waveformPaths.map((waveform) => (
@@ -224,6 +290,7 @@ export function SequencerSection({
   selectionSpans,
   tuningLength,
   rollNotes,
+  activeMidiCcController,
   playheadPhase,
   ratioToBottom,
   rulerRatios,
@@ -234,6 +301,9 @@ export function SequencerSection({
   selectedWaveformId,
   selectedFrequency,
   selectedPhase,
+  selectedAmplitude,
+  selectedAmplitudeOffset,
+  waveformParameterRanges,
   waveformPaths,
   combinedWaveformPath,
   updateSelectedWaveform,
@@ -251,6 +321,10 @@ export function SequencerSection({
   }, [tuningLength])
 
   const selectedOutline = selectionSpans.length > 0 ? selectionSpans[0] : null
+  const automationSegments = useMemo(
+    () => buildMidiCcAutomationSegments(rollNotes, activeMidiCcController),
+    [activeMidiCcController, rollNotes]
+  )
 
   return (
     <main className="sequencer">
@@ -335,6 +409,50 @@ export function SequencerSection({
                 />
               </div>
             ) : null}
+            <div className="rollMidiCcLayer" aria-hidden="true">
+              {automationSegments.map((segment, index) => {
+                const connectorBottom = segment.connectFromValue === null
+                  ? 0
+                  : Math.min(segment.value, segment.connectFromValue) * 100
+                const connectorHeight = segment.connectFromValue === null
+                  ? 0
+                  : Math.abs(segment.value - segment.connectFromValue) * 100
+                const tone = segment.active
+                  ? segment.selected ? ' rollMidiCcSegment-selected' : ' rollMidiCcSegment-active'
+                  : ''
+                return (
+                  <span key={`${segment.controller}-${segment.x}-${index}`}>
+                    {segment.connectFromValue === null ? null : (
+                      <span
+                        className={`rollMidiCcConnector${tone}`}
+                        style={{
+                          left: `${segment.x * 100}%`,
+                          bottom: `${connectorBottom}%`,
+                          height: `${connectorHeight}%`,
+                        }}
+                      />
+                    )}
+                    <span
+                      className={`rollMidiCcSegment${tone}`}
+                      style={{
+                        left: `${segment.x * 100}%`,
+                        width: `${segment.width * 100}%`,
+                        bottom: `${segment.value * 100}%`,
+                      }}
+                    />
+                    {segment.active && segment.selected ? (
+                      <span
+                        className="rollMidiCcNode"
+                        style={{
+                          left: `${segment.x * 100}%`,
+                          bottom: `${segment.value * 100}%`,
+                        }}
+                      />
+                    ) : null}
+                  </span>
+                )
+              })}
+            </div>
             <div className="rollNoteLayer" aria-hidden="true">
               {rollNotes.map((note, noteIndex) => {
                 const rowFromTop = tuningLength - 1 - note.pitch
@@ -376,6 +494,9 @@ export function SequencerSection({
                 selectedWaveformId={selectedWaveformId}
                 selectedFrequency={selectedFrequency}
                 selectedPhase={selectedPhase}
+                selectedAmplitude={selectedAmplitude}
+                selectedAmplitudeOffset={selectedAmplitudeOffset}
+                waveformParameterRanges={waveformParameterRanges}
                 waveformPaths={waveformPaths}
                 combinedWaveformPath={combinedWaveformPath}
                 updateSelectedWaveform={updateSelectedWaveform}

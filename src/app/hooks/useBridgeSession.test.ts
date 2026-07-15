@@ -18,7 +18,9 @@ const createArgs = (request: Request) => ({
     ...projectFixture('3'),
     document: { ...projectFixture('3').document, dirty: true },
   }) },
-  editorStateRef: { current: { selection: { path: [] }, inputMode: 'pitch' as const } },
+  editorStateRef: {
+    current: { selection: { path: [] }, inputMode: 'pitch' as const, midiCcController: 0 },
+  },
   activeSequenceTargetRef: { current: null },
   compositionSelectionRef: { current: { rowCoordinate: 0, columnCoordinate: 0 } },
   workspaceViewRef: { current: 'sequencer' as 'sequencer' | 'composition' },

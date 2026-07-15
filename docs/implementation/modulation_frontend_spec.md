@@ -1,14 +1,14 @@
 # Modulation Frontend Specification
 
 This is the implementation contract for the redesigned backend modulation system. It
-targets `xen.bridge.v7`, command catalog schema 5, and modulation schema 1. The old
+targets `xen.bridge.v9`, command catalog schema 7, and modulation schema 3. The old
 command-string JSON modulator format is removed; there is no compatibility path.
 
 ## Design boundary
 
 Modulation is an edit gesture, not persisted project state. The frontend sends a full
 modulation definition during a preview, and the backend materializes ordinary scalar
-pitch, velocity, delay, gate, or weight values into the project. Commit creates at most
+pitch, velocity, delay, gate, weight, or MIDI CC values into the project. Commit creates at most
 one undo entry. Cancel restores the exact baseline. DAW persistence and recovery never
 store transient preview state.
 
@@ -22,13 +22,13 @@ combination operation, or the output range are edited.
 
 ```ts
 type ModulationCatalog = {
-  schema_version: 1;
+  schema_version: 3;
   maximum_waveforms: 64;
   waveform_shapes: Array<
     "sine" | "triangle" | "sawtooth_up" | "sawtooth_down" | "square"
   >;
   waveform_parameters: {
-    frequency: { minimum: 0; maximum: 1 };
+    frequency: { minimum: number; maximum: number };
     phase: { minimum: 0; maximum: 1 };
     amplitude: { minimum: -1; maximum: 1 };
     amplitude_offset: { minimum: -1; maximum: 1 };
@@ -40,43 +40,61 @@ type ModulationCatalog = {
     roles?: ["carrier", "modulator"];
   }>;
   destinations: Array<{
-    id: "pitch" | "velocity" | "delay" | "gate" | "weight";
+    id: "pitch" | "velocity" | "delay" | "gate" | "weight" | "midi_cc";
     range: "integer" | "unit" | "positive";
     quantization?: "nearest";
+    parameters: Array<{
+      id: "controller";
+      kind: "integer";
+      required: true;
+      constraints: [{ kind: "range"; minimum: 0; maximum: 127 }];
+    }>;
   }>;
   normalization: "clamp((raw + 1) / 2, 0, 1)";
 };
 ```
 
-Do not hard-code future operation or shape availability when the catalog can drive the
-UI. Schema 1 nevertheless has the exact validation and math below.
+Built-in destinations advertise `parameters: []`; only `midi_cc` advertises the
+required controller parameter shown above.
+
+Do not hard-code operation, shape, or parameter availability when the catalog can drive
+the UI. Every parameter range contains finite endpoints with `minimum <= maximum`.
 
 ## Frontend interaction requirements
 
-Use one destination control and one modulation editor; do not create a separate
-modulator control for each destination. Only one destination is active at a time.
-Changing the active input mode or destination must not apply modulation. A waveform or
-combination edit is what begins/updates the gesture.
+The active input mode is the modulation destination; do not show a second destination
+control. Changing the active input mode must not apply modulation. A waveform or
+combination edit is what begins/updates the gesture. Output ranges are frontend defaults
+and are not directly editable in the modulation header.
 
 The editor should support these behaviors:
 
-- Add and remove waveform rows and choose each row's shape from a dropdown populated by
-  the catalog. Exactly one waveform is selected for direct editing at a time.
-- Enable/disable rows without deleting their parameters. Show an explicit combination
-  operation control populated by the catalog.
+- Show each waveform as an icon tile with a small menu for its enabled state and shape.
+  Place a square add button immediately after the final tile. Exactly one waveform is
+  selected for direct editing at a time.
+- Show every catalog operation in the combination picker. Selecting a binary operation
+  creates a second waveform when necessary, enables the first two, disables later
+  waveforms, and locks enabled state until a reducer is selected again.
 - Draw every enabled waveform and the combined result in the same plot. Make the
   selected waveform and combined result more prominent than unselected waveforms.
 - Replace the old on-canvas handle with plot-wide mouse editing. A normal left drag
-  edits frequency on x and amplitude on y; y maps bottom/middle/top to `-1/0/+1`.
-  Treat x as a grab-relative frequency change so the waveform does not jump on pointer
-  down. Shift+left drag edits phase on x and amplitude offset on y, with the same
-  bipolar y mapping.
-- Show selected-waveform values for frequency, phase, amplitude, and amplitude offset.
-  Display ranges are `0..1`, `0..1`, `-1..1`, and `-1..1` respectively.
+  defines wavelength from the sequence's left edge to the pointer, so frequency is
+  `sequenceWidth / pointerDistance`. Shift+left drag edits phase on x, with one displayed
+  wavelength of pointer travel representing one full phase cycle. Phase moves in the
+  inverse numeric direction so the displayed waveform follows the pointer. Shift is a
+  live modifier: pressing or releasing it during a drag switches modes without jumping.
+  Vertical motion changes amplitude, or amplitude offset while Shift is held. Pointer capture keeps
+  every value changing while the pointer is outside the plot, up to catalog limits.
+- Show selected-waveform values for frequency, phase, amplitude, and amplitude offset
+  using the bounds advertised by the modulation catalog.
 - Add Weight as an input mode. Use `W` as its default key only when that key is not
   already assigned. Up/down issue additive `shift weight` changes of `+0.1/-0.1` unless
   the user's keymap supplies a different command. Weight edits follow the selected
   Cell/immediate-parent semantics described below.
+- MIDI CC input mode keeps its controller number in frontend editor state. A numeric
+  prefix followed by `A` selects that controller; plain `A` reuses the current one.
+  Controller labels and values are always derived from project snapshots. Up/down and
+  J/K issue parameterized shifts for the active controller; X removes it.
 
 ## Data model
 
@@ -84,7 +102,7 @@ The editor should support these behaviors:
 type Waveform = {
   enabled: boolean;
   shape: "sine" | "triangle" | "sawtooth_up" | "sawtooth_down" | "square";
-  frequency: number;        // inclusive [0, 1]
+  frequency: number;        // inclusive catalog-advertised range
   phase: number;            // inclusive [0, 1]
   amplitude: number;        // inclusive [-1, 1]
   amplitude_offset: number; // inclusive [-1, 1]
@@ -95,7 +113,9 @@ type Modulation = {
   waveforms: Waveform[]; // 1..64 total entries
 };
 
-type Destination = "pitch" | "velocity" | "delay" | "gate" | "weight";
+type Destination =
+  | { id: "pitch" | "velocity" | "delay" | "gate" | "weight" }
+  | { id: "midi_cc"; controller: number };
 
 type OutputRange = { minimum: number; maximum: number };
 
@@ -131,9 +151,10 @@ Output ranges are inclusive and require `minimum <= maximum`:
   the nearest integer, with exact half-way values rounded away from zero.
 - `velocity`, `delay`, `gate`: both endpoints must be in `[0, 1]`.
 - `weight`: both endpoints must fit in a positive 32-bit float.
+- `midi_cc`: the controller is an integer in `[0,127]` and both endpoints are in `[0,1]`.
 
-Recommended initial ranges are `[0, tuning.intervals.length - 1]` for pitch,
-`[0.1, 2]` for weight, and `[0, 1]` for velocity, delay, and gate.
+Frontend ranges are `[-2 * tuning.intervals.length, +2 * tuning.intervals.length]` for
+pitch, `[0.1, 2]` for weight, and `[0, 1]` for velocity, delay, gate, and MIDI CC.
 
 ## Target semantics
 
@@ -145,7 +166,7 @@ The target is captured by `begin` and is fixed for the whole gesture.
   directly contained by that Cell. It does not search arbitrary descendants.
 - The pattern filters child-cell indexes. A request selecting no child cells is rejected.
 - Each Sequence is sampled independently across its own child-cell count.
-- Pitch, velocity, delay, and gate update musical content in each selected child Cell.
+- Pitch, velocity, delay, gate, and MIDI CC update musical content in each selected child Cell.
   Weight updates the selected child Cell's weight.
 
 The ordinary scalar commands are separate from this API. `set weight` and
@@ -256,7 +277,8 @@ amplitude_offset + amplitude * shape(frequency * x + phase)
 ```
 
 The shape range is bipolar `[-1, 1]`. Average, sum, and product combine every enabled
-raw waveform. AM is `carrier * clamp((modulator + 1) / 2, 0, 1)`. Ring is
+raw waveform without clamping intermediate values. AM is
+`carrier * clamp((modulator + 1) / 2, 0, 1)`. Ring is
 `carrier * modulator`. PM adds the modulator raw value to the carrier phase. FM samples
 the modulator at each child and integrates instantaneous carrier frequency across the
 Sequence; unlike PM, it carries phase forward from one sample to the next.

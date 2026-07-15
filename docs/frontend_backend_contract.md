@@ -10,7 +10,7 @@ JUCE exposes the native function `xenBridgeRequest` and event `xenBridgeEvent`.
 
 ```ts
 type Envelope = {
-  protocol: "xen.bridge.v7";
+  protocol: "xen.bridge.v9";
   type: "request" | "response" | "event";
   name: string;
   request_id?: string;
@@ -30,12 +30,20 @@ type CatalogCommand = {
   description: string;
 };
 
+type ModulationCatalog = {
+  schema_version: 3;
+  waveform_parameters: {
+    frequency: { minimum: 0; maximum: 64 };
+  };
+  // Additional waveform, operation, and destination metadata omitted here.
+};
+
 type SessionHello = {
-  protocol: "xen.bridge.v7";
+  protocol: "xen.bridge.v9";
   plugin_version: string;
-  project_schema_version: 6;
+  project_schema_version: 7;
   library_schema_version: 2;
-  catalog: { schema_version: 5; commands: CatalogCommand[] };
+  catalog: { schema_version: 7; commands: CatalogCommand[] };
   modulation: ModulationCatalog;
   binding: { session_id: string; instance_id: string; channel_id: string };
   keymap: KeymapResource;
@@ -96,7 +104,7 @@ type Cursor = {
 };
 
 type ProjectSnapshot = {
-  schema_version: 6;
+  schema_version: 7;
   state_revision: string;
   project_revision: string;
   history_entry_id: string;
@@ -115,6 +123,13 @@ type ProjectSnapshot = {
   };
   project: Project;
 };
+
+type MidiCcValue = { controller: number; value: number };
+type MidiCcLabel = { controller: number; label: string };
+
+// Every Note contains midi_cc: MidiCcValue[].
+// Project contains midi_cc_labels: MidiCcLabel[].
+// Both arrays are always present and sorted by unique controller number.
 
 type DocumentFile = {
   name: string;
@@ -230,6 +245,12 @@ The response contains status, nullable `suggested_selection`, and the current
 `snapshot`. Project-aware commands require a current project revision. The command
 catalog remains immutable per hello response and drives frontend completion.
 
+MIDI CC edits use the catalog-advertised `set midiCC`, `shift midiCC`, and
+`remove midiCC` commands. Project-owned aliases use `set midiCCLabel` and
+`remove midiCCLabel`. Controller numbers are integers in `[0,127]`; values are finite
+normalized numbers in `[0,1]`. A zero value remains an explicit entry, while absence
+means no entry for that controller.
+
 Document commands are retained for the keyboard command line and use the same backend
 service:
 
@@ -255,7 +276,7 @@ Modulation uses the separate `modulation.preview.begin`, `.update`, `.commit`, a
 `.cancel` lifecycle. The begin/commit/cancel responses contain snapshots. Update
 responses are small acknowledgements and intentionally omit the project snapshot;
 accepted updates publish coalesced `state.changed` events at the coordinator maintenance
-rate. See [Modulation frontend specification](modulation_frontend_spec.md) for the
+rate. See [Modulation frontend specification](implementation/modulation_frontend_spec.md) for the
 complete schema, validation rules, target semantics, and client flow.
 
 ## Library resource
@@ -294,12 +315,12 @@ library event to every instance.
 
 ## Persistence formats and limits
 
-- `.xencell`: reusable cell, `{ "kind": "xen_cell", "schema": 1, ... }`, 16 MiB.
-- `.xenproj`: complete project, `{ "kind": "xen_project", "schema": 1, ... }`,
+- `.xencell`: reusable cell, `{ "kind": "xen_cell", "schema": 2, ... }`, 16 MiB.
+- `.xenproj`: complete project, `{ "kind": "xen_project", "schema": 2, ... }`,
   64 MiB.
-- DAW state: internal `{ "kind": "xen_processor_state", "schema": 5, ... }`,
+- DAW state: internal `{ "kind": "xen_processor_state", "schema": 6, ... }`,
   65 MiB including its envelope.
-- Recovery: internal `{ "kind": "xen_recovery", "schema": 1, ... }`, 65 MiB
+- Recovery: internal `{ "kind": "xen_recovery", "schema": 2, ... }`, 65 MiB
   including its envelope.
 
 `.xencomp` and `xen_composition` are unsupported. Project files embed their complete

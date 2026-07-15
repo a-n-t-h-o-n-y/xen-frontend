@@ -7,6 +7,11 @@ import {
   compositionRowChannel,
   compositionRowRename,
   scaleDuration,
+  removeMidiCc,
+  removeMidiCcLabel,
+  setMidiCc,
+  setMidiCcLabel,
+  shiftMidiCc,
   setBaseFrequency,
   setKey,
   setDuration,
@@ -71,5 +76,19 @@ describe('set command builders', () => {
   it('builds scale duration commands for both modes', () => {
     expect(scaleDuration('half')).toBe('halve duration')
     expect(scaleDuration('double')).toBe('double duration')
+  })
+})
+
+describe('MIDI CC command builders', () => {
+  it('builds parameterized value commands', () => {
+    expect(setMidiCc(74, 0.625)).toBe('set midiCC 74 0.625')
+    expect(shiftMidiCc(74, 1 / 127)).toBe(`shift midiCC 74 +${1 / 127}`)
+    expect(removeMidiCc(74)).toBe('remove midiCC 74')
+  })
+
+  it('quotes labels and builds label removal', () => {
+    expect(setMidiCcLabel(74, 'Filter "cutoff"'))
+      .toBe('set midiCCLabel 74 "Filter \\"cutoff\\""')
+    expect(removeMidiCcLabel(74)).toBe('remove midiCCLabel 74')
   })
 })

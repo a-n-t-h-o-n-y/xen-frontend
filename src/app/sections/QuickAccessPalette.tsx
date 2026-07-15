@@ -44,6 +44,8 @@ type QuickAccessPaletteProps = {
   sequenceBank: SequenceBank | null
   keymapResource: KeymapResource | null
   currentInputMode: InputMode
+  midiCcLabels?: ReadonlyMap<number, string>
+  activeMidiCcController?: number
 }
 
 const scopes: Array<{ id: PaletteScope; label: string }> = [
@@ -72,6 +74,8 @@ export function QuickAccessPalette({
   sequenceBank,
   keymapResource,
   currentInputMode,
+  midiCcLabels,
+  activeMidiCcController,
 }: QuickAccessPaletteProps) {
   const { state, dispatch } = controller
   const panelRef = useRef<HTMLElement | null>(null)
@@ -122,6 +126,8 @@ export function QuickAccessPalette({
           sequenceBank,
           activeTuningName,
           activeScaleId,
+          ...(midiCcLabels ? { midiCcLabels } : {}),
+          ...(activeMidiCcController === undefined ? {} : { activeMidiCcController }),
         })
       : [], [
     activeScaleId,
@@ -129,6 +135,8 @@ export function QuickAccessPalette({
     completion.activeArgument,
     completion.mode,
     librarySnapshot,
+    midiCcLabels,
+    activeMidiCcController,
     sequenceBank,
     state.isCompletionDismissed,
     state.isHistoryNavigationFrozen,

@@ -526,7 +526,6 @@
 }
 
 /* Catalog-driven modulation editor */
-.modulationDestinationControls,
 .modulationWaveControls,
 .modulationParameterControls {
   display: grid;
@@ -535,23 +534,16 @@
   min-width: 0;
 }
 
-.modulationDestinationControls {
-  grid-template-columns: minmax(7rem, 1.25fr) repeat(2, minmax(4.5rem, 0.75fr));
-}
-
 .modulationWaveControls {
   position: relative;
-  grid-template-columns: minmax(9rem, 1.35fr) minmax(7rem, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 0.28fr);
 }
 
 .modulationParameterControls {
-  grid-template-columns: minmax(6rem, 1.2fr) repeat(4, minmax(4.5rem, 1fr));
+  grid-template-columns: repeat(4, minmax(4.25rem, 1fr));
 }
 
-.modulationNumber,
-.modulationSelect,
-.modulationManagerTrigger,
-.modulationSelectedShape {
+.modulationNumber {
   width: 100%;
   min-width: 0;
   height: var(--header-control-height);
@@ -562,36 +554,15 @@
   font-size: var(--font-xs);
 }
 
-.modulationNumber,
-.modulationSelect {
+.modulationNumber {
   padding: 0 var(--space-2);
 }
 
-.modulationManagerTrigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: 0 var(--space-2);
-  cursor: pointer;
-}
-
-.modulationSelectedShape {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-2);
-}
-
-.modulationManagerTrigger:hover,
-.modulationSelect:hover,
 .modulationNumber:hover {
   border-color: var(--border-strong-color);
   background: var(--surface-control-hover);
 }
 
-.modulationManagerTrigger:focus-visible,
-.modulationSelect:focus-visible,
 .modulationNumber:focus-visible {
   border-color: var(--accent);
   outline: 2px solid var(--focus-ring);
@@ -605,7 +576,7 @@
   z-index: 70;
   display: grid;
   gap: var(--space-2);
-  width: min(32rem, 72vw);
+  width: min(27rem, 72vw);
   max-height: min(28rem, 62vh);
   padding: var(--space-3);
   border: var(--border-strong);
@@ -638,71 +609,141 @@
   text-transform: capitalize;
 }
 
-.modulationAddWave,
 .modulationRemoveWave,
-.modulationWaveSelect {
+.modulationShapeOption,
+.modulationWaveTile,
+.modulationWaveAddTile {
   border: var(--border-subtle);
   border-radius: var(--radius-1);
   background: var(--surface-control);
   color: var(--text-secondary);
 }
 
-.modulationAddWave {
-  min-height: var(--control-height-sm);
-  padding: 0 var(--space-2);
-}
-
-.modulationWaveRows {
-  display: grid;
+.modulationWaveStrip {
+  display: flex;
+  align-items: end;
   gap: var(--space-1);
-  min-height: 0;
-  overflow-y: auto;
+  min-width: 0;
+  overflow-x: auto;
 }
 
-.modulationWaveRow {
+.modulationWaveTile {
+  position: relative;
   display: grid;
-  grid-template-columns: 2rem 1.25rem minmax(8rem, 1fr) 4.75rem 2rem;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 2.5rem;
-  padding: var(--space-1);
-  border: 1px solid transparent;
-  border-radius: var(--radius-1);
+  grid-template-columns: 2.25rem 0.9rem;
+  flex: 0 0 auto;
+  height: var(--header-control-height);
+  overflow: hidden;
 }
 
-.modulationWaveRow-selected {
+.modulationWaveTile-selected {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
-.modulationWaveSelect,
-.modulationRemoveWave {
+.modulationWaveTile-disabled {
+  opacity: 0.48;
+}
+
+.modulationWaveTileSelect,
+.modulationWaveTileMenu,
+.modulationWaveAddTile {
   display: inline-grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
   padding: 0;
+  cursor: pointer;
 }
 
-.modulationWaveSelect[aria-pressed='true'] {
-  color: var(--accent-strong);
+.modulationWaveTileMenu {
+  border-left: 1px solid var(--divider-color);
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
 }
 
-.modulationAddWave:hover:not(:disabled),
+.modulationWaveAddTile {
+  flex: 0 0 var(--header-control-height);
+  width: var(--header-control-height);
+  border: var(--border-subtle);
+  font-size: 1.15rem;
+}
+
+.modulationWaveIcon {
+  width: 1.75rem;
+  height: 1.4rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.modulationWaveTile:hover,
+.modulationWaveAddTile:hover:not(:disabled),
 .modulationRemoveWave:hover:not(:disabled),
-.modulationWaveSelect:hover:not(:disabled) {
+.modulationShapeOption:hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--surface-control-hover);
   color: var(--text-primary);
 }
 
-.modulationAddWave:disabled,
+.modulationWaveAddTile:disabled,
 .modulationRemoveWave:disabled,
-.modulationWaveSelect:disabled,
-.modulationNumber:disabled,
-.modulationSelect:disabled {
+.modulationShapeOption:disabled,
+.modulationNumber:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.modulationCombineField {
+  min-width: 0;
+}
+
+.modulationCompactField {
+  min-width: 0;
+}
+
+.modulationCompactField .fieldLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modulationRemoveWave {
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-2);
+}
+
+.modulationEnableWave {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+}
+
+.modulationShapeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.modulationShapeOption {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  min-height: 3.5rem;
+  padding: var(--space-1);
+  font-size: var(--font-xs);
+}
+
+.modulationShapeOption-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 @media (max-width: 980px) {
@@ -711,7 +752,7 @@
   }
 
   .modulationParameterControls {
-    grid-template-columns: minmax(6rem, 1.2fr) repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .modulationWaveManager {

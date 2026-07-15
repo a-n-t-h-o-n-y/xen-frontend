@@ -9,7 +9,12 @@ import {
   getSequenceById,
   moveCompositionSelection,
 } from '../domain/composition'
-import { compositionCellAssign, compositionCellUnassign } from '../domain/commands'
+import {
+  compositionCellAssign,
+  compositionCellUnassign,
+  removeMidiCc,
+  shiftMidiCc,
+} from '../domain/commands'
 import { moveSelectionWithTopBoundary, projectRootCell } from '../domain/selection'
 import { isEditableTarget } from '../presentation/viewModels'
 import { getErrorMessage } from '../utils/errors'
@@ -325,6 +330,7 @@ export function useKeyboardController({
           return
         }
         if (
+          !isDigitKey &&
           action !== 'modulator.mode.toggle' &&
           action !== 'input_mode.set'
         ) {
@@ -352,12 +358,13 @@ export function useKeyboardController({
           return
         }
         event.preventDefault()
+        const pendingNumber = pendingNumberRef.current
         void (async () => {
           try {
             if (matchedBinding.target.type === 'command') {
               const command = expandNumericPlaceholders(
                 matchedBinding.target.command,
-                pendingNumberRef.current
+                pendingNumber
               )
               await executeBackendCommand(command)
               return
@@ -394,10 +401,37 @@ export function useKeyboardController({
             }
 
             if (matchedBinding.target.action === 'input_mode.set') {
+              if (matchedBinding.target.arguments.mode === 'midi_cc' && pendingNumber) {
+                const controller = Number.parseInt(pendingNumber, 10)
+                if (controller < 0 || controller > 127) {
+                  setStatusMessage('MIDI controller number must be between 0 and 127.')
+                  setStatusLevel('warning')
+                  return
+                }
+                installEditorState({
+                  ...editorStateRef.current,
+                  inputMode: 'midi_cc',
+                  midiCcController: controller,
+                })
+                return
+              }
               installEditorState({
                 ...editorStateRef.current,
                 inputMode: matchedBinding.target.arguments.mode,
               })
+              return
+            }
+
+            if (matchedBinding.target.action === 'midi_cc.shift') {
+              await executeBackendCommand(shiftMidiCc(
+                editorStateRef.current.midiCcController,
+                matchedBinding.target.arguments.amount
+              ))
+              return
+            }
+
+            if (matchedBinding.target.action === 'midi_cc.remove') {
+              await executeBackendCommand(removeMidiCc(editorStateRef.current.midiCcController))
               return
             }
 

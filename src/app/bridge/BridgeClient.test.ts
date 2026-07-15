@@ -14,7 +14,7 @@ const responseEnvelope = (
   requestId: string,
   payload: Record<string, unknown>
 ) => ({
-  protocol: 'xen.bridge.v7',
+  protocol: 'xen.bridge.v9',
   type: 'response',
   name,
   request_id: requestId,
@@ -69,7 +69,7 @@ describe('BridgeClient', () => {
       preview_id: 'mod-1',
       update_sequence: '1',
       expected_project_revision: '3',
-      destination: 'weight',
+      destination: { id: 'weight' },
       output_range: { minimum: 0.1, maximum: 2 },
       modulation: {
         operation: 'average',
@@ -101,7 +101,7 @@ describe('BridgeClient', () => {
 
     expect(payload.project_revision).toBe('3')
     expect(JSON.parse(rawRequest)).toEqual({
-      protocol: 'xen.bridge.v7',
+      protocol: 'xen.bridge.v9',
       type: 'request',
       name: 'state.get',
       request_id: 'req-test',

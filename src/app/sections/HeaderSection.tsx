@@ -48,6 +48,7 @@ type HeaderSectionProps = {
   tuningName: string
   sequenceName: string
   currentInputMode: InputMode
+  currentInputKey: string
   documentControls: ReactNode
   onOpenQuickAccess: () => void
   onOpenSettings: () => void
@@ -55,6 +56,8 @@ type HeaderSectionProps = {
   onExitModulation: () => void
   modulationDisabled: boolean
   modulationControls?: ReactNode
+  automationControls?: ReactNode
+  currentInputLabel?: string
 }
 
 export function HeaderSection({
@@ -99,6 +102,7 @@ export function HeaderSection({
   tuningName,
   sequenceName,
   currentInputMode,
+  currentInputKey,
   documentControls,
   onOpenQuickAccess,
   onOpenSettings,
@@ -106,6 +110,8 @@ export function HeaderSection({
   onExitModulation,
   modulationDisabled,
   modulationControls,
+  automationControls,
+  currentInputLabel,
 }: HeaderSectionProps) {
   return (
     <header className={`header${modulationControls ? ' header-modulation' : ''}`}>
@@ -132,10 +138,17 @@ export function HeaderSection({
         </div>
         <div className="headerActions">
           {documentControls}
-          <div className="headerInputStatus" aria-label={`Input mode ${currentInputMode}`}>
-            <span className="headerInputStatusLabel">Input</span>
-            <span className="headerInputStatusValue">
-              {currentInputMode.charAt(0).toUpperCase() + currentInputMode.slice(1)}
+          <div className="headerInputStatus" aria-label={`Input mode ${currentInputLabel ?? currentInputMode}`}>
+            <kbd className="headerInputStatusKey">{currentInputKey}</kbd>
+            <span className="headerInputStatusText">
+              <span className="headerInputStatusLabel">Input</span>
+              <span className={`headerInputStatusValue${
+                currentInputLabel ? ' headerInputStatusValue-custom' : ''
+              }`}>
+                {currentInputLabel ?? (
+                  currentInputMode.charAt(0).toUpperCase() + currentInputMode.slice(1)
+                )}
+              </span>
             </span>
           </div>
           <button
@@ -324,6 +337,7 @@ export function HeaderSection({
             </div>
           </div>
         </section>
+        {automationControls}
         </div>
       )}
     </header>

@@ -35,6 +35,8 @@ export type FrontendUiActionId =
   | 'edit.cut'
   | 'edit.paste'
   | 'modulator.mode.toggle'
+  | 'midi_cc.shift'
+  | 'midi_cc.remove'
   | CommandUiActionId
 
 type UiActionMetadata = {
@@ -45,6 +47,7 @@ type UiActionMetadata = {
     | 'none'
     | 'selectionDirection'
     | 'inputMode'
+    | 'normalizedDelta'
 }
 
 export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
@@ -59,6 +62,18 @@ export const uiActionRegistry: Record<FrontendUiActionId, UiActionMetadata> = {
     label: 'Set input mode',
     section: 'Sequencer',
     argumentKind: 'inputMode',
+  },
+  'midi_cc.shift': {
+    id: 'midi_cc.shift',
+    label: 'Shift active MIDI CC',
+    section: 'Sequencer',
+    argumentKind: 'normalizedDelta',
+  },
+  'midi_cc.remove': {
+    id: 'midi_cc.remove',
+    label: 'Remove active MIDI CC',
+    section: 'Sequencer',
+    argumentKind: 'none',
   },
   'workspace.view.toggle': {
     id: 'workspace.view.toggle',
@@ -268,6 +283,9 @@ export const formatUiActionTarget = (
   }
   if (target.action === 'input_mode.set') {
     return `Set input mode to ${target.arguments.mode}`
+  }
+  if (target.action === 'midi_cc.shift') {
+    return `Shift active MIDI CC by ${target.arguments.amount}`
   }
   return uiActionRegistry[target.action].label
 }

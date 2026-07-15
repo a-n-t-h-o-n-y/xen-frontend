@@ -49,7 +49,11 @@ const renderController = (
     setIsModulatorMode?: Parameters<typeof useKeyboardController>[0]['setIsModulatorMode']
   } = {}
 ) => {
-  const editorState: EditorState = { selection: { path: [] }, inputMode: 'pitch' }
+  const editorState: EditorState = {
+    selection: { path: [] },
+    inputMode: 'pitch',
+    midiCcController: 0,
+  }
   const editorStateRef = options.editorStateRef ?? { current: editorState }
   const workspaceView = options.workspaceView ?? 'sequencer'
   const args: Parameters<typeof useKeyboardController>[0] = {
@@ -160,7 +164,9 @@ describe('useKeyboardController', () => {
     keymap.bindings.sequencer?.push(binding)
     const setIsModulatorMode = vi.fn()
     const rendered = renderController(keymap, vi.fn(), vi.fn(), {
-      editorStateRef: { current: { selection: { path: [] }, inputMode: 'scale' } },
+      editorStateRef: {
+        current: { selection: { path: [] }, inputMode: 'scale', midiCcController: 0 },
+      },
       setIsModulatorMode,
     })
 
@@ -190,6 +196,7 @@ describe('useKeyboardController', () => {
       current: {
         selection: { path: [{ kind: 'element' as const, index: 0 }] },
         inputMode: 'pitch' as const,
+        midiCcController: 0,
       },
     }
     const installEditorState = vi.fn((nextState: EditorState) => {
@@ -210,6 +217,7 @@ describe('useKeyboardController', () => {
     expect(installEditorState).toHaveBeenLastCalledWith({
       selection: { path: [] },
       inputMode: 'pitch',
+      midiCcController: 0,
     })
     expect(setWorkspaceView).not.toHaveBeenCalled()
 
@@ -407,6 +415,62 @@ describe('useKeyboardController', () => {
     })
 
     expect(execute).toHaveBeenCalledWith('split 3')
+    rendered.unmount()
+  })
+
+  it('selects a parameterized MIDI CC mode and routes active-controller edits', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined)
+    const editorStateRef: { current: EditorState } = {
+      current: { selection: { path: [] }, inputMode: 'pitch', midiCcController: 0 },
+    }
+    const installEditorState = vi.fn((nextState: EditorState) => {
+      editorStateRef.current = nextState
+    })
+    const rendered = renderController(createResource(), vi.fn(), execute, {
+      editorStateRef,
+      installEditorState,
+    })
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '7', code: 'Digit7' }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '4', code: 'Digit4' }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', code: 'KeyA' }))
+    })
+    expect(editorStateRef.current).toMatchObject({ inputMode: 'midi_cc', midiCcController: 74 })
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }))
+      await Promise.resolve()
+    })
+    expect(execute).toHaveBeenCalledWith(`shift midiCC 74 +${8 / 127}`)
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', code: 'KeyX' }))
+      await Promise.resolve()
+    })
+    expect(execute).toHaveBeenCalledWith('remove midiCC 74')
+    rendered.unmount()
+  })
+
+  it('rejects out-of-range controller prefixes and keeps the existing input mode', () => {
+    const editorStateRef: { current: EditorState } = {
+      current: { selection: { path: [] }, inputMode: 'pitch', midiCcController: 12 },
+    }
+    const installEditorState = vi.fn()
+    const rendered = renderController(createResource(), vi.fn(), vi.fn(), {
+      editorStateRef,
+      installEditorState,
+    })
+
+    act(() => {
+      for (const key of ['1', '2', '8']) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, code: `Digit${key}` }))
+      }
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', code: 'KeyA' }))
+    })
+
+    expect(installEditorState).not.toHaveBeenCalled()
+    expect(editorStateRef.current.inputMode).toBe('pitch')
     rendered.unmount()
   })
 

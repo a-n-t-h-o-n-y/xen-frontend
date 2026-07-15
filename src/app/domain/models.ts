@@ -9,6 +9,7 @@ export type FileRevision = string
 export type EditorState = {
   selection: Selection
   inputMode: InputMode
+  midiCcController: number
 }
 
 export type { TransportState } from '../constants'
@@ -146,6 +147,7 @@ export type ProjectSnapshot = {
   sequenceBank: SequenceBank | null
   composition: Composition | null
   pitch: PitchState
+  midiCcLabels: Map<number, string>
 }
 
 export type ProjectDocument = {

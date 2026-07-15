@@ -233,15 +233,36 @@
 }
 
 .headerInputStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 7rem;
+  height: 2.25rem;
+  padding: 0 var(--space-2) 0 var(--space-1);
+  border-radius: var(--radius-1);
+  background: var(--accent-softer);
+}
+
+.headerInputStatusKey {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-1);
+  background: var(--surface-control);
+  color: var(--accent-strong);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.headerInputStatusText {
   display: grid;
   grid-template-rows: auto auto;
   align-content: center;
-  min-width: 4.5rem;
-  height: 2.25rem;
-  padding: 0 var(--space-2);
-  border-left: 2px solid var(--accent);
-  border-radius: 2px;
-  background: var(--accent-softer);
 }
 
 .headerInputStatusLabel {
@@ -254,11 +275,19 @@
 }
 
 .headerInputStatusValue {
+  overflow: hidden;
+  max-width: 12rem;
   color: var(--accent-strong);
   font-size: var(--font-sm);
   font-weight: 700;
   line-height: 1.2;
   text-transform: capitalize;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerInputStatusValue-custom {
+  text-transform: none;
 }
 
 .headerUtilityButton {
@@ -471,7 +500,11 @@
 
 .headerControlRow {
   display: grid;
-  grid-template-columns: minmax(17.5rem, 1fr) minmax(30rem, 2fr) minmax(17.5rem, 1fr);
+  grid-template-columns:
+    minmax(15rem, 0.8fr)
+    minmax(26rem, 1.5fr)
+    minmax(14rem, 0.8fr)
+    minmax(26rem, 1.35fr);
   align-items: stretch;
   gap: 0;
   min-width: 0;
@@ -518,8 +551,199 @@
   white-space: nowrap;
 }
 
+/* Project-owned controller labels with frontend-owned controller selection. */
+.headerControlGroup-automation {
+  position: relative;
+}
+
+.automationFields {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(9rem, 1.5fr) minmax(7rem, 1fr) 4.5rem auto;
+  align-items: end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.automationControllerPicker,
+.automationLabelField,
+.automationValueField {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.automationControllerTrigger,
+.automationLabelDisplay,
+.automationLabelInput,
+.automationValue {
+  height: var(--header-control-height);
+  min-width: 0;
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-xs);
+}
+
+.automationLabelControl {
+  display: flex;
+  min-width: 0;
+}
+
+.automationLabelControl .automationLabelDisplay {
+  flex: 1 1 auto;
+  border-radius: var(--radius-1) 0 0 var(--radius-1);
+}
+
+.automationLabelClear {
+  flex: 0 0 1.75rem;
+  height: var(--header-control-height);
+  border: var(--border-subtle);
+  border-left: 0;
+  border-radius: 0 var(--radius-1) var(--radius-1) 0;
+  background: var(--surface-control);
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.automationControllerTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.automationLabelDisplay,
+.automationLabelInput {
+  width: 100%;
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automationLabelDisplay {
+  cursor: text;
+}
+
+.automationValue {
+  display: grid;
+  align-items: center;
+  padding: 0 var(--space-2);
+  color: var(--text-secondary);
+}
+
+.automationControllerTrigger:hover:not(:disabled),
+.automationControllerTrigger:focus-visible:not(:disabled),
+.automationLabelDisplay:hover:not(:disabled),
+.automationLabelDisplay:focus-visible:not(:disabled),
+.automationLabelInput:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.automationActions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.automationActions button {
+  height: var(--header-control-height);
+  padding: 0 var(--space-2);
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-control);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-xs);
+  cursor: pointer;
+}
+
+.automationActions button:hover:not(:disabled),
+.automationActions button:focus-visible:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.automationControllerMenu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  left: 0;
+  z-index: 90;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-subtle);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-lg);
+}
+
+.automationControllerMenu input {
+  width: 100%;
+  height: 2rem;
+  padding: 0 var(--space-2);
+  border: var(--border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.automationControllerMenu [role='listbox'] {
+  display: grid;
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.automationControllerOption {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.automationControllerOption:hover,
+.automationControllerOption:focus-visible,
+.automationControllerOption[aria-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.automationControllerOption small {
+  color: var(--accent);
+}
+
+.automationError {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  max-width: 24rem;
+  color: var(--danger);
+  font-size: var(--font-xs);
+}
+
 .modulationHeader {
-  grid-template-columns: minmax(10rem, 0.55fr) minmax(24rem, 1.1fr) minmax(30rem, 1.5fr);
+  grid-template-columns: minmax(26rem, 1.35fr) minmax(22rem, 1fr);
 }
 
 .headerField-timeSignature {

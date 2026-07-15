@@ -1,5 +1,6 @@
 import type {
   CatalogDto,
+  Cell as CellDto,
   CommandExecuteResponseDto,
   KeymapDocumentDto,
   KeymapStorageResourceDto,
@@ -10,6 +11,7 @@ import type {
   ScaleDefinitionDto,
   SelectionDto,
 } from './contracts'
+import type { Cell } from './music'
 import type {
   Composition,
   CommandContext,
@@ -43,6 +45,23 @@ const emptySequenceEntry = {
 }
 
 const sequenceName = (id: number): string => `S${id}`
+
+const cellFromDto = (cell: CellDto): Cell => ({
+  weight: cell.weight,
+  elements: cell.elements.map((element) => element.type === 'Note'
+    ? {
+        type: 'Note',
+        pitch: element.pitch,
+        velocity: element.velocity,
+        delay: element.delay,
+        gate: element.gate,
+        midiCc: element.midi_cc.map((entry) => ({ ...entry })),
+      }
+    : {
+        type: 'Sequence',
+        cells: element.cells.map(cellFromDto),
+      }),
+})
 
 const compositionFromDto = (
   composition: ProjectSnapshotDto['project']['composition']
@@ -96,7 +115,7 @@ const arrangedSequenceFromDto = (snapshot: ProjectSnapshotDto): Sequence => {
       composition.default_column.duration
 
   return {
-    cell: (sequenceEntry ?? emptySequenceEntry).cell,
+    cell: sequenceEntry ? cellFromDto(sequenceEntry.cell) : emptySequenceEntry.cell,
     timeSignature: {
       numerator: columnLength.numerator,
       denominator: columnLength.denominator,
@@ -129,11 +148,15 @@ export const projectFromDto = (snapshot: ProjectSnapshotDto): ProjectSnapshot =>
           sequences: snapshot.project.sequence_bank.sequences.map((entry) => ({
             id: entry.id,
             name: entry.name || sequenceName(entry.id),
-            sequence: { cell: entry.cell },
+            sequence: { cell: cellFromDto(entry.cell) },
           })),
         },
     composition: compositionFromDto(snapshot.project.composition),
     pitch: pitchFromDto(pitchState),
+    midiCcLabels: new Map(snapshot.project.midi_cc_labels.map((entry) => [
+      entry.controller,
+      entry.label,
+    ])),
   }
 }
 

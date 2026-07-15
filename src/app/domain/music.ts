@@ -17,6 +17,12 @@ export type NoteElement = {
   velocity: number
   delay: number
   gate: number
+  midiCc: MidiCcValue[]
+}
+
+export type MidiCcValue = {
+  controller: number
+  value: number
 }
 
 export type SequenceElement = {

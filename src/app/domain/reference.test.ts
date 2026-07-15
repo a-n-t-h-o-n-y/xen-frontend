@@ -3,7 +3,7 @@ import { buildSessionReference, filterCommandReference } from './reference'
 
 describe('command reference', () => {
   const reference = buildSessionReference({
-    schema_version: 5,
+    schema_version: 7,
     commands: [
       {
         path: ['set', 'velocity'],

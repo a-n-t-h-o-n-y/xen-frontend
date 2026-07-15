@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   expandNumericPlaceholders,
+  findInputModeKeyLabel,
   findKeymapBinding,
   findKeymapTriggerConflict,
   formatKeymapTarget,
@@ -53,6 +54,34 @@ describe('keymap routing', () => {
     expect(normalizeKey('ArrowLeft')).toBe('ArrowLeft')
     expect(expandNumericPlaceholders('duplicate :N=2:', '7')).toBe('duplicate 7')
     expect(expandNumericPlaceholders('duplicate :N=2:', '')).toBe('duplicate 2')
+  })
+
+  it('finds the displayed key for an input mode from the active keymap', () => {
+    const modeBinding = binding(trigger('v'), 'input_mode.set')
+    modeBinding.target = {
+      type: 'ui_action',
+      action: 'input_mode.set',
+      arguments: { mode: 'velocity' },
+    }
+    expect(findInputModeKeyLabel(resource({ sequencer: [modeBinding] }), 'velocity')).toBe('V')
+    expect(findInputModeKeyLabel(resource({ sequencer: [] }), 'velocity')).toBe('—')
+
+    const escapeBinding = binding(trigger('Escape'), 'input_mode.set')
+    escapeBinding.target = {
+      type: 'ui_action',
+      action: 'input_mode.set',
+      arguments: { mode: 'pitch' },
+    }
+    const pitchBinding = binding(trigger('p'), 'input_mode.set')
+    pitchBinding.target = {
+      type: 'ui_action',
+      action: 'input_mode.set',
+      arguments: { mode: 'pitch' },
+    }
+    expect(findInputModeKeyLabel(
+      resource({ sequencer: [escapeBinding, pitchBinding] }),
+      'pitch'
+    )).toBe('P')
   })
 
   it('matches complete physical modifier state without dropping Meta', () => {

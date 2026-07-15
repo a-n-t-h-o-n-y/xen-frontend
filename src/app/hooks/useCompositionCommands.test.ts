@@ -15,6 +15,7 @@ const renderCompositionCommands = (
     current: {
       selection: { path: [{ kind: 'element' as const, index: 0 }] },
       inputMode: 'pitch' as const,
+      midiCcController: 0,
     } satisfies EditorState,
   }
   const installActiveSequenceTarget = vi.fn()
@@ -62,6 +63,7 @@ describe('useCompositionCommands sequence entry', () => {
     expect(rendered.installEditorState).toHaveBeenCalledWith({
       selection: { path: [] },
       inputMode: 'pitch',
+      midiCcController: 0,
     })
     expect(rendered.installWorkspaceView).toHaveBeenCalledWith('sequencer')
   })
